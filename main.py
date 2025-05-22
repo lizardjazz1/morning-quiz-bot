@@ -53,7 +53,16 @@ quiz_data = load_questions()
 user_scores = load_user_data()
 
 # Хранение активных опросов
-current_poll = {}  # {poll_id: {"chat_id": ..., "correct_index": ...}}
+current_poll = {}  # {poll_id: {"chat_id": ..., "correct_index": ..., "quiz_session": True/False}
+current_quiz_session = {}  # {chat_id: {"questions": [...], "correct_answers": {}, "current_index": 0}
+
+
+# Получить список случайных вопросов
+def get_quiz_questions(count=10):
+    all_questions = []
+    for category in quiz_data.values():
+        all_questions.extend(category)
+    return random.sample(all_questions, min(count, len(all_questions)))
 
 # Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -64,7 +73,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Регистрация пользователя
     if chat_id not in user_scores:
         user_scores[chat_id] = {}
-    if str(user_id) not in user_scores[chat_id]:
+    if str(user_id) not in user_scores.get(chat_id, {}):
         user_scores[chat_id][str(user_id)] = {"name": user_name, "score": 0}
         save_user_data(user_scores)
 
@@ -101,7 +110,7 @@ async def send_quiz(context: ContextTypes.DEFAULT_TYPE, chat_id=None):
                 options=options,
                 type=Poll.QUIZ,
                 correct_option_id=options.index(correct_answer),
-                is_anonymous=False  # Включаем неанонимность
+                is_anonymous=False
             )
 
             poll_id = message.poll.id
@@ -110,7 +119,8 @@ async def send_quiz(context: ContextTypes.DEFAULT_TYPE, chat_id=None):
             current_poll[poll_id] = {
                 "chat_id": cid,
                 "correct_index": correct_index,
-                "message_id": message.message_id
+                "message_id": message.message_id,
+                "quiz_session": False
             }
 
         except Exception as e:
@@ -145,6 +155,8 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await context.bot.send_message(chat_id=chat_id, text=f"{user_name} правильно ответил(а)! 👏")
         save_user_data(user_scores)
 
+    del current_poll[poll_id]  # Убираем опрос из активных
+
 
 # Команда /quiz — вручную запускает викторину ТОЛЬКО в текущем чате
 async def manual_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -156,6 +168,85 @@ async def manual_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("🧠 Запускаю викторину вручную...")
     await send_quiz(context, chat_id=chat_id)
+
+
+# Команда /quiz10 — серия из 10 вопросов подряд
+async def start_quiz10(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = str(update.message.chat_id)
+
+    if chat_id not in context.bot_data.get("active_chats", set()):
+        await update.message.reply_text("Сначала нужно запустить бота через /start")
+        return
+
+    questions = get_quiz_questions(10)
+    if not questions:
+        await update.message.reply_text("Не могу начать квиз — нет вопросов 😕")
+        return
+
+    # Подготавливаем сессию
+    current_quiz_session[chat_id] = {
+        "questions": questions,
+        "correct_answers": {},
+        "current_index": 0
+    }
+
+    await update.message.reply_text("📚 Серия из 10 вопросов началась! 🧠")
+
+    await send_next_quiz_question(chat_id, context)
+
+
+# Отправка следующего вопроса серии `quiz10`
+async def send_next_quiz_question(chat_id, context):
+    session = current_quiz_session.get(chat_id)
+    if not session or session["current_index"] >= len(session["questions"]):
+        await show_final_results(chat_id, context)
+        return
+
+    question_data = session["questions"][session["current_index"]]
+    options = question_data["options"]
+    correct_answer = question_data["correct"]
+
+    message = await context.bot.send_poll(
+        chat_id=chat_id,
+        question=f"📌 Вопрос {session['current_index'] + 1}:\n{question_data['question']}",
+        options=options,
+        type=Poll.QUIZ,
+        correct_option_id=options.index(correct_answer),
+        is_anonymous=False
+    )
+
+    poll_id = message.poll.id
+    correct_index = options.index(correct_answer)
+
+    current_poll[poll_id] = {
+        "chat_id": chat_id,
+        "correct_index": correct_index,
+        "message_id": message.message_id,
+        "quiz_session": True  # Это часть квиза из 10 вопросов
+    }
+    
+    session["current_index"] += 1
+    session["current_question"] = poll_id
+
+
+# Финальные результаты после 10 вопросов
+async def show_final_results(chat_id, context):
+    session = current_quiz_session.pop(chat_id, None)
+    if not session:
+        return
+
+    correct_answers = session["correct_answers"]
+    results = sorted(correct_answers.items(), key=lambda x: x[1]['count'], reverse=True)
+
+    result_text = "🏁 Вот как вы прошли квиз из 10 вопросов:\n\n"
+    for idx, (uid, data) in enumerate(results, 1):
+        total = data["count"]
+        emoji = "✨" if total == 10 else "👏" if total >= 7 else "👍" if total >= 5 else "🙂"
+        result_text += f"{idx}. {data['name']} — {total}/10 {emoji}\n"
+
+    result_text += "\n🔥 Спасибо за участие!"
+
+    await context.bot.send_message(chat_id=chat_id, text=result_text)
 
 
 # Команда /rating — показывает таблицу лидеров
@@ -189,6 +280,7 @@ if __name__ == '__main__':
     # Регистрация команд
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("quiz", manual_quiz))
+    application.add_handler(CommandHandler("quiz10", start_quiz10))
     application.add_handler(CommandHandler("rating", rating))
     application.add_handler(PollAnswerHandler(handle_poll_answer))
 

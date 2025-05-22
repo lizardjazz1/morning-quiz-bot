@@ -5,7 +5,6 @@ from telegram import Update, Poll
 from telegram.ext import ApplicationBuilder, CommandHandler, PollAnswerHandler, ContextTypes, JobQueue
 from dotenv import load_dotenv
 import random
-import threading # Этот импорт больше не используется активно для keep_alive
 from typing import List, Tuple, Dict, Any, Optional
 
 # --- Константы ---
@@ -23,7 +22,9 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 # Глобальные переменные для данных
-quiz_data: Dict[str, Dict[str, Dict[str, Any]]] = {}
+# Теперь quiz_data это Dict[CategoryName, ListOfQuestionDicts]
+# Каждый QuestionDict будет иметь "question", "options", "correct_option_index"
+quiz_data: Dict[str, List[Dict[str, Any]]] = {}
 user_scores: Dict[str, Dict[str, Any]] = {}
 
 # Хранение активных опросов
@@ -36,30 +37,99 @@ current_quiz_session: Dict[str, Dict[str, Any]] = {}
 # --- Функции загрузки и сохранения данных ---
 def load_questions():
     global quiz_data
+    raw_quiz_data_from_file: Dict[str, List[Dict[str, Any]]] = {}
     try:
         with open(QUESTIONS_FILE, 'r', encoding='utf-8') as f:
-            quiz_data = json.load(f)
-            logger.info(f"Загружено {sum(len(cat) for cat in quiz_data.values() if isinstance(cat, dict))} вопросов.")
+            raw_quiz_data_from_file = json.load(f)
     except FileNotFoundError:
         logger.error(f"Файл вопросов {QUESTIONS_FILE} не найден.")
         quiz_data = {}
+        return
     except json.JSONDecodeError:
         logger.error(f"Ошибка декодирования JSON в файле вопросов {QUESTIONS_FILE}.")
         quiz_data = {}
+        return
     except Exception as e:
-        logger.error(f"Неизвестная ошибка при загрузке вопросов: {e}")
+        logger.error(f"Неизвестная ошибка при загрузке сырых вопросов: {e}")
         quiz_data = {}
+        return
+
+    processed_quiz_data: Dict[str, List[Dict[str, Any]]] = {}
+    total_questions_loaded = 0
+    questions_skipped_due_to_format_error = 0
+
+    for category, questions_list in raw_quiz_data_from_file.items():
+        if not isinstance(questions_list, list):
+            logger.warning(f"Категория '{category}' в файле вопросов не содержит список. Пропускается.")
+            continue
+        
+        processed_questions_for_category = []
+        for idx, q_raw in enumerate(questions_list):
+            if not isinstance(q_raw, dict):
+                logger.warning(f"Вопрос #{idx+1} в категории '{category}' не является словарем. Пропускается.")
+                questions_skipped_due_to_format_error += 1
+                continue
+
+            question_text = q_raw.get("question")
+            options = q_raw.get("options")
+            correct_answer_text = q_raw.get("correct") # Ожидаем текстовый ответ
+
+            if not all([
+                isinstance(question_text, str) and question_text.strip(),
+                isinstance(options, list) and len(options) >= 2 and all(isinstance(opt, str) for opt in options),
+                isinstance(correct_answer_text, str) and correct_answer_text.strip()
+            ]):
+                logger.warning(
+                    f"Вопрос #{idx+1} в категории '{category}' имеет неверный формат или пустые значения "
+                    f"(question: {type(question_text)}, options: {type(options)}, correct: {type(correct_answer_text)}). Пропускается. Детали: {q_raw}"
+                )
+                questions_skipped_due_to_format_error += 1
+                continue
+            
+            try:
+                # Ищем индекс правильного ответа (текст) в списке вариантов (тексты)
+                correct_option_index = options.index(correct_answer_text)
+            except ValueError:
+                logger.warning(
+                    f"Правильный ответ '{correct_answer_text}' для вопроса '{question_text[:50]}...' "
+                    f"в категории '{category}' не найден в списке вариантов {options}. Пропускается."
+                )
+                questions_skipped_due_to_format_error += 1
+                continue
+            
+            # Сохраняем вопрос в обработанном формате
+            processed_question = {
+                "question": question_text,
+                "options": options,
+                "correct_option_index": correct_option_index # Теперь это индекс
+            }
+            processed_questions_for_category.append(processed_question)
+            total_questions_loaded += 1
+        
+        if processed_questions_for_category:
+            processed_quiz_data[category] = processed_questions_for_category
+        else:
+            logger.info(f"Категория '{category}' не содержит валидных вопросов после обработки или была изначально пустой.")
+
+    quiz_data = processed_quiz_data # Обновляем глобальную переменную
+    if total_questions_loaded > 0:
+        logger.info(f"Успешно загружено и обработано {total_questions_loaded} вопросов.")
+    else:
+        logger.warning("Не было загружено ни одного валидного вопроса.")
+    if questions_skipped_due_to_format_error > 0:
+        logger.warning(f"{questions_skipped_due_to_format_error} вопросов было пропущено из-за ошибок формата или несоответствия данных.")
+
 
 def load_user_data():
     global user_scores
     if not os.path.exists(USERS_FILE):
-        save_user_data({}) # Создаем пустой файл, если его нет
+        save_user_data({}) 
         user_scores = {}
         return
     try:
         with open(USERS_FILE, 'r', encoding='utf-8') as f:
             content = f.read()
-            if not content: # Если файл пуст
+            if not content: 
                 user_scores = {}
                 return
             user_scores = json.loads(content)
@@ -69,7 +139,7 @@ def load_user_data():
         user_scores = {}
     except Exception as e:
         logger.error(f"Ошибка при загрузке рейтинга: {e}")
-        save_user_data({}) # На всякий случай сбросим к пустому состоянию
+        save_user_data({})
         user_scores = {}
 
 def save_user_data(data):
@@ -89,44 +159,40 @@ def get_user_mention(user_id: int, user_name: str) -> str:
     return f"[{user_name}](tg://user?id={user_id})"
 
 def prepare_poll_options(question_details: Dict[str, Any]) -> Tuple[str, List[str], int, List[str]]:
+    # Эта функция уже ожидает correct_option_index, что теперь соответствует данным
     q_text = question_details["question"]
     correct_answer = question_details["options"][question_details["correct_option_index"]]
-    options = list(question_details["options"])
+    options = list(question_details["options"]) # Создаем копию для перемешивания
     random.shuffle(options)
     new_correct_index = options.index(correct_answer)
-    return q_text, options, new_correct_index, question_details["options"]
+    return q_text, options, new_correct_index, question_details["options"] # Возвращаем и оригинальные опции, если нужно
 
 def get_random_questions(category: str, count: int) -> List[Dict[str, Any]]:
     """Получает 'count' случайных вопросов из указанной категории."""
-    if category not in quiz_data or not isinstance(quiz_data.get(category), dict) or not quiz_data[category]:
-        logger.warning(f"get_random_questions: Категория '{category}' не найдена, не является словарем или пуста.")
+    if category not in quiz_data or not isinstance(quiz_data.get(category), list) or not quiz_data[category]:
+        logger.warning(f"get_random_questions: Категория '{category}' не найдена, не является списком или пуста.")
         return []
     
-    category_data = quiz_data[category]
-    all_question_keys = list(category_data.keys())
+    category_questions_list = quiz_data[category] # Это List[Dict[str, Any]]
 
-    if not all_question_keys:
-        logger.warning(f"get_random_questions: В категории '{category}' нет ключей вопросов.")
+    if not category_questions_list:
+        logger.warning(f"get_random_questions: В категории '{category}' нет вопросов (список пуст).")
         return []
 
-    if len(all_question_keys) < count:
-        selected_keys = all_question_keys 
-        random.shuffle(selected_keys) # Shuffle if taking all available from category
-    else:
-        selected_keys = random.sample(all_question_keys, count)
+    num_available = len(category_questions_list)
+    actual_count = min(count, num_available)
     
-    selected_questions = []
-    for key in selected_keys:
-        question_detail = category_data.get(key)
-        if isinstance(question_detail, dict):
-            question_copy = question_detail.copy() 
-            question_copy["original_key_in_category"] = key 
-            question_copy["original_category"] = category # Добавляем информацию о категории
-            selected_questions.append(question_copy)
-        else:
-            logger.warning(f"get_random_questions: question_detail для ключа {key} в категории {category} не является словарем: {type(question_detail)}")
+    # random.sample выбирает уникальные элементы
+    selected_questions_raw = random.sample(category_questions_list, actual_count)
+    
+    selected_questions_processed = []
+    for q_detail in selected_questions_raw:
+        question_copy = q_detail.copy() 
+        question_copy["original_category"] = category # Добавляем информацию о категории
+        # 'original_key_in_category' удален, т.к. вопросы в списке не имеют именованных ключей
+        selected_questions_processed.append(question_copy)
             
-    return selected_questions
+    return selected_questions_processed
 
 def get_random_questions_from_all(count: int) -> List[Dict[str, Any]]:
     """Получает 'count' случайных вопросов из всех доступных категорий."""
@@ -135,30 +201,26 @@ def get_random_questions_from_all(count: int) -> List[Dict[str, Any]]:
         logger.warning("get_random_questions_from_all: quiz_data пуст.")
         return []
 
-    for category, questions_in_cat in quiz_data.items():
-        if questions_in_cat and isinstance(questions_in_cat, dict):
-            for q_key, q_detail in questions_in_cat.items():
-                if isinstance(q_detail, dict):
-                    question_copy = q_detail.copy()
-                    question_copy["original_key_in_category"] = q_key
-                    question_copy["original_category"] = category
-                    all_questions_with_details.append(question_copy)
-                else:
-                    logger.warning(f"get_random_questions_from_all: q_detail для ключа {q_key} в категории {category} не является словарем: {type(q_detail)}")
-        elif not questions_in_cat:
-             logger.debug(f"get_random_questions_from_all: Категория {category} пуста.")
-        else: # questions_in_cat is not a dict
-            logger.warning(f"get_random_questions_from_all: questions_in_cat для категории {category} не является словарем: {type(questions_in_cat)}")
+    for category, questions_list_in_cat in quiz_data.items():
+        if questions_list_in_cat and isinstance(questions_list_in_cat, list):
+            for q_detail in questions_list_in_cat:
+                # q_detail - это уже обработанный словарь вопроса из load_questions
+                question_copy = q_detail.copy()
+                question_copy["original_category"] = category # Добавляем исходную категорию
+                all_questions_with_details.append(question_copy)
+        elif not questions_list_in_cat:
+             logger.debug(f"get_random_questions_from_all: Категория {category} пуста (список пуст).")
+        else: 
+            logger.warning(f"get_random_questions_from_all: Данные для категории {category} не являются списком: {type(questions_list_in_cat)}")
 
     if not all_questions_with_details:
         logger.info("get_random_questions_from_all: Не найдено ни одного вопроса во всех категориях.")
         return []
 
-    if len(all_questions_with_details) <= count:
-        random.shuffle(all_questions_with_details)
-        return all_questions_with_details
-    else:
-        return random.sample(all_questions_with_details, count)
+    num_available = len(all_questions_with_details)
+    actual_count = min(count, num_available)
+    
+    return random.sample(all_questions_with_details, actual_count)
 
 
 # --- Команды ---
@@ -189,7 +251,8 @@ async def categories_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text("Категории вопросов еще не загружены или отсутствуют.")
         return
     
-    category_list = "\n".join([f"- {cat}" for cat in quiz_data.keys() if isinstance(quiz_data.get(cat), dict) and quiz_data[cat]])
+    # Проверяем, что категория это список и он не пустой
+    category_list = "\n".join([f"- {cat}" for cat in quiz_data.keys() if isinstance(quiz_data.get(cat), list) and quiz_data[cat]])
     if not category_list:
         await update.message.reply_text("Доступных категорий с вопросами нет.")
     else:
@@ -204,13 +267,11 @@ async def quiz_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     category_name = " ".join(context.args)
 
-    if category_name not in quiz_data or not quiz_data[category_name]:
-        await update.message.reply_text(f"Категория '{category_name}' не найдена или в ней нет вопросов.")
-        return
-
+    # get_random_questions сама проверит существование категории и ее тип (list)
     question_list = get_random_questions(category_name, 1)
     if not question_list:
-        await update.message.reply_text(f"В категории '{category_name}' не нашлось вопросов.") # Сообщение изменено для краткости
+        # Сообщение get_random_questions будет в логах, здесь общее для пользователя
+        await update.message.reply_text(f"В категории '{category_name}' не нашлось вопросов или категория не существует.")
         return
     
     question_details = question_list[0]
@@ -252,7 +313,7 @@ async def start_quiz10(update: Update, context: ContextTypes.DEFAULT_TYPE):
     category_source_description: str = "" 
     num_questions_to_fetch = 10
 
-    if not context.args: # Категория не указана
+    if not context.args: 
         logger.info(f"Запрос /quiz10 без категории от чата {chat_id_str}.")
         questions_for_session = get_random_questions_from_all(num_questions_to_fetch)
         category_source_description = "всех доступных категорий"
@@ -261,19 +322,16 @@ async def start_quiz10(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("Не удалось найти вопросы. Возможно, база вопросов пуста или все категории пусты.")
             return
 
-    else: # Категория указана
+    else: 
         category_name = " ".join(context.args)
         logger.info(f"Запрос /quiz10 с категорией '{category_name}' от чата {chat_id_str}.")
 
-        if category_name not in quiz_data or not isinstance(quiz_data.get(category_name), dict) or not quiz_data[category_name]:
-            await update.message.reply_text(f"Категория '{category_name}' не найдена или в ней нет вопросов.")
-            return
-
+        # get_random_questions обработает случай отсутствия категории или пустой категории
         questions_for_session = get_random_questions(category_name, num_questions_to_fetch)
         category_source_description = f"категории '{category_name}'"
         
         if not questions_for_session: 
-            await update.message.reply_text(f"В категории '{category_name}' не нашлось вопросов для квиза.")
+            await update.message.reply_text(f"В категории '{category_name}' не нашлось вопросов для квиза или категория не существует.")
             return
             
     actual_num_questions = len(questions_for_session)
@@ -281,9 +339,9 @@ async def start_quiz10(update: Update, context: ContextTypes.DEFAULT_TYPE):
     intro_message_text = f"Начинаем квиз из {category_source_description}! "
     if actual_num_questions == 1:
         intro_message_text += f"Подготовлен {actual_num_questions} вопрос. Приготовьтесь!"
-    elif actual_num_questions < num_questions_to_fetch : # Но больше 0
+    elif actual_num_questions < num_questions_to_fetch :
          intro_message_text += f"Подготовлено {actual_num_questions} вопросов (меньше {num_questions_to_fetch}). Приготовьтесь!"
-    else: # actual_num_questions == num_questions_to_fetch (или больше, если get_random_... вернуло больше, но оно не должно)
+    else:
         intro_message_text += f"Подготовлено {actual_num_questions} вопросов. Приготовьтесь!"
 
     intro_message = await update.message.reply_text(intro_message_text)
@@ -297,7 +355,7 @@ async def start_quiz10(update: Update, context: ContextTypes.DEFAULT_TYPE):
     }
 
     if chat_id_str in user_scores:
-        for uid in user_scores[chat_id_str]: # uid это user_id_str
+        for uid in user_scores[chat_id_str]: 
             if isinstance(user_scores[chat_id_str].get(uid), dict):
                 user_scores[chat_id_str][uid]["answered_polls"] = set()
     save_user_data(user_scores)
@@ -335,28 +393,10 @@ async def send_next_quiz_question(context: ContextTypes.DEFAULT_TYPE, chat_id_st
     question_details = session["questions"][session["current_index"]]
     q_text, options, correct_idx, _ = prepare_poll_options(question_details)
     
-    # Определяем open_period: длиннее для последнего вопроса
     is_last_question = (session["current_index"] == len(session["questions"]) - 1)
     current_open_period = DEFAULT_POLL_OPEN_PERIOD
     if is_last_question:
-        # Время на последний вопрос = стандартное время + дополнительное окно на результаты
-        # Это значит, что сам опрос будет открыт дольше.
-        # Или, если мы хотим чтобы опрос закрылся через DEFAULT_POLL_OPEN_PERIOD, а потом было ожидание,
-        # то FINAL_ANSWER_WINDOW_SECONDS - это задержка *после* закрытия опроса.
-        # Текущая логика в send_poll для последнего вопроса:
-        # open_period=DEFAULT_POLL_OPEN_PERIOD + (FINAL_ANSWER_WINDOW_SECONDS if session["current_index"] == len(session["questions"]) - 1 else 0)
-        # Это делает сам опрос дольше.
-        # А job `show_quiz10_final_results_after_delay` запускается с задержкой FINAL_ANSWER_WINDOW_SECONDS *после* отправки последнего вопроса.
-        # Это может привести к тому, что результаты покажутся раньше, чем закроется опрос, если FINAL_ANSWER_WINDOW_SECONDS < open_period последнего вопроса.
-
-        # Исправим: Опрос всегда DEFAULT_POLL_OPEN_PERIOD. Таймер FINAL_ANSWER_WINDOW_SECONDS запускается *после* отправки последнего вопроса.
-        # Сообщение "У вас есть X секунд" должно отражать время до показа результатов.
-        # Это означает, что у пользователя есть DEFAULT_POLL_OPEN_PERIOD на ответ на последний вопрос,
-        # и еще (FINAL_ANSWER_WINDOW_SECONDS - DEFAULT_POLL_OPEN_PERIOD) времени, если они еще не ответили, до показа результатов.
-        # Либо, FINAL_ANSWER_WINDOW_SECONDS - это общее время от момента отправки последнего вопроса до результатов.
-        # Текущая формулировка "У вас есть {FINAL_ANSWER_WINDOW_SECONDS} секунд, чтобы ответить на него" предполагает, что это общее время.
-        # А опрос должен быть открыт как минимум это время.
-        current_open_period = FINAL_ANSWER_WINDOW_SECONDS # Делаем опрос открытым на всё время ожидания результатов
+        current_open_period = FINAL_ANSWER_WINDOW_SECONDS 
     
     try:
         sent_poll_message = await context.bot.send_poll(
@@ -409,11 +449,11 @@ async def show_quiz10_final_results_after_delay(context: ContextTypes.DEFAULT_TY
     if not sorted_session_participants:
         results_text += "В этой сессии никто не участвовал или не набрал очков."
     else:
-        for rank, (user_id_str, data) in enumerate(sorted_session_participants, 1):
+        for rank, (user_id_str_val, data) in enumerate(sorted_session_participants, 1): # Renamed user_id_str to avoid conflict
             user_name = data["name"]
             session_score = data["score"]
-            total_score = user_scores.get(chat_id_str, {}).get(user_id_str, {}).get("score", 0)
-            user_mention_md = get_user_mention(int(user_id_str), user_name)
+            total_score = user_scores.get(chat_id_str, {}).get(user_id_str_val, {}).get("score", 0)
+            user_mention_md = get_user_mention(int(user_id_str_val), user_name)
             results_text += (
                 f"{rank}. {user_mention_md}: {session_score}/{num_questions_in_session} (общий рейтинг: {total_score})\n"
             )
@@ -422,7 +462,6 @@ async def show_quiz10_final_results_after_delay(context: ContextTypes.DEFAULT_TY
         await context.bot.send_message(chat_id=chat_id, text=results_text, parse_mode='Markdown')
     except Exception as e:
         logger.error(f"Ошибка отправки финальных результатов в чат {chat_id}: {e}")
-
 
     cleanup_quiz_session(chat_id_str)
     logger.info(f"Сессия квиза для чата {chat_id_str} завершена и очищена.")
@@ -479,42 +518,22 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if user_id_str not in user_scores[chat_id_str]:
         user_scores[chat_id_str][user_id_str] = {"name": user_name, "score": 0, "answered_polls": set()}
     else:
-        user_scores[chat_id_str][user_id_str]["name"] = user_name
-    
-    # answered_polls в user_scores в основном для одиночных квизов или для предотвращения двойного начисления общего рейтинга.
-    # Для quiz10, answered_polls очищается перед сессией.
+        # Обновляем имя пользователя, если оно изменилось
+        if user_scores[chat_id_str][user_id_str]["name"] != user_name:
+            user_scores[chat_id_str][user_id_str]["name"] = user_name
+            
+    # Убедимся, что `answered_polls` существует
+    if "answered_polls" not in user_scores[chat_id_str][user_id_str]:
+        user_scores[chat_id_str][user_id_str]["answered_polls"] = set()
 
     is_correct = bool(selected_option_ids and selected_option_ids[0] == correct_option_index)
 
     if is_correct:
-        # Обновляем общий счет только если пользователь еще не отвечал ПРАВИЛЬНО на этот КОНКРЕТНЫЙ опрос (poll_id)
-        # This check is important for overall score, even if session scores are handled separately.
-        # user_scores[chat_id_str][user_id_str]["answered_polls"] stores poll_ids for which score was already given.
-        # Let's rename "answered_polls" to "rewarded_poll_ids" to be clearer for overall score.
-        # For now, let's assume "answered_polls" tracks polls for which any answer was given.
-        # The logic for adding to overall score needs to be precise.
-        # If this poll_id is NOT in the set of polls for which the user has ALREADY received a point.
-        
-        # Let's refine this: add to score if correct, and this poll_id hasn't yet given this user a point.
-        # We will use a different set for this in user_scores for clarity.
-        # Or, for simplicity, assume one correct answer per poll ID per user adds to global score.
-        # The current logic `if poll_id not in user_scores[chat_id_str][user_id_str].get("answered_polls", set()):`
-        # before adding to score was fine for preventing multiple global score additions for the same poll.
-        # Let's keep it.
-        
-        # Убедимся, что `answered_polls` существует
-        if "answered_polls" not in user_scores[chat_id_str][user_id_str]:
-            user_scores[chat_id_str][user_id_str]["answered_polls"] = set()
-
         if poll_id not in user_scores[chat_id_str][user_id_str]["answered_polls"]:
              user_scores[chat_id_str][user_id_str]["score"] = user_scores[chat_id_str][user_id_str].get("score", 0) + 1
-             user_scores[chat_id_str][user_id_str]["answered_polls"].add(poll_id) # Отмечаем, что за этот опрос балл начислен
-
-
-    # save_user_data() вызывается здесь, чтобы сохранить обновленное имя или новый счет, если он изменился
-    # Это может быть часто, но гарантирует сохранность.
-    save_user_data(user_scores)
-
+             user_scores[chat_id_str][user_id_str]["answered_polls"].add(poll_id)
+    
+    save_user_data(user_scores) # Сохраняем изменения в общем рейтинге
 
     if is_quiz_session_poll:
         session_chat_id = poll_info.get("associated_quiz_session_chat_id")
@@ -523,14 +542,13 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
             
             if user_id_str not in session["session_scores"]:
                 session["session_scores"][user_id_str] = {"name": user_name, "score": 0, "correctly_answered_poll_ids_in_session": set()}
-            elif session["session_scores"][user_id_str]["name"] != user_name:
+            elif session["session_scores"][user_id_str]["name"] != user_name: # Обновляем имя в сессии
                  session["session_scores"][user_id_str]["name"] = user_name
 
-            # Для сессионных очков:
             if is_correct and poll_id not in session["session_scores"][user_id_str]["correctly_answered_poll_ids_in_session"]:
                 session["session_scores"][user_id_str]["score"] += 1
                 session["session_scores"][user_id_str]["correctly_answered_poll_ids_in_session"].add(poll_id)
-                current_quiz_session[session_chat_id] = session # Сохраняем обновленную сессию
+                current_quiz_session[session_chat_id] = session 
 
             current_question_index_in_session = session["current_index"] -1 
             is_it_last_question_of_session = (current_question_index_in_session == len(session["questions"]) - 1)
@@ -553,7 +571,7 @@ async def rating(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     sorted_users = sorted(
-        [item for item in user_scores[chat_id_str].items() if isinstance(item[1], dict)], # Фильтруем некорректные записи
+        [item for item in user_scores[chat_id_str].items() if isinstance(item[1], dict)], 
         key=lambda item: (-item[1].get("score", 0), item[1].get("name", "").lower())
     )
 

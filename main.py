@@ -239,7 +239,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_user_data(user_scores)
     await update.message.reply_text(
         "Привет! Я бот для викторин.\n"
-        "Используйте /quiz_category <название категории> для начала одиночного вопроса по категории.\n"
+        "Используйте /quiz <название категории> для начала одиночного вопроса по категории.\n"
         "Используйте /quiz10 [название категории] для начала серии из 10 вопросов (если категория не указана, вопросы будут из всех доступных).\n"
         "Используйте /rating для просмотра рейтинга.\n"
         "Используйте /categories для просмотра доступных категорий.\n"
@@ -258,12 +258,12 @@ async def categories_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     else:
         await update.message.reply_text(f"Доступные категории:\n{category_list}")
 
-async def quiz_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     chat_id_str = str(chat_id)
 
     if not context.args:
-        await update.message.reply_text("Пожалуйста, укажите категорию. Пример: /quiz_category ОбщиеЗнания")
+        await update.message.reply_text("Пожалуйста, укажите категорию. Пример: /quiz ОбщиеЗнания")
         return
     category_name = " ".join(context.args)
 
@@ -599,7 +599,7 @@ def main():
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("categories", categories_command))
-    application.add_handler(CommandHandler("quiz_category", quiz_category))
+    application.add_handler(CommandHandler("quiz", quiz))
     application.add_handler(CommandHandler("quiz10", start_quiz10))
     application.add_handler(CommandHandler("stopquiz10", stop_quiz10))
     application.add_handler(CommandHandler("rating", rating))

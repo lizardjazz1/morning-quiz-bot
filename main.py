@@ -24,9 +24,9 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 quiz_data: Dict[str, List[Dict[str, Any]]] = {}
-user_scores: Dict[str, Dict[str, Any]] = {}
-current_poll: Dict[str, Dict[str, Any]] = {}
-current_quiz_session: Dict[str, Dict[str, Any]] = {}
+user_scores: Dict[str, Dict[str, Any]] = {}  # Исправлено
+current_poll: Dict[str, Dict[str, Any]] = {} # Исправлено
+current_quiz_session: Dict[str, Dict[str, Any]] = {} # Исправлено
 
 # --- Вспомогательные функции для сериализации/десериализации (без изменений) ---
 def convert_sets_to_lists_recursively(obj: Any) -> Any:
@@ -112,7 +112,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_scores[chat_id_str][user_id_str]["answered_polls"] = set(user_scores[chat_id_str][user_id_str].get("answered_polls", [])) # type: ignore
     save_user_data()
     await update.message.reply_text( # type: ignore
-        f"Привет, {user.first_name}! Команды:\n" 
+        f"Привет, {user.first_name}! Команды:\n"
         "/quiz [категория] - 1 вопрос.\n/quiz10 [категория] - 10 вопросов.\n"
         "/categories - список категорий.\n/top - топ игроков.\n/stopquiz - остановить /quiz10."
     )
@@ -175,10 +175,10 @@ async def start_quiz10(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         questions = get_random_questions_from_all(NUMBER_OF_QUESTIONS_IN_SESSION)
         cat_desc = "случайных категорий"
-    
+
     actual_num_q = len(questions)
     if actual_num_q == 0: await update.message.reply_text(f"Не найдено вопросов для {cat_desc}."); return # type: ignore
-    
+
     intro_text = f"Начинаем викторину из {actual_num_q} вопросов ({cat_desc})! Приготовьтесь!"
     if actual_num_q < NUMBER_OF_QUESTIONS_IN_SESSION: intro_text += f" (Меньше {NUMBER_OF_QUESTIONS_IN_SESSION}, т.к. не хватило)"
 
@@ -210,19 +210,19 @@ async def send_next_question_in_session(context: ContextTypes.DEFAULT_TYPE, chat
     q_details = session["questions"][current_q_idx]
     is_last = (current_q_idx == actual_num_q - 1)
     open_period = FINAL_ANSWER_WINDOW_SECONDS if is_last else DEFAULT_POLL_OPEN_PERIOD
-    
+
     q_text_display = f"Вопрос {current_q_idx + 1}/{actual_num_q}\n"
     if cat := q_details.get("original_category"): q_text_display += f"Категория: {cat}\n"
     q_text_display += q_details['question']
-    
+
     q_text_poll, opts_poll, correct_idx_poll, _ = prepare_poll_options(q_details) # q_text_poll не используется здесь, берем q_text_display
 
     try:
         sent_poll = await context.bot.send_poll(chat_id=chat_id_str, question=q_text_display, options=opts_poll,
             type=Poll.QUIZ, correct_option_id=correct_idx_poll, open_period=open_period, is_anonymous=False)
-        
+
         session["current_poll_id"] = sent_poll.poll.id
-        session["current_index"] += 1 
+        session["current_index"] += 1
 
         current_poll[sent_poll.poll.id] = {
             "chat_id": chat_id_str, "message_id": sent_poll.message_id, "correct_index": correct_idx_poll,
@@ -233,7 +233,7 @@ async def send_next_question_in_session(context: ContextTypes.DEFAULT_TYPE, chat
 
         job_delay_secs = open_period + JOB_GRACE_PERIOD
         job_name = f"poll_end_{chat_id_str}_{sent_poll.poll.id}"
-        
+
         # Удаляем старую задачу с таким именем, если она есть
         for old_job in context.job_queue.get_jobs_by_name(job_name): old_job.schedule_removal() # type: ignore
 
@@ -344,19 +344,19 @@ async def show_quiz_session_results(context: ContextTypes.DEFAULT_TYPE, chat_id_
             session["session_scores"].items(),
             key=lambda item: (-item[1]["score"], item[1]["name"].lower())
         )
-        
+
         medals = ["🥇", "🥈", "🥉"]
         for rank, (user_id_str, data) in enumerate(sorted_session_participants):
             user_name = data["name"]
             session_score = data["score"]
             global_score = user_scores.get(chat_id_str, {}).get(user_id_str, {}).get("score", 0)
-            
+
             rank_display = medals[rank] if rank < len(medals) else f"{rank + 1}."
             results_body += f"{rank_display} {user_name}: {session_score}/{num_q_in_session} (общий счёт: {global_score})\n"
-        
+
         if len(sorted_session_participants) > 3:
             results_body += "\nОтличная игра, остальные участники!"
-            
+
     try: await context.bot.send_message(chat_id=chat_id_str, text=results_header + results_body)
     except Exception as e: logger.error(f"Ошибка отправки результатов сессии в {chat_id_str}: {e}", exc_info=True)
 
@@ -364,7 +364,7 @@ async def show_quiz_session_results(context: ContextTypes.DEFAULT_TYPE, chat_id_
     current_poll_id_of_session = session.get("current_poll_id") # Poll_id последнего отправленного вопроса
     if current_poll_id_of_session and current_poll_id_of_session in current_poll:
         del current_poll[current_poll_id_of_session]
-    
+
     current_quiz_session.pop(chat_id_str, None) # Удаляем сессию
     logger.info(f"Сессия для чата {chat_id_str} очищена.")
     # Глобальные очки уже должны быть сохранены в handle_poll_answer
@@ -373,7 +373,7 @@ async def top_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id_str = str(update.effective_chat.id) # type: ignore
     if chat_id_str not in user_scores or not user_scores[chat_id_str]:
         await update.message.reply_text("Статистики нет."); return # type: ignore
-    
+
     sorted_scores = sorted(user_scores[chat_id_str].items(), key=lambda item: item[1].get("score", 0), reverse=True)
     if not sorted_scores: await update.message.reply_text("Пока нет игроков с очками."); return # type: ignore
 
@@ -393,7 +393,7 @@ async def stop_quiz_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             member = await context.bot.get_chat_member(chat_id_str, user_id_str)
             if member.status in [member.ADMINISTRATOR, member.OWNER]: is_admin = True
         except Exception as e: logger.warning(f"Ошибка проверки админа {user_id_str} в {chat_id_str}: {e}")
-    
+
     if not is_admin and user_id_str != session.get("starter_user_id"):
         await update.message.reply_text("Только админ или запустивший может остановить."); return # type: ignore
 
@@ -402,7 +402,7 @@ async def stop_quiz_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if current_poll_id and current_poll_id in current_poll:
         try: await context.bot.stop_poll(chat_id_str, current_poll[current_poll_id]["message_id"])
         except Exception as e: logger.error(f"Ошибка stop_poll {current_poll_id} в {chat_id_str}: {e}")
-    
+
     await show_quiz_session_results(context, chat_id_str, error_occurred=True) # Показываем как прерванную
     await update.message.reply_text("Викторина остановлена.") # type: ignore
 
@@ -415,7 +415,7 @@ def main():
         CommandHandler("quiz10", start_quiz10), CommandHandler("categories", categories_command),
         CommandHandler("top", top_command), CommandHandler("stopquiz", stop_quiz_command),
         PollAnswerHandler(handle_poll_answer)])
-    
+
     async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.error("Exception while handling an update:", exc_info=context.error)
     app.add_error_handler(error_handler)
@@ -423,12 +423,4 @@ def main():
     logger.info("Бот запускается..."); app.run_polling(); logger.info("Бот остановлен.")
 
 if __name__ == '__main__':
-    # Рекомендация: удалить users.json перед первым запуском с этими изменениями, если он мог быть поврежден.
-    # if os.path.exists(USERS_FILE):
-    #     try:
-    #         with open(USERS_FILE, 'r', encoding='utf-8') as f_test: json.load(f_test)
-    #     except json.JSONDecodeError:
-    #         logger.warning(f"{USERS_FILE} поврежден. Рекомендуется удалить для чистого старта.")
-    #         # try: os.remove(USERS_FILE)
-    #         # except OSError as e_remove: logger.error(f"Не удалось удалить {USERS_FILE}: {e_remove}")
     main()

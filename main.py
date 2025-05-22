@@ -53,7 +53,7 @@ quiz_data = load_questions()
 user_scores = load_user_data()
 
 # Хранение активных опросов
-current_poll = {}  # {poll_id: {"chat_id": ..., "correct_index": ..., "message_id": ...}}
+current_poll = {}  # {poll_id: {"chat_id": ..., "correct_index": ...}}
 
 # Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -68,7 +68,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_scores[chat_id][str(user_id)] = {"name": user_name, "score": 0}
         save_user_data(user_scores)
 
-    await update.message.reply_text("Привет! Я буду присылать утреннюю викторину в формате опроса!")
+    await update.message.reply_text("Привет! Я буду присылать вам утреннюю викторину в формате опроса!")
     logging.info(f"Бот добавлен в чат {chat_id}")
 
     # Добавляем чат в список активных
@@ -76,12 +76,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     active_chats.add(chat_id)
     context.bot_data["active_chats"] = active_chats
 
-# Отправка случайного вопроса в виде опроса
-async def send_quiz(context: ContextTypes.DEFAULT_TYPE):
+
+# Отправка случайного вопроса (опционально по одному чату или всем)
+async def send_quiz(context: ContextTypes.DEFAULT_TYPE, chat_id=None):
     active_chats = context.bot_data.get("active_chats", set())
+
     if not active_chats:
         logging.warning("Нет активных чатов для рассылки")
         return
+
+    target_chats = [chat_id] if chat_id else list(active_chats)
 
     categories = list(quiz_data.keys())
     category = random.choice(categories)
@@ -89,10 +93,10 @@ async def send_quiz(context: ContextTypes.DEFAULT_TYPE):
     options = question_data["options"]
     correct_answer = question_data["correct"]
 
-    for chat_id in active_chats:
+    for cid in target_chats:
         try:
             message = await context.bot.send_poll(
-                chat_id=chat_id,
+                chat_id=cid,
                 question=question_data["question"],
                 options=options,
                 type=Poll.QUIZ,
@@ -104,14 +108,14 @@ async def send_quiz(context: ContextTypes.DEFAULT_TYPE):
             correct_index = options.index(correct_answer)
 
             current_poll[poll_id] = {
-                "chat_id": chat_id,
+                "chat_id": cid,
                 "correct_index": correct_index,
-                "user_answers": {},  # {user_id: {"name": ..., "option": ...}}
                 "message_id": message.message_id
             }
 
         except Exception as e:
-            logging.error(f"Ошибка при отправке опроса в чат {chat_id}: {e}")
+            logging.error(f"Ошибка при отправке опроса в чат {cid}: {e}")
+
 
 # Обработка ответов на опрос
 async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -127,7 +131,6 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     chat_id = poll_info["chat_id"]
     correct_index = poll_info["correct_index"]
-    poll_info["user_answers"][user_id] = {"name": user_name, "option": option}
 
     # Инициализация user_scores, если нужно
     if chat_id not in user_scores:
@@ -142,6 +145,36 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await context.bot.send_message(chat_id=chat_id, text=f"{user_name} правильно ответил(а)! 👏")
         save_user_data(user_scores)
 
+
+# Команда /quiz — вручную запускает викторину ТОЛЬКО в текущем чате
+async def manual_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = str(update.message.chat_id)
+
+    if chat_id not in context.bot_data.get("active_chats", set()):
+        await update.message.reply_text("Сначала нужно запустить бота через /start")
+        return
+
+    await update.message.reply_text("🧠 Запускаю викторину вручную...")
+    await send_quiz(context, chat_id=chat_id)
+
+
+# Команда /rating — показывает таблицу лидеров
+async def rating(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = str(update.message.chat_id)
+    scores = user_scores.get(chat_id, {})
+
+    if not scores:
+        await update.message.reply_text("Никто ещё не отвечал.")
+        return
+
+    sorted_scores = sorted(scores.items(), key=lambda x: x[1]['score'], reverse=True)
+    rating_text = "🏆 Таблица лидеров:\n\n"
+    for idx, (uid, data) in enumerate(sorted_scores, 1):
+        rating_text += f"{idx}. {data['name']} — {data['score']} очков\n"
+
+    await update.message.reply_text(rating_text)
+
+
 # Основная функция
 if __name__ == '__main__':
     print("🔧 Запуск бота...")
@@ -155,6 +188,8 @@ if __name__ == '__main__':
 
     # Регистрация команд
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("quiz", manual_quiz))
+    application.add_handler(CommandHandler("rating", rating))
     application.add_handler(PollAnswerHandler(handle_poll_answer))
 
     # Планировщик

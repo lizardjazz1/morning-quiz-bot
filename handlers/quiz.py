@@ -93,5 +93,5 @@ async def show_final_results(chat_id, context):
     result_text += "\n🔥 Молодцы! Теперь вы знаете ещё больше!"
     await context.bot.send_message(chat_id=chat_id, text=result_text)
 
-manual_quiz_handler = CommandHandler("quiz", manual_quiz)
+manual_quiz = CommandHandler("quiz", manual_quiz_callback)
 start_quiz10_handler = CommandHandler("quiz10", start_quiz10)

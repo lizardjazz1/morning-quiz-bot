@@ -24,9 +24,9 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 quiz_data: Dict[str, List[Dict[str, Any]]] = {}
-user_scores: Dict[str, Dict[str, Any]] = {}  # Исправлено
-current_poll: Dict[str, Dict[str, Any]] = {} # Исправлено
-current_quiz_session: Dict[str, Dict[str, Any]] = {} # Исправлено
+user_scores: Dict[str, Dict[str, Any]] = {}
+current_poll: Dict[str, Dict[str, Any]] = {}
+current_quiz_session: Dict[str, Dict[str, Any]] = {}
 
 # --- Вспомогательные функции для сериализации/десериализации (без изменений) ---
 def convert_sets_to_lists_recursively(obj: Any) -> Any:
@@ -58,9 +58,10 @@ def load_questions():
                 logger.warning(f"Категория '{category}' не список. Пропущена."); continue
             processed_category_questions = []
             for i, q_data in enumerate(questions_list):
+                # ИСПРАВЛЕНО ЗДЕСЬ: Убрана лишняя закрывающая скобка в конце условия
                 if not (isinstance(q_data, dict) and all(k in q_data for k in ["question", "options", "correct"]) and
                         isinstance(q_data["options"], list) and len(q_data["options"]) >= 2 and
-                        q_data["correct"] in q_data["options"])):
+                        q_data["correct"] in q_data["options"]):
                     logger.warning(f"Вопрос {i+1} в '{category}' некорректен. Пропущен. Данные: {q_data}"); continue
                 correct_option_index = q_data["options"].index(q_data["correct"])
                 processed_category_questions.append({"question": q_data["question"], "options": q_data["options"],
@@ -196,10 +197,9 @@ async def send_next_question_in_session(context: ContextTypes.DEFAULT_TYPE, chat
     session = current_quiz_session.get(chat_id_str)
     if not session: logger.warning(f"send_next_q: Сессия {chat_id_str} удалена/не найдена."); return
 
-    # Отменяем предыдущую задачу на переход, если она была (например, если вызвали досрочно из handle_poll_answer)
     if job := session.get("next_question_job"):
         try: job.schedule_removal(); logger.debug(f"Job {job.name} отменен для {chat_id_str}.")
-        except Exception: pass # Может быть уже выполнена или удалена
+        except Exception: pass
         session["next_question_job"] = None
 
     current_q_idx, actual_num_q = session["current_index"], session["actual_num_questions"]
@@ -215,7 +215,7 @@ async def send_next_question_in_session(context: ContextTypes.DEFAULT_TYPE, chat
     if cat := q_details.get("original_category"): q_text_display += f"Категория: {cat}\n"
     q_text_display += q_details['question']
 
-    q_text_poll, opts_poll, correct_idx_poll, _ = prepare_poll_options(q_details) # q_text_poll не используется здесь, берем q_text_display
+    q_text_poll, opts_poll, correct_idx_poll, _ = prepare_poll_options(q_details)
 
     try:
         sent_poll = await context.bot.send_poll(chat_id=chat_id_str, question=q_text_display, options=opts_poll,
@@ -227,14 +227,13 @@ async def send_next_question_in_session(context: ContextTypes.DEFAULT_TYPE, chat
         current_poll[sent_poll.poll.id] = {
             "chat_id": chat_id_str, "message_id": sent_poll.message_id, "correct_index": correct_idx_poll,
             "quiz_session": True, "question_details": q_details, "associated_quiz_session_chat_id": chat_id_str,
-            "is_last_question": is_last, "next_q_triggered_by_answer": False # Новый флаг
+            "is_last_question": is_last, "next_q_triggered_by_answer": False
         }
         logger.info(f"Отправлен вопрос {current_q_idx + 1}/{actual_num_q} сессии {chat_id_str}. Poll ID: {sent_poll.poll.id}")
 
         job_delay_secs = open_period + JOB_GRACE_PERIOD
         job_name = f"poll_end_{chat_id_str}_{sent_poll.poll.id}"
 
-        # Удаляем старую задачу с таким именем, если она есть
         for old_job in context.job_queue.get_jobs_by_name(job_name): old_job.schedule_removal() # type: ignore
 
         next_job = context.job_queue.run_once(handle_current_poll_end, timedelta(seconds=job_delay_secs), # type: ignore
@@ -245,7 +244,7 @@ async def send_next_question_in_session(context: ContextTypes.DEFAULT_TYPE, chat
         await show_quiz_session_results(context, chat_id_str, error_occurred=True)
 
 
-async def handle_current_poll_end(context: ContextTypes.DEFAULT_TYPE): # Job callback
+async def handle_current_poll_end(context: ContextTypes.DEFAULT_TYPE):
     job_data = context.job.data # type: ignore
     chat_id_str, ended_poll_id, ended_poll_q_idx = job_data["chat_id"], job_data["ended_poll_id"], job_data["ended_poll_q_idx"]
     logger.info(f"Job 'handle_current_poll_end' сработал для {chat_id_str}, poll {ended_poll_id} (вопрос {ended_poll_q_idx + 1}).")
@@ -253,25 +252,19 @@ async def handle_current_poll_end(context: ContextTypes.DEFAULT_TYPE): # Job cal
     session = current_quiz_session.get(chat_id_str)
     if not session: logger.warning(f"Сессия {chat_id_str} не найдена при обработке job для poll {ended_poll_id}."); return
 
-    # Очищаем информацию о завершенном опросе
     poll_info_ended = current_poll.pop(ended_poll_id, None)
     if poll_info_ended: logger.debug(f"Poll {ended_poll_id} удален из current_poll для {chat_id_str}.")
-    else: logger.warning(f"Poll {ended_poll_id} не найден в current_poll при обработке job (возможно, уже удален).")
+    else: logger.warning(f"Poll {ended_poll_id} не найден в current_poll при обработке job.")
 
-    # Если это была задача для последнего вопроса, или сессия уже должна была завершиться
     if ended_poll_q_idx >= session["actual_num_questions"] - 1:
-        # Убедимся, что все вопросы действительно были "отправлены" (current_index дошел до конца)
         if session["current_index"] >= session["actual_num_questions"]:
             logger.info(f"Время для последнего вопроса (индекс {ended_poll_q_idx}) сессии {chat_id_str} истекло. Показ результатов.")
             await show_quiz_session_results(context, chat_id_str)
-        else: # Сессия почему-то не дошла до конца, но job для последнего вопроса сработал. Странно.
+        else:
             logger.warning(f"Job для последнего вопроса {ended_poll_q_idx} сработал, но current_index={session['current_index']}. Показываем результаты.")
             await show_quiz_session_results(context, chat_id_str)
         return
 
-    # Если следующий вопрос ЕЩЕ НЕ БЫЛ отправлен (т.е. никто не ответил на ended_poll_id, или ответ не вызвал переход)
-    # `current_index` указывает на индекс *следующего* вопроса. Если он равен `ended_poll_q_idx + 1`, значит,
-    # `send_next_question_in_session` для вопроса `ended_poll_q_idx + 1` еще не вызывался.
     if session["current_index"] == ended_poll_q_idx + 1:
         logger.info(f"Тайм-аут для вопроса {ended_poll_q_idx + 1} в {chat_id_str} (poll {ended_poll_id}). Отправляем следующий.")
         await send_next_question_in_session(context, chat_id_str)
@@ -284,10 +277,9 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
     poll_id, uid_str, user_name = answer.poll_id, str(user.id), user.full_name # type: ignore
 
     poll_info = current_poll.get(poll_id)
-    if not poll_info: return # Ответ на старый/неизвестный опрос
+    if not poll_info: return
 
     chat_id_str = poll_info["chat_id"]
-    # Обновление глобальной статистики
     user_scores.setdefault(chat_id_str, {}).setdefault(uid_str, {"name": user_name, "score": 0, "answered_polls": set()})
     user_global_data = user_scores[chat_id_str][uid_str]
     user_global_data["name"] = user_name
@@ -295,31 +287,27 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     is_correct = (len(answer.option_ids) == 1 and answer.option_ids[0] == poll_info["correct_index"]) # type: ignore
 
-    # Только один раз начисляем очки за конкретный опрос в глобальный рейтинг
     if poll_id not in user_global_data["answered_polls"]:
         if is_correct: user_global_data["score"] += 1
         user_global_data["answered_polls"].add(poll_id)
-        save_user_data() # Сохраняем после изменения глобальных очков
+        save_user_data()
         logger.info(f"{user_name} ({uid_str}) ответил {'правильно' if is_correct else 'неправильно'} на poll {poll_id}. Глобальный счет: {user_global_data['score']}")
 
-    # Если это опрос из сессии /quiz10
     if poll_info["quiz_session"]:
         session_chat_id = poll_info["associated_quiz_session_chat_id"]
         session = current_quiz_session.get(session_chat_id) # type: ignore
         if session:
             session_user_scores = session["session_scores"].setdefault(uid_str, {"name": user_name, "score": 0, "answered_this_session_polls": set()})
-            session_user_scores["name"] = user_name # Обновить имя, если изменилось
+            session_user_scores["name"] = user_name
             if not isinstance(session_user_scores.get("answered_this_session_polls"), set): session_user_scores["answered_this_session_polls"] = set(session_user_scores.get("answered_this_session_polls",[]))
 
-            # Начисляем очки за сессию только один раз за данный poll_id
             if poll_id not in session_user_scores["answered_this_session_polls"]:
                 if is_correct: session_user_scores["score"] += 1
                 session_user_scores["answered_this_session_polls"].add(poll_id)
                 logger.info(f"{user_name} ({uid_str}) +{1 if is_correct else 0} в сессии {session_chat_id}. Счет сессии: {session_user_scores['score']}")
 
-            # Если это первый ответ на ДАННЫЙ опрос И это НЕ последний вопрос сессии
             if not poll_info.get("next_q_triggered_by_answer") and not poll_info.get("is_last_question"):
-                poll_info["next_q_triggered_by_answer"] = True # Помечаем, что для этого poll_id переход уже инициирован
+                poll_info["next_q_triggered_by_answer"] = True
                 logger.info(f"Первый ответ на poll {poll_id} в сессии {session_chat_id}. Отправляем следующий вопрос досрочно.")
                 await send_next_question_in_session(context, session_chat_id) # type: ignore
 
@@ -330,7 +318,7 @@ async def show_quiz_session_results(context: ContextTypes.DEFAULT_TYPE, chat_id_
 
     if job := session.get("next_question_job"):
         try: job.schedule_removal(); logger.info(f"Job {job.name} отменен для {chat_id_str} при показе результатов.")
-        except Exception: pass # Может быть уже выполнен или удален
+        except Exception: pass
 
     num_q_in_session = session.get("actual_num_questions", NUMBER_OF_QUESTIONS_IN_SESSION)
     results_header = "🏁 Викторина завершена! 🏁\n\n" if not error_occurred else "Викторина прервана.\n\nПромежуточные результаты:\n"
@@ -339,7 +327,6 @@ async def show_quiz_session_results(context: ContextTypes.DEFAULT_TYPE, chat_id_
     if not session["session_scores"]:
         results_body = "В этой сессии никто не участвовал или не набрал очков."
     else:
-        # Сортируем по очкам в сессии (убывание), затем по имени (возрастание)
         sorted_session_participants = sorted(
             session["session_scores"].items(),
             key=lambda item: (-item[1]["score"], item[1]["name"].lower())
@@ -360,14 +347,12 @@ async def show_quiz_session_results(context: ContextTypes.DEFAULT_TYPE, chat_id_
     try: await context.bot.send_message(chat_id=chat_id_str, text=results_header + results_body)
     except Exception as e: logger.error(f"Ошибка отправки результатов сессии в {chat_id_str}: {e}", exc_info=True)
 
-    # Очистка сессии
-    current_poll_id_of_session = session.get("current_poll_id") # Poll_id последнего отправленного вопроса
+    current_poll_id_of_session = session.get("current_poll_id")
     if current_poll_id_of_session and current_poll_id_of_session in current_poll:
         del current_poll[current_poll_id_of_session]
 
-    current_quiz_session.pop(chat_id_str, None) # Удаляем сессию
+    current_quiz_session.pop(chat_id_str, None)
     logger.info(f"Сессия для чата {chat_id_str} очищена.")
-    # Глобальные очки уже должны быть сохранены в handle_poll_answer
 
 async def top_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id_str = str(update.effective_chat.id) # type: ignore
@@ -378,7 +363,7 @@ async def top_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not sorted_scores: await update.message.reply_text("Пока нет игроков с очками."); return # type: ignore
 
     top_text = "🏆 Топ игроков в этом чате:\n"
-    for i, (uid, data) in enumerate(sorted_scores[:10]): # Топ-10
+    for i, (uid, data) in enumerate(sorted_scores[:10]):
         top_text += f"{i+1}. {data.get('name', f'User {uid}')} - {data.get('score', 0)} очков\n"
     await update.message.reply_text(top_text) # type: ignore
 
@@ -403,7 +388,7 @@ async def stop_quiz_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try: await context.bot.stop_poll(chat_id_str, current_poll[current_poll_id]["message_id"])
         except Exception as e: logger.error(f"Ошибка stop_poll {current_poll_id} в {chat_id_str}: {e}")
 
-    await show_quiz_session_results(context, chat_id_str, error_occurred=True) # Показываем как прерванную
+    await show_quiz_session_results(context, chat_id_str, error_occurred=True)
     await update.message.reply_text("Викторина остановлена.") # type: ignore
 
 # --- Точка входа ---

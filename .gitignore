@@ -42,4 +42,3 @@ users.json # Данные пользователей не должны быть 
 .vscode/
 *.swp
 *~
-users.json

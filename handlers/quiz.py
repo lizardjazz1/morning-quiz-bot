@@ -1,20 +1,15 @@
 # handlers/quiz.py
 
+from telegram.ext import CommandHandler
 from telegram import Update
-from telegram.ext import ContextTypes, CommandHandler
+from telegram.ext import ContextTypes
 
 import random
-
 from storage.state_manager import state
 
-quiz_data = {}
+logger = logging.getLogger(__name__)
 
-def get_quiz_questions(count=10):
-    all_questions = []
-    for category in quiz_data.values():
-        all_questions.extend(category)
-    return random.sample(all_questions, min(count, len(all_questions)))
-
+# --- Функции ---
 async def manual_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = str(update.message.chat_id)
     if chat_id not in context.bot_data.get("active_chats", set()):
@@ -42,6 +37,13 @@ async def start_quiz10(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("📚 Серия из 10 вопросов началась! 🧠")
     await send_next_quiz_question(chat_id, context)
+
+# --- Вспомогательные функции ---
+def get_quiz_questions(count=10):
+    all_questions = []
+    for category in quiz_data.values():
+        all_questions.extend(category)
+    return random.sample(all_questions, min(count, len(all_questions)))
 
 async def send_next_quiz_question(chat_id, context):
     session = state.current_quiz_session.get(chat_id)
@@ -93,5 +95,6 @@ async def show_final_results(chat_id, context):
     result_text += "\n🔥 Молодцы! Теперь вы знаете ещё больше!"
     await context.bot.send_message(chat_id=chat_id, text=result_text)
 
-manual_quiz = CommandHandler("quiz", manual_quiz_callback)
+# --- Обработчики ---
+manual_quiz_handler = CommandHandler("quiz", manual_quiz)
 start_quiz10_handler = CommandHandler("quiz10", start_quiz10)

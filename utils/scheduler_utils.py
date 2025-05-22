@@ -1,7 +1,6 @@
-# utils/keep_alive.py
+# utils/scheduler_utils.py
 
 import threading
-import time
 
 def keep_alive():
     print("⏰ Бот всё ещё работает...")

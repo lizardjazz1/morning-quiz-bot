@@ -1,76 +1,45 @@
 # main.py
 
 import logging
-from telegram.ext import ApplicationBuilder, CommandHandler, PollAnswerHandler
 from apscheduler.schedulers.background import BackgroundScheduler
-from dotenv import load_dotenv
-import os
-import json
-from telegram import Update
-from telegram.ext import ContextTypes
+
+from telegram.ext import ApplicationBuilder
+
+# Импорты из наших модулей
+from config.settings import BOT_TOKEN
+from handlers.start import start
+from handlers.quiz import manual_quiz, start_quiz10
+from handlers.rating import rating
+from handlers.poll_answer import poll_answer_handler
+from utils.scheduler_utils import keep_alive
+from services.quiz_service import send_quiz
+
 
 # Логирование
-logging.basicConfig(level=logging.INFO)
-
-# Подгружаем токен
-load_dotenv()
-TOKEN = os.getenv("BOT_TOKEN")
-
-# Загрузка данных
-def load_questions():
-    try:
-        with open('questions.json', 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception as e:
-        logging.error(f"Ошибка при загрузке вопросов: {e}")
-        return {}
-
-def load_user_data():
-    if not os.path.exists('users.json'):
-        save_user_data({})
-    try:
-        with open('users.json', 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception as e:
-        logging.error(f"Ошибка при загрузке рейтинга: {e}")
-        return {}
-
-def save_user_data(data):
-    with open('users.json', 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
 
 # Периодический вывод для Replit
-def keep_alive():
-    print("⏰ Бот всё ещё работает...")
-    threading.Timer(7200, keep_alive).start()
-
 keep_alive()
 
-# Глобальные данные
-quiz_data = load_questions()
-user_scores = load_user_data()
-current_poll = {}  # {poll_id: {...}}
-current_quiz_session = {}  # {chat_id: {...}}
+# Инициализация приложения
+application = ApplicationBuilder().token(BOT_TOKEN).build()
 
-# Инициализируем бота
-from handlers.start_handler import start
-from handlers.quiz_handler import manual_quiz, start_quiz10, handle_poll_answer
-from handlers.rating_handler import rating
+# Регистрация обработчиков
+application.add_handler(start)
+application.add_handler(manual_quiz)
+application.add_handler(start_quiz10)
+application.add_handler(rating)
+application.add_handler(poll_answer_handler)
 
-application = ApplicationBuilder().token(TOKEN).build()
-
-# Регистрация команд
-application.add_handler(CommandHandler("start", start))
-application.add_handler(CommandHandler("quiz", manual_quiz))
-application.add_handler(CommandHandler("quiz10", start_quiz10))
-application.add_handler(CommandHandler("rating", rating))
-application.add_handler(PollAnswerHandler(handle_poll_answer))
-
-# Планировщик ежедневного квиза
+# Планировщик
 scheduler = BackgroundScheduler()
-scheduler.add_job(manual_quiz, 'cron', hour=8, minute=0, args=[application])
+scheduler.add_job(send_quiz, 'cron', hour=8, minute=0, args=[application])  # Каждое утро в 8:00
 scheduler.start()
 
-# Запуск бота
-print("✅ Бот запущен. Ожидание сообщений...")
-application.run_polling()
+# Точка запуска
+if __name__ == '__main__':
+    print("✅ Бот запущен. Ожидание сообщений...")
+    application.run_polling()

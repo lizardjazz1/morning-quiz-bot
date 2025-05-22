@@ -1,57 +1,14 @@
 # handlers/quiz_handler.py
 
 import random
+from telegram import Update
 from telegram.ext import ContextTypes
-from telegram import Poll
-from utils.questions import load_questions
-from config import USERS_FILE
 
-quiz_data = load_questions()
-current_quiz_session = {}  # {chat_id: {...}}
-current_poll = {}  # {poll_id: {...}}
+# Внешние зависимости
+from main import quiz_data, current_poll, current_quiz_session
+from utils.users import user_scores, save_user_data
 
-async def send_quiz(context: ContextTypes.DEFAULT_TYPE, chat_id=None):
-    from handlers.quiz_handler import manual_quiz, send_next_quiz_question
-    pass  # Импорт ниже
-
-
-async def manual_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = str(update.message.chat_id)
-
-    if chat_id not in context.bot_data.get("active_chats", set()):
-        await update.message.reply_text("Сначала нужно запустить бота через /start")
-        return
-
-    await update.message.reply_text("🧠 Запускаю викторину вручную...")
-    await send_quiz(context, chat_id=chat_id)
-
-
-async def start_quiz10(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = str(update.message.chat_id)
-
-    if chat_id not in context.bot_data.get("active_chats", set()):
-        await update.message.reply_text("Сначала нужно запустить бота через /start")
-        return
-
-    questions = load_questions().values()
-    all_questions = [q for cat in questions for q in cat]
-    session_questions = random.sample(all_questions, min(10, len(all_questions)))
-
-    if not session_questions:
-        await update.message.reply_text("Не могу начать квиз — нет вопросов 😕")
-        return
-
-    current_quiz_session[chat_id] = {
-        "questions": session_questions,
-        "correct_answers": {},
-        "current_index": 0,
-        "total_questions": 10
-    }
-
-    await update.message.reply_text("📚 Серия из 10 вопросов началась! 🧠")
-    await send_next_quiz_question(chat_id, context)
-
-
+# Отправка следующего вопроса серии
 async def send_next_quiz_question(chat_id, context):
     session = current_quiz_session.get(chat_id)
     if not session or session["current_index"] >= len(session["questions"]):
@@ -66,7 +23,7 @@ async def send_next_quiz_question(chat_id, context):
         chat_id=chat_id,
         question=f"📌 Вопрос {session['current_index'] + 1}:\n{question_data['question']}",
         options=options,
-        type=Poll.QUIZ,
+        type="quiz",
         correct_option_id=options.index(correct_answer),
         is_anonymous=False
     )
@@ -84,6 +41,7 @@ async def send_next_quiz_question(chat_id, context):
     session["current_index"] += 1
 
 
+# Обработка ответов на опрос
 async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     answer = update.poll_answer
     poll_id = answer.poll_id
@@ -101,9 +59,7 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     del current_poll[poll_id]
 
-    # Обновление общего рейтинга
-    from utils.users import user_scores, save_user_data
-
+    # Сохраняем общий рейтинг
     if chat_id not in user_scores:
         user_scores[chat_id] = {}
 
@@ -126,6 +82,7 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await send_next_quiz_question(chat_id, context)
 
 
+# Финальные результаты после 10 вопросов
 async def show_final_results(chat_id, context):
     session = current_quiz_session.pop(chat_id, None)
     if not session:

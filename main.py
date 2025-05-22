@@ -31,8 +31,9 @@ def load_user_data():
     try:
         with open('users.json', 'r', encoding='utf-8') as f:
             return json.load(f)
-    except Exception as e:
+    except (json.JSONDecodeError, Exception) as e:
         logging.error(f"Ошибка при загрузке рейтинга: {e}")
+        save_user_data({})
         return {}
 
 # Сохранение пользовательских данных
@@ -138,7 +139,7 @@ async def start_quiz10(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "questions": questions,
         "correct_answers": {},
         "current_index": 0,
-        "completed_users": set()  # Участники, которые завершили квиз
+        "completed_users": set()
     }
     await update.message.reply_text("📚 Серия из 10 вопросов началась! 🧠")
     await send_next_quiz_question(chat_id, context)
@@ -207,7 +208,7 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
             session["correct_answers"][user_id] = {"name": user_name, "count": 0}
         if option == correct_index:
             session["correct_answers"][user_id]["count"] += 1
-        # Отправляем следующий вопрос или завершаем
+        # Отправляем следующий вопрос или обновляем результаты
         await send_next_quiz_question(chat_id, context)
 
 # Финальные результаты для каждого пользователя отдельно
@@ -215,18 +216,19 @@ async def show_final_results_individual(chat_id, context):
     session = current_quiz_session.get(chat_id)
     if not session:
         return
-    user_id = str(context._user_id)
-    user_name = context._bot_username  # может быть None, лучше получать через контекст
 
-    # Если пользователь уже завершил квиз, выходим
-    if user_id in session.get("completed_users", set()):
+    user = update.effective_user
+    user_id = str(user.id)
+    user_name = user.full_name
+
+    # Добавляем пользователя в список завершивших (если ещё не добавлен)
+    completed_users = session.get("completed_users", set())
+    if user_id in completed_users:
         return
+    completed_users.add(user_id)
+    session["completed_users"] = completed_users
 
-    # Добавляем пользователя в список завершивших
-    session.setdefault("completed_users", set()).add(user_id)
-
-    # Формируем результаты этого пользователя и других завершивших
-    completed_users = session["completed_users"]
+    # Собираем результаты только завершивших пользователей
     results = []
     for uid in completed_users:
         if uid in session["correct_answers"]:
@@ -234,7 +236,7 @@ async def show_final_results_individual(chat_id, context):
 
     results.sort(key=lambda x: x[1]['count'], reverse=True)
 
-    result_text = f"🏁 {session['correct_answers'][user_id]['name']}, вот результаты квиза:\n"
+    result_text = f"🏁 {user_name}, вот твои результаты:\n"
     for idx, (uid, data) in enumerate(results, 1):
         total = data["count"]
         emoji = "✨" if total == 10 else "👏" if total >= 7 else "👍" if total >= 5 else "🙂"

@@ -24,9 +24,9 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 quiz_data: Dict[str, List[Dict[str, Any]]] = {}
-user_scores: Dict[str, Dict[str, Any]]] = {}
-current_poll: Dict[str, Dict[str, Any]]] = {}
-current_quiz_session: Dict[str, Dict[str, Any]]] = {}
+user_scores: Dict[str, Dict[str, Any]] = {}
+current_poll: Dict[str, Dict[str, Any]] = {}
+current_quiz_session: Dict[str, Dict[str, Any]] = {}
 
 # --- Вспомогательные функции для сериализации/десериализации (без изменений) ---
 def convert_sets_to_lists_recursively(obj: Any) -> Any:

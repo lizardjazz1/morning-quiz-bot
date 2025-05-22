@@ -54,15 +54,9 @@ user_scores = load_user_data()
 
 # Хранение активных опросов
 current_poll = {}  # {poll_id: {"chat_id": ..., "correct_index": ..., "quiz_session": True/False}
-current_quiz_session = {}  # {chat_id: {"questions": [...], "correct_answers": {}, "current_index": 0}
 
-
-# Получить список случайных вопросов
-def get_quiz_questions(count=10):
-    all_questions = []
-    for category in quiz_data.values():
-        all_questions.extend(category)
-    return random.sample(all_questions, min(count, len(all_questions)))
+# Хранение сессии квиза из 10 вопросов
+current_quiz_session = {}  # {chat_id: {"questions": [...], "correct_answers": {}, "current_index": 0, "active": True}}
 
 # Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -94,15 +88,13 @@ async def send_quiz(context: ContextTypes.DEFAULT_TYPE, chat_id=None):
         logging.warning("Нет активных чатов для рассылки")
         return
 
-    target_chats = [chat_id] if chat_id else list(active_chats)
-
     categories = list(quiz_data.keys())
     category = random.choice(categories)
     question_data = random.choice(quiz_data[category])
     options = question_data["options"]
     correct_answer = question_data["correct"]
 
-    for cid in target_chats:
+    for cid in active_chats:
         try:
             message = await context.bot.send_poll(
                 chat_id=cid,
@@ -127,35 +119,12 @@ async def send_quiz(context: ContextTypes.DEFAULT_TYPE, chat_id=None):
             logging.error(f"Ошибка при отправке опроса в чат {cid}: {e}")
 
 
-# Обработка ответов на опрос
-async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    answer = update.poll_answer
-    poll_id = answer.poll_id
-    user_id = str(answer.user.id)
-    option = answer.option_ids[0]  # индекс выбранного варианта
-    user_name = answer.user.full_name
-
-    poll_info = current_poll.get(poll_id)
-    if not poll_info:
-        return
-
-    chat_id = poll_info["chat_id"]
-    correct_index = poll_info["correct_index"]
-
-    # Инициализация user_scores, если нужно
-    if chat_id not in user_scores:
-        user_scores[chat_id] = {}
-
-    # Если пользователь дал правильный ответ
-    if option == correct_index:
-        if user_id not in user_scores[chat_id]:
-            user_scores[chat_id][user_id] = {"name": user_name, "score": 1}
-        else:
-            user_scores[chat_id][user_id]["score"] += 1
-        await context.bot.send_message(chat_id=chat_id, text=f"{user_name} правильно ответил(а)! 👏")
-        save_user_data(user_scores)
-
-    del current_poll[poll_id]  # Убираем опрос из активных
+# Получить случайные вопросы для квиза
+def get_quiz_questions(count=10):
+    all_questions = []
+    for category in quiz_data.values():
+        all_questions.extend(category)
+    return random.sample(all_questions, min(count, len(all_questions)))
 
 
 # Команда /quiz — вручную запускает викторину ТОЛЬКО в текущем чате
@@ -187,15 +156,15 @@ async def start_quiz10(update: Update, context: ContextTypes.DEFAULT_TYPE):
     current_quiz_session[chat_id] = {
         "questions": questions,
         "correct_answers": {},
-        "current_index": 0
+        "current_index": 0,
+        "active": True
     }
 
     await update.message.reply_text("📚 Серия из 10 вопросов началась! 🧠")
-
     await send_next_quiz_question(chat_id, context)
 
 
-# Отправка следующего вопроса серии `quiz10`
+# Отправка следующего вопроса серии
 async def send_next_quiz_question(chat_id, context):
     session = current_quiz_session.get(chat_id)
     if not session or session["current_index"] >= len(session["questions"]):
@@ -206,27 +175,76 @@ async def send_next_quiz_question(chat_id, context):
     options = question_data["options"]
     correct_answer = question_data["correct"]
 
-    message = await context.bot.send_poll(
-        chat_id=chat_id,
-        question=f"📌 Вопрос {session['current_index'] + 1}:\n{question_data['question']}",
-        options=options,
-        type=Poll.QUIZ,
-        correct_option_id=options.index(correct_answer),
-        is_anonymous=False
-    )
+    try:
+        message = await context.bot.send_poll(
+            chat_id=chat_id,
+            question=f"📌 Вопрос {session['current_index'] + 1}:\n{question_data['question']}",
+            options=options,
+            type=Poll.QUIZ,
+            correct_option_id=options.index(correct_answer),
+            is_anonymous=False
+        )
 
-    poll_id = message.poll.id
-    correct_index = options.index(correct_answer)
+        poll_id = message.poll.id
+        correct_index = options.index(correct_answer)
 
-    current_poll[poll_id] = {
-        "chat_id": chat_id,
-        "correct_index": correct_index,
-        "message_id": message.message_id,
-        "quiz_session": True  # Это часть квиза из 10 вопросов
-    }
-    
-    session["current_index"] += 1
-    session["current_question"] = poll_id
+        current_poll[poll_id] = {
+            "chat_id": chat_id,
+            "correct_index": correct_index,
+            "message_id": message.message_id,
+            "quiz_session": True  # Это часть серии
+        }
+
+        session["current_index"] += 1  # Увеличиваем индекс
+
+    except Exception as e:
+        logging.error(f"Ошибка при отправке опроса в чат {chat_id}: {e}")
+        await context.bot.send_message(chat_id=chat_id, text="❌ Не могу продолжить — ошибка отправки")
+
+
+# Обработка ответов на опрос
+async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    answer = update.poll_answer
+    poll_id = answer.poll_id
+    user_id = str(answer.user.id)
+    option = answer.option_ids[0]  # индекс выбранного варианта
+    user_name = answer.user.full_name
+
+    poll_info = current_poll.get(poll_id)
+    if not poll_info:
+        return
+
+    chat_id = poll_info["chat_id"]
+    correct_index = poll_info["correct_index"]
+    is_quiz_session = poll_info.get("quiz_session", False)
+
+    # Убираем опрос из списка активных
+    del current_poll[poll_id]
+
+    # Инициализация user_scores, если нужно
+    if chat_id not in user_scores:
+        user_scores[chat_id] = {}
+
+    # Если пользователь дал правильный ответ
+    if option == correct_index:
+        if user_id not in user_scores[chat_id]:
+            user_scores[chat_id][user_id] = {"name": user_name, "score": 1}
+        else:
+            user_scores[chat_id][user_id]["score"] += 1
+        await context.bot.send_message(chat_id=chat_id, text=f"{user_name}, правильно! 👏")
+        save_user_data(user_scores)
+
+    # Если это часть серии квизов
+    if is_quiz_session and chat_id in current_quiz_session:
+        session = current_quiz_session[chat_id]
+        if user_id not in session["correct_answers"]:
+            session["correct_answers"][user_id] = {"name": user_name, "count": 0}
+
+        if option == correct_index:
+            session["correct_answers"][user_id]["count"] += 1
+
+        # Отправляем следующий вопрос
+        await send_next_quiz_question(chat_id, context)
 
 
 # Финальные результаты после 10 вопросов
@@ -244,7 +262,7 @@ async def show_final_results(chat_id, context):
         emoji = "✨" if total == 10 else "👏" if total >= 7 else "👍" if total >= 5 else "🙂"
         result_text += f"{idx}. {data['name']} — {total}/10 {emoji}\n"
 
-    result_text += "\n🔥 Спасибо за участие!"
+    result_text += "\n🔥 Молодцы! Теперь вы знаете ещё больше!"
 
     await context.bot.send_message(chat_id=chat_id, text=result_text)
 

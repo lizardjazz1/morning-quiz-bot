@@ -1,57 +1,65 @@
-# main.py
-
-from telegram import Update
-from telegram.ext import ContextTypes, ApplicationBuilder, CommandHandler, PollAnswerHandler
-from apscheduler.schedulers.background import BackgroundScheduler
+# quiz_bot/main.py
 import logging
+from telegram.ext import ApplicationBuilder, CommandHandler, PollAnswerHandler
 
-# Локальные импорты
-from config.settings import BOT_TOKEN
-from handlers.start import start
-from handlers.quiz import manual_quiz_handler, start_quiz10_handler
-from handlers.rating import rating_handler
-from handlers.poll_answer import poll_answer_handler
-from utils.scheduler_utils import keep_alive
-from services.quiz_service import send_quiz
-from storage.data_loader import load_json
-from services.score_service import init_user_scores
-from storage.state_manager import state
+from config import TOKEN, setup_logging
+from data_manager import load_questions, load_user_data
+from handlers import start, manual_quiz, start_quiz10, rating, handle_poll_answer
+from scheduler_setup import setup_scheduler
+from utils import keep_alive
 
-# Логирование
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
+def main():
+    # 1. Настройка логирования
+    setup_logging()
+    logging.info("🔧 Запуск бота...")
 
-# Периодический вывод для Replit
-keep_alive()
+    if not TOKEN: # Проверка уже есть в config.py, но для надежности
+        logging.critical("❌ Токен не найден в config.py. Завершение работы.")
+        return
 
-# Инициализация приложения
-application = ApplicationBuilder().token(BOT_TOKEN).build()
+    print(f"✅ Токен загружен: {TOKEN[:5]}...{TOKEN[-5:]}")
 
-# Инициализация данных при запуске
-async def post_init(app):
-    app.bot_data["quiz_data"] = load_json("questions.json")
-    app.bot_data["user_scores"] = load_json("users.json")
-    app.bot_data["active_chats"] = set(app.bot_data["user_scores"].keys())
-    app.bot_data["state"] = state
-    logging.info("✅ Данные загружены")
+    # 2. Создание экземпляра Application
+    application = ApplicationBuilder().token(TOKEN).build()
 
-application.post_init = post_init
+    # 3. Загрузка данных и инициализация bot_data
+    # Эти данные будут доступны во всех хендлерах через context.bot_data
+    application.bot_data['quiz_data'] = load_questions()
+    application.bot_data['user_scores'] = load_user_data()
+    application.bot_data['current_poll'] = {}  # {poll_id: {"chat_id": ..., "correct_index": ..., "message_id": ..., "quiz_session": True/False}}
+    application.bot_data['current_quiz_session'] = {} # {chat_id: {"questions": [...], "correct_answers": {}, "current_index": 0, "active": True}}
+    application.bot_data['active_chats'] = set() # {chat_id_str, ...}
+    # При старте можно загружать active_chats из файла, если нужна персистентность
+    # Например, при первом /start чат добавляется и сохраняется в users.json или отдельный файл.
 
-# Регистрация обработчиков
-application.add_handler(start)
-application.add_handler(manual_quiz_handler)
-application.add_handler(start_quiz10_handler)
-application.add_handler(rating_handler)
-application.add_handler(poll_answer_handler)
+    logging.info(f"Загружено вопросов: {sum(len(v) for v in application.bot_data['quiz_data'].values())}")
+    logging.info(f"Загружено пользовательских данных для {len(application.bot_data['user_scores'])} чатов.")
 
-# Планировщик
-scheduler = BackgroundScheduler()
-scheduler.add_job(send_quiz, 'cron', hour=8, minute=0, args=[application])
-scheduler.start()
 
-# Запуск
-if __name__ == '__main__':
-    print("✅ Бот запущен. Ожидание сообщений...")
+    # 4. Регистрация обработчиков
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("quiz", manual_quiz))
+    application.add_handler(CommandHandler("quiz10", start_quiz10))
+    application.add_handler(CommandHandler("rating", rating))
+    application.add_handler(PollAnswerHandler(handle_poll_answer))
+    logging.info("Обработчики команд зарегистрированы.")
+
+    # 5. Настройка и запуск планировщика
+    # Передаем application, чтобы планировщик имел доступ к bot_data и bot
+    scheduler = setup_scheduler(application)
+
+    # 6. Функция для поддержания активности (если нужно, например, для Replit)
+    keep_alive() # Запускаем keep_alive один раз, он сам себя будет перезапускать
+
+    # 7. Запуск бота
+    logging.info("✅ Бот запущен. Ожидание сообщений...")
     application.run_polling()
+
+    # Остановка планировщика при завершении работы бота (если бот останавливается корректно)
+    logging.info("Остановка планировщика...")
+    scheduler.shutdown()
+    logging.info("Бот остановлен.")
+
+
+if __name__ == '__main__':
+    main()

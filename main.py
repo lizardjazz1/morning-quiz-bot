@@ -44,13 +44,14 @@ def save_user_data(data):
 # Периодический вывод для Replit
 def keep_alive():
     print("⏰ Бот всё ещё работает...")
-    threading.Timer(60, keep_alive).start()
+    threading.Timer(7200, keep_alive).start()
 
 keep_alive()
 
 # Загружаем данные
 quiz_data = load_questions()
 user_scores = load_user_data()
+current_quiz = {}  # Хранение текущего вопроса для проверки ответов
 
 # Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -67,6 +68,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("Привет! Я буду присылать тебе утреннюю викторину!")
     logging.info(f"Бот добавлен в чат {chat_id}")
+
+    # Добавляем чат в список активных
+    active_chats = context.bot_data.get("active_chats", set())
+    active_chats.add(chat_id)
+    context.bot_data["active_chats"] = active_chats
 
 # Отправка случайного вопроса
 async def send_quiz(context: ContextTypes.DEFAULT_TYPE):
@@ -90,8 +96,6 @@ async def send_quiz(context: ContextTypes.DEFAULT_TYPE):
             logging.error(f"Ошибка при отправке сообщения в чат {chat_id}: {e}")
 
 # Обработка ответов
-current_quiz = {}
-
 async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -132,6 +136,17 @@ async def rating(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(rating_text)
 
+# Команда /quiz — вручную запускает викторину
+async def manual_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = str(update.message.chat_id)
+
+    if chat_id not in context.bot_data.get("active_chats", set()):
+        await update.message.reply_text("Сначала нужно запустить бота через /start")
+        return
+
+    await update.message.reply_text("🧠 Запускаю викторину вручную...")
+    await send_quiz(context)
+
 # Основная функция
 if __name__ == '__main__':
     print("🔧 Запуск бота...")
@@ -146,6 +161,7 @@ if __name__ == '__main__':
     # Регистрация команд
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("rating", rating))
+    application.add_handler(CommandHandler("quiz", manual_quiz))  # Новая команда
     application.add_handler(CallbackQueryHandler(button_click))
 
     # Планировщик

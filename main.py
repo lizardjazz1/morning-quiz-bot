@@ -55,7 +55,7 @@ user_scores = load_user_data()
 current_poll = {}  # {poll_id: {"chat_id": ..., "correct_index": ..., "quiz_session": True/False}
 
 # Хранение сессии квиза из 10 вопросов
-current_quiz_session = {}  # {chat_id: {"questions": [...], "correct_answers": {}, "current_index": 0, "active": True, "final_message_id": ...}}
+current_quiz_session = {}  # {chat_id: {"questions": [...], "correct_answers": {}, "current_index": 0, "completed_users": set()}}
 
 # Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -138,7 +138,7 @@ async def start_quiz10(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "questions": questions,
         "correct_answers": {},
         "current_index": 0,
-        "active": True
+        "completed_users": set()  # Участники, которые завершили квиз
     }
     await update.message.reply_text("📚 Серия из 10 вопросов началась! 🧠")
     await send_next_quiz_question(chat_id, context)
@@ -147,7 +147,7 @@ async def start_quiz10(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def send_next_quiz_question(chat_id, context):
     session = current_quiz_session.get(chat_id)
     if not session or session["current_index"] >= len(session["questions"]):
-        await show_final_results(chat_id, context)
+        await show_final_results_individual(chat_id, context)
         return
     question_data = session["questions"][session["current_index"]]
     options = question_data["options"]
@@ -207,35 +207,41 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
             session["correct_answers"][user_id] = {"name": user_name, "count": 0}
         if option == correct_index:
             session["correct_answers"][user_id]["count"] += 1
-        # Отправляем следующий вопрос или обновляем результаты
+        # Отправляем следующий вопрос или завершаем
         await send_next_quiz_question(chat_id, context)
 
-# Финальные результаты после 10 вопросов
-async def show_final_results(chat_id, context):
+# Финальные результаты для каждого пользователя отдельно
+async def show_final_results_individual(chat_id, context):
     session = current_quiz_session.get(chat_id)
     if not session:
         return
+    user_id = str(context._user_id)
+    user_name = context._bot_username  # может быть None, лучше получать через контекст
 
-    results = sorted(session["correct_answers"].items(), key=lambda x: x[1]['count'], reverse=True)
-    result_text = "🏁 Вот как вы прошли квиз из 10 вопросов:\n"
+    # Если пользователь уже завершил квиз, выходим
+    if user_id in session.get("completed_users", set()):
+        return
+
+    # Добавляем пользователя в список завершивших
+    session.setdefault("completed_users", set()).add(user_id)
+
+    # Формируем результаты этого пользователя и других завершивших
+    completed_users = session["completed_users"]
+    results = []
+    for uid in completed_users:
+        if uid in session["correct_answers"]:
+            results.append((uid, session["correct_answers"][uid]))
+
+    results.sort(key=lambda x: x[1]['count'], reverse=True)
+
+    result_text = f"🏁 {session['correct_answers'][user_id]['name']}, вот результаты квиза:\n"
     for idx, (uid, data) in enumerate(results, 1):
         total = data["count"]
         emoji = "✨" if total == 10 else "👏" if total >= 7 else "👍" if total >= 5 else "🙂"
         result_text += f"{idx}. {data['name']} — {total}/10 {emoji}\n"
     result_text += "\n🔥 Молодцы! Теперь вы знаете ещё больше!"
 
-    if "final_message_id" in session:
-        try:
-            await context.bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=session["final_message_id"],
-                text=result_text
-            )
-        except Exception as e:
-            logging.error(f"Ошибка при обновлении финального сообщения: {e}")
-    else:
-        message = await context.bot.send_message(chat_id=chat_id, text=result_text)
-        session["final_message_id"] = message.message_id
+    await context.bot.send_message(chat_id=chat_id, text=result_text)
 
 # Команда /rating — показывает таблицу лидеров
 async def rating(update: Update, context: ContextTypes.DEFAULT_TYPE):

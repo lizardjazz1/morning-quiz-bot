@@ -5,7 +5,25 @@ from telegram.ext import ContextTypes
 # Импорты из других модулей проекта
 from config import logger
 import state # Для доступа к user_scores
-from utils import pluralize_points # Новая функция для склонения слова "очки"
+from utils import pluralize_points # Обновленная функция для склонения слова "очки"
+
+def get_player_display(player_name: str, player_score: int) -> str:
+    """Формирует строку отображения игрока с иконкой и счетом."""
+    icon = ""
+    if player_score > 0:
+        if player_score >= 50: # Пример порога для особой медали
+            icon = "🌟"
+        elif player_score >= 10:
+            icon = "🏆"
+        else:
+            icon = "👍"
+    elif player_score < 0:
+        icon = "👎"
+    else: # player_score == 0
+        icon = "😐"
+    
+    return f"{icon} {player_name} - {pluralize_points(player_score)}"
+
 
 async def rating_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.effective_chat:
@@ -27,11 +45,16 @@ async def rating_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Пока нет игроков с набранными очками в этом чате.") # type: ignore
         return
 
-    top_players_text = "🏆 Топ-10 игроков в этом чате (/rating):\n\n"
+    top_players_text = "📊 Топ-10 игроков в этом чате (/rating):\n\n"
     for i, (user_id, data) in enumerate(sorted_scores_list[:10]):
         player_name = data.get('name', f'Игрок {user_id}')
         player_score = data.get('score', 0)
-        top_players_text += f"{i+1}. {player_name} - {pluralize_points(player_score)}\n" # Используем pluralize
+        rank_prefix = f"{i+1}."
+        if i == 0 and player_score > 0 : rank_prefix = "🥇"
+        elif i == 1 and player_score > 0 : rank_prefix = "🥈"
+        elif i == 2 and player_score > 0 : rank_prefix = "🥉"
+        
+        top_players_text += f"{rank_prefix} {get_player_display(player_name, player_score)}\n"
 
     await update.message.reply_text(top_players_text) # type: ignore
 
@@ -42,22 +65,20 @@ async def global_top_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text("Пока нет данных о рейтингах игроков.") # type: ignore
         return
 
-    # Правильное агрегирование для глобального топа
-    aggregated_global_scores = {} # user_id: {"name": name, "total_score": score}
-    for chat_id, chat_users in state.user_scores.items(): # Итерация по всем чатам
+    aggregated_global_scores = {}
+    for chat_id, chat_users in state.user_scores.items():
         for user_id, data in chat_users.items():
             user_name = data.get("name", f"Игрок {user_id}")
             user_chat_score = data.get("score", 0)
-            
+
             if user_id not in aggregated_global_scores:
                 aggregated_global_scores[user_id] = {"name": user_name, "total_score": 0}
             
+            # Суммируем очки из разных чатов для одного user_id
             aggregated_global_scores[user_id]["total_score"] += user_chat_score
-            # Обновляем имя, если текущее "полнее" или просто последнее увиденное
-            # Можно улучшить, например, храня глобальное имя пользователя
+            # Обновляем имя на самое "полное" или последнее встреченное
             if len(user_name) > len(aggregated_global_scores[user_id]["name"]):
                  aggregated_global_scores[user_id]["name"] = user_name
-
 
     if not aggregated_global_scores:
         await update.message.reply_text("Нет игроков для отображения в глобальном рейтинге.") # type: ignore
@@ -73,7 +94,12 @@ async def global_top_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     for i, (user_id, data) in enumerate(sorted_global_scores[:10]):
         player_name = data["name"]
         player_total_score = data["total_score"]
-        global_top_text += f"{i+1}. {player_name} - {pluralize_points(player_total_score)}\n" # Используем pluralize
+        rank_prefix = f"{i+1}."
+        if i == 0 and player_total_score > 0 : rank_prefix = "🥇"
+        elif i == 1 and player_total_score > 0 : rank_prefix = "🥈"
+        elif i == 2 and player_total_score > 0 : rank_prefix = "🥉"
+
+        global_top_text += f"{rank_prefix} {get_player_display(player_name, player_total_score)}\n"
 
     await update.message.reply_text(global_top_text) # type: ignore
 

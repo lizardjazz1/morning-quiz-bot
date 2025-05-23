@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 
 # --- Константы ---
 QUESTIONS_FILE = 'questions.json'
+MALFORMED_QUESTIONS_FILE = 'malformed_questions.json' # Новый файл
 USERS_FILE = 'users.json'
 DEFAULT_POLL_OPEN_PERIOD = 25  # Секунд на ответ
 FINAL_ANSWER_WINDOW_SECONDS = 45 # Время на последний вопрос в /quiz10

@@ -62,7 +62,6 @@ async def _initiate_quiz10_session(
     logger.info(f"/quiz10 на {actual_number_of_questions} вопросов ({intro_message_part}) запущена в чате {chat_id_str} пользователем {user_id}.")
     await send_next_question_in_session(context, chat_id_str)
 
-
 async def quiz10_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.effective_chat:
         logger.warning("quiz10_command: message or effective_chat is None.")
@@ -96,7 +95,7 @@ async def quiz10_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_quiz10_category_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    if not query: # query не может быть None для CallbackQueryHandler
+    if not query:
         logger.error("handle_quiz10_category_selection: query is None, что не должно происходить.")
         return
         
@@ -116,7 +115,6 @@ async def handle_quiz10_category_selection(update: Update, context: ContextTypes
         logger.info(f"Не удалось отредактировать сообщение с кнопками выбора категории: {e}")
         # Если не удалось отредактировать (например, сообщение слишком старое), отправляем новое.
         await context.bot.send_message(chat_id, "Выбор сделан. Начинаем /quiz10...")
-
 
     category_name = None
     if query.data == CALLBACK_DATA_QUIZ10_RANDOM_CATEGORY:
@@ -168,8 +166,9 @@ async def quiz10notify_command(update: Update, context: ContextTypes.DEFAULT_TYP
         else:
             await update.message.reply_text(f"Категория '{category_name_arg}' не найдена или пуста. Викторина будет по случайным категориям.") # type: ignore
             
-    if not chosen_category_name and not any(state.quiz_data.values()): # Проверка если нет ни одной категории с вопросами
-        all_questions_flat = [q for cat_list in state.quiz_data.values() for q_list in cat_list for q in q_list]
+    if not chosen_category_name: # Если категория не была задана или не найдена, проверяем общую доступность вопросов
+        # Исправленная строка:
+        all_questions_flat = [q for questions_in_category in state.quiz_data.values() for q in questions_in_category]
         if not all_questions_flat:
             await update.message.reply_text("Нет доступных вопросов для викторины. Загрузите вопросы.") # type: ignore
             return
@@ -233,7 +232,7 @@ async def _start_scheduled_quiz10_job_callback(context: ContextTypes.DEFAULT_TYP
         return
 
     pending_info = state.pending_scheduled_quizzes.pop(chat_id_str, None)
-    if pending_info: # Дополнительная проверка, что действительно было что удалять
+    if pending_info:
          logger.info(f"Запускаем запланированный quiz10 для чата {chat_id_str}. Категория из job: {category_name_encoded}")
 
     actual_category_name = None

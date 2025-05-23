@@ -5,7 +5,7 @@ import copy
 from typing import List, Dict, Any, Set
 
 # Импорты из других модулей проекта
-from config import logger, QUESTIONS_FILE, USERS_FILE
+from config import logger, QUESTIONS_FILE, USERS_FILE, MALFORMED_QUESTIONS_FILE # Добавили MALFORMED_QUESTIONS_FILE
 import state # Для доступа и изменения глобальных переменных состояния
 
 # --- Вспомогательные функции для сериализации/десериализации ---
@@ -22,14 +22,17 @@ def convert_sets_to_lists_recursively(obj: Any) -> Any:
 
 def convert_user_scores_lists_to_sets(scores_data: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(scores_data, dict):
-        return scores_data
+        return scores_data # Возвращаем как есть, если это не словарь
     for chat_id, users_in_chat in scores_data.items():
         if isinstance(users_in_chat, dict):
             for user_id, user_data_val in users_in_chat.items():
-                if isinstance(user_data_val, dict) and \
-                   'answered_polls' in user_data_val and \
-                   isinstance(user_data_val['answered_polls'], list):
-                    user_data_val['answered_polls'] = set(user_data_val['answered_polls'])
+                if isinstance(user_data_val, dict):
+                    # Обновляем answered_polls
+                    if 'answered_polls' in user_data_val and isinstance(user_data_val['answered_polls'], list):
+                        user_data_val['answered_polls'] = set(user_data_val['answered_polls'])
+                    # Обновляем milestones_achieved (если есть)
+                    if 'milestones_achieved' in user_data_val and isinstance(user_data_val['milestones_achieved'], list):
+                        user_data_val['milestones_achieved'] = set(user_data_val['milestones_achieved'])
     return scores_data
 
 # --- Функции загрузки и сохранения данных ---
@@ -38,44 +41,76 @@ def convert_user_scores_lists_to_sets(scores_data: Dict[str, Any]) -> Dict[str, 
 # Вызывается из bot.py при старте.
 def load_questions():
     processed_questions_count, valid_categories_count = 0, 0
+    malformed_entries = [] # Для сбора некорректных записей
     try:
         with open(QUESTIONS_FILE, 'r', encoding='utf-8') as f:
             raw_data = json.load(f)
         if not isinstance(raw_data, dict):
-            logger.error(f"{QUESTIONS_FILE} должен содержать JSON объект.")
-            return
-        temp_quiz_data = {}
-        for category, questions_list in raw_data.items():
-            if not isinstance(questions_list, list):
-                logger.warning(f"Категория '{category}' не список. Пропущена.")
-                continue
-            processed_category_questions = []
-            for i, q_data in enumerate(questions_list):
-                if not (isinstance(q_data, dict) and
-                        all(k in q_data for k in ["question", "options", "correct"]) and
-                        isinstance(q_data["options"], list) and len(q_data["options"]) >= 2 and
-                        q_data["correct"] in q_data["options"]):
-                    logger.warning(f"Вопрос {i+1} в '{category}' некорректен. Пропущен. Данные: {q_data}")
+            logger.error(f"{QUESTIONS_FILE} должен содержать JSON объект (словарь категорий).")
+            malformed_entries.append({"error_type": "root_not_dict", "data": raw_data})
+            state.quiz_data = {} # Устанавливаем пустые данные
+        else:
+            temp_quiz_data = {}
+            for category, questions_list in raw_data.items():
+                if not isinstance(questions_list, list):
+                    logger.warning(f"Категория '{category}' не является списком вопросов. Пропущена.")
+                    malformed_entries.append({"error_type": "category_not_list", "category": category, "data": questions_list})
                     continue
-                correct_option_index = q_data["options"].index(q_data["correct"])
-                processed_category_questions.append({
-                    "question": q_data["question"],
-                    "options": q_data["options"],
-                    "correct_option_index": correct_option_index,
-                    "original_category": category
-                })
-                processed_questions_count += 1
-            if processed_category_questions:
-                temp_quiz_data[category] = processed_category_questions
-                valid_categories_count += 1
-        state.quiz_data = temp_quiz_data # Обновляем глобальное состояние
+                
+                processed_category_questions = []
+                for i, q_data in enumerate(questions_list):
+                    is_valid = (isinstance(q_data, dict) and
+                                all(k in q_data for k in ["question", "options", "correct"]) and
+                                isinstance(q_data.get("question"), str) and
+                                isinstance(q_data.get("options"), list) and len(q_data["options"]) >= 2 and
+                                isinstance(q_data.get("correct"), str) and
+                                q_data["correct"] in q_data["options"])
+                    
+                    if not is_valid:
+                        logger.warning(f"Вопрос {i+1} в категории '{category}' некорректен или неполон. Пропущен. Данные: {q_data}")
+                        malformed_entries.append({"error_type": "invalid_question_format", "category": category, "question_index": i, "data": q_data})
+                        continue
+                    
+                    try:
+                        correct_option_index = q_data["options"].index(q_data["correct"])
+                    except ValueError: # Хотя предыдущая проверка должна это покрыть, но на всякий случай
+                        logger.warning(f"Правильный ответ для вопроса {i+1} в '{category}' не найден в опциях. Пропущен. Данные: {q_data}")
+                        malformed_entries.append({"error_type": "correct_not_in_options", "category": category, "question_index": i, "data": q_data})
+                        continue
+
+                    processed_category_questions.append({
+                        "question": q_data["question"],
+                        "options": q_data["options"],
+                        "correct_option_index": correct_option_index,
+                        "original_category": category # Сохраняем исходную категорию
+                    })
+                    processed_questions_count += 1
+                
+                if processed_category_questions:
+                    temp_quiz_data[category] = processed_category_questions
+                    valid_categories_count += 1
+            state.quiz_data = temp_quiz_data
+        
         logger.info(f"Загружено {processed_questions_count} вопросов из {valid_categories_count} категорий.")
+
+        if malformed_entries:
+            logger.warning(f"Обнаружено {len(malformed_entries)} некорректных записей в {QUESTIONS_FILE}. Они записаны в {MALFORMED_QUESTIONS_FILE}")
+            try:
+                with open(MALFORMED_QUESTIONS_FILE, 'w', encoding='utf-8') as mf:
+                    json.dump(malformed_entries, mf, ensure_ascii=False, indent=4)
+            except Exception as e_mf:
+                logger.error(f"Не удалось записать некорректные записи в {MALFORMED_QUESTIONS_FILE}: {e_mf}")
+
     except FileNotFoundError:
         logger.error(f"{QUESTIONS_FILE} не найден.")
+        state.quiz_data = {}
     except json.JSONDecodeError:
         logger.error(f"Ошибка декодирования JSON в {QUESTIONS_FILE}.")
+        state.quiz_data = {}
     except Exception as e:
-        logger.error(f"Ошибка загрузки вопросов: {e}", exc_info=True)
+        logger.error(f"Непредвиденная ошибка загрузки вопросов: {e}", exc_info=True)
+        state.quiz_data = {}
+
 
 # save_user_data: Сохраняет state.user_scores в USERS_FILE.
 # Вызывается из command_handlers.py (/start) и poll_answer_handler.py.
@@ -86,7 +121,7 @@ def save_user_data():
         with open(USERS_FILE, 'w', encoding='utf-8') as f:
             json.dump(data_to_save_serializable, f, ensure_ascii=False, indent=4)
     except Exception as e:
-        logger.error(f"Ошибка сохранения данных: {e}", exc_info=True)
+        logger.error(f"Ошибка сохранения данных пользователей: {e}", exc_info=True)
 
 # load_user_data: Загружает данные пользователей из USERS_FILE в state.user_scores.
 # Вызывается из bot.py при старте.
@@ -98,11 +133,12 @@ def load_user_data():
             state.user_scores = convert_user_scores_lists_to_sets(loaded_data)
             logger.info("Данные пользователей загружены.")
         else:
-            logger.info(f"{USERS_FILE} не найден или пуст. Старт с пустыми данными.")
+            logger.info(f"{USERS_FILE} не найден или пуст. Старт с пустыми данными пользователей.")
             state.user_scores = {}
     except json.JSONDecodeError:
-        logger.error(f"Ошибка декодирования {USERS_FILE}. Использование пустых данных.")
+        logger.error(f"Ошибка декодирования JSON в {USERS_FILE}. Использование пустых данных пользователей.")
         state.user_scores = {}
     except Exception as e:
-        logger.error(f"Ошибка загрузки данных: {e}", exc_info=True)
+        logger.error(f"Непредвиденная ошибка загрузки данных пользователей: {e}", exc_info=True)
         state.user_scores = {}
+

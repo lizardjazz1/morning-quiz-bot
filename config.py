@@ -13,13 +13,13 @@ NUMBER_OF_QUESTIONS_IN_SESSION = 10
 JOB_GRACE_PERIOD = 1 # Секунды запаса для задач JobQueue после закрытия опроса
 
 # Константы для Callback Data (для кнопок выбора категории)
-CALLBACK_DATA_PREFIX_QUIZ10_CATEGORY = "quiz10_cat_"
-CALLBACK_DATA_QUIZ10_RANDOM_CATEGORY = "quiz10_cat_random"
+CALLBACK_DATA_PREFIX_QUIZ10_CATEGORY = "quiz10_cat_" # Старый префикс (можно оставить в паттерне обработчика на время)
+CALLBACK_DATA_PREFIX_QUIZ10_CATEGORY_SHORT = "q10s_" # НОВЫЙ короткий префикс для category selection callback data
+CALLBACK_DATA_QUIZ10_RANDOM_CATEGORY = "quiz10_cat_random" # Этот уже достаточно короткий
 
 # Константы для /quiz10notify
 QUIZ10_NOTIFY_DELAY_MINUTES = 2 # Минут до начала квиза после уведомления
-CALLBACK_DATA_QUIZ10_NOTIFY_START_NOW = "quiz10_notify_start_now_" # префикс + chat_id + category_encoded
-
+# CALLBACK_DATA_QUIZ10_NOTIFY_START_NOW = "quiz10_notify_start_now_" # префикс + chat_id + category_encoded (не используется в CallbackQueryHandler)
 
 # Загрузка переменных окружения из .env файла
 load_dotenv()

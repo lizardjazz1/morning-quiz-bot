@@ -21,8 +21,10 @@ from telegram.ext import (ApplicationBuilder, CommandHandler, PollAnswerHandler,
                           CallbackQueryHandler, ContextTypes)
 
 # Импорты из других модулей проекта
-from config import (TOKEN, logger, CALLBACK_DATA_PREFIX_QUIZ10_CATEGORY,
-                    CALLBACK_DATA_QUIZ10_RANDOM_CATEGORY) # CALLBACK_DATA_QUIZ10_NOTIFY_START_NOW здесь не нужен для регистрации
+from config import (TOKEN, logger,
+                    # CALLBACK_DATA_PREFIX_QUIZ10_CATEGORY, # Старый префикс, может быть в старых сообщениях
+                    CALLBACK_DATA_PREFIX_QUIZ10_CATEGORY_SHORT, # Новый префикс
+                    CALLBACK_DATA_QUIZ10_RANDOM_CATEGORY) # Callback для случайных категорий
 from data_manager import load_questions, load_user_data
 
 # Импорт обработчиков из нового пакета handlers
@@ -38,7 +40,15 @@ from poll_answer_handler import handle_poll_answer # Этот файл оста�
 # --- Обработчик ошибок ---
 # Эта функция будет вызываться при возникновении ошибок в других обработчиках.
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # context.error содержит информацию об ошибке
     logger.error("Произошла ошибка при обработке обновления:", exc_info=context.error)
+    # Можно добавить отправку сообщения пользователю, если ошибка критична или понятна
+    # if isinstance(update, Update) and update.effective_chat:
+    #     try:
+    #         await context.bot.send_message(chat_id=update.effective_chat.id, text="Произошла внутренняя ошибка. Пожалуйста, попробуйте позже.")
+    #     except Exception as e:
+    #         logger.error(f"Не удалось отправить сообщение об ошибке пользователю: {e}")
+
 
 # --- Основная функция для запуска бота ---
 def main():
@@ -70,8 +80,12 @@ def main():
     application.add_handler(CommandHandler("globaltop", global_top_command))
 
     # Обработчик для кнопок выбора категории /quiz10
+    # Обновляем паттерн, чтобы реагировать на НОВЫЙ короткий префикс и кнопку случайных категорий.
+    # Если нужно временно поддерживать старые кнопки с длинным префиксом,
+    # можно добавить pattern=f"^{CALLBACK_DATA_PREFIX_QUIZ10_CATEGORY}|..."
+    # Но для исправления ошибки и перехода на новую схему, лучше использовать только новый.
     application.add_handler(CallbackQueryHandler(handle_quiz10_category_selection,
-                                                 pattern=f"^{CALLBACK_DATA_PREFIX_QUIZ10_CATEGORY}|^({CALLBACK_DATA_QUIZ10_RANDOM_CATEGORY})$"))
+                                                 pattern=f"^{CALLBACK_DATA_PREFIX_QUIZ10_CATEGORY_SHORT}|^({CALLBACK_DATA_QUIZ10_RANDOM_CATEGORY})$")) # Обновленный паттерн
 
     # ВНИМАНИЕ: Callback для CALLBACK_DATA_QUIZ10_NOTIFY_START_NOW (если он был бы) не нужен,
     # так как старт происходит через job_queue и функцию _start_scheduled_quiz10_job_callback

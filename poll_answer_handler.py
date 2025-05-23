@@ -7,7 +7,7 @@ from config import logger
 import state # Для доступа к current_poll, user_scores, current_quiz_session
 from data_manager import save_user_data # Для сохранения очков пользователя
 # send_next_question_in_session И send_solution_if_available ИЗ quiz_logic
-from quiz_logic import send_next_question_in_session, send_solution_if_available
+from quiz_logic import send_next_question_in_session, send_solution_if_available, show_quiz_session_results 
 from utils import pluralize_points # Обновленная функция для склонения слова "очки"
 
 # Мотивационные сообщения

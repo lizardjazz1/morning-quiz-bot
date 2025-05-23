@@ -1,10 +1,10 @@
 modules = ["python-3.12"]
 
 # Установка зависимостей + запуск бота
-run = "pip install -r requirements.txt && python main.py"
+run = "pip install -r requirements.txt && python bot.py"
 
 [nix]
 channel = "stable-24_05"
 
 [deployment]
-run = ["sh", "-c", "pip install -r requirements.txt && python main.py"]
+run = ["sh", "-c", "pip install -r requirements.txt && python bot.py"]

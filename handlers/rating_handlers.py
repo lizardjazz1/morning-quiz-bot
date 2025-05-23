@@ -7,8 +7,10 @@ from config import logger
 import state # Для доступа к user_scores
 from utils import pluralize_points # Обновленная функция для склонения слова "очки"
 
-def get_player_display(player_name: str, player_score: int) -> str:
-    """Формирует строку отображения игрока с иконкой и счетом."""
+def get_player_display(player_name: str, player_score: int, separator: str = " - ") -> str:
+    """
+    Формирует строку отображения игрока с иконкой, именем, разделителем и счетом.
+    """
     icon = ""
     if player_score > 0:
         if player_score >= 50: # Пример порога для особой медали
@@ -22,7 +24,12 @@ def get_player_display(player_name: str, player_score: int) -> str:
     else: # player_score == 0
         icon = "😐"
     
-    return f"{icon} {player_name} - {pluralize_points(player_score)}"
+    # Используем f-string, чтобы корректно вставить separator без лишних пробелов вокруг него, если он ":"
+    # и с пробелами, если он " - "
+    if separator == ":":
+        return f"{icon} {player_name}{separator} {pluralize_points(player_score)}"
+    else: # Для " - " и других возможных разделителей, которые предполагают пробелы вокруг
+        return f"{icon} {player_name} {separator} {pluralize_points(player_score)}"
 
 
 async def rating_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -54,6 +61,7 @@ async def rating_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif i == 1 and player_score > 0 : rank_prefix = "🥈"
         elif i == 2 and player_score > 0 : rank_prefix = "🥉"
         
+        # Здесь используется separator по умолчанию (" - ")
         top_players_text += f"{rank_prefix} {get_player_display(player_name, player_score)}\n"
 
     await update.message.reply_text(top_players_text) # type: ignore
@@ -99,6 +107,7 @@ async def global_top_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         elif i == 1 and player_total_score > 0 : rank_prefix = "🥈"
         elif i == 2 and player_total_score > 0 : rank_prefix = "🥉"
 
+        # Здесь используется separator по умолчанию (" - ")
         global_top_text += f"{rank_prefix} {get_player_display(player_name, player_total_score)}\n"
 
     await update.message.reply_text(global_top_text) # type: ignore

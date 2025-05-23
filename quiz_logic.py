@@ -13,7 +13,6 @@ from utils import pluralize_points # Обновленная функция дл�
 # Импортируем get_player_display для единообразного отображения в результатах сессии
 from handlers.rating_handlers import get_player_display
 
-
 # --- Вспомогательные функции для викторины ---
 
 # get_random_questions: Возвращает случайные вопросы из указанной категории.
@@ -49,6 +48,32 @@ def prepare_poll_options(q_details: Dict[str, Any]) -> Tuple[str, List[str], int
 
     return q_text, opts_shuffled, new_correct_idx, list(opts_orig) # Возвращаем копию оригинальных опций
 
+
+async def send_solution_if_available(context: ContextTypes.DEFAULT_TYPE, chat_id_str: str, question_details: Dict[str, Any], q_index_for_log: int = -1):
+    """Отправляет пояснение к вопросу, если оно доступно."""
+    solution = question_details.get("solution")
+    # Для лога и заголовка используем короткую версию вопроса или стандартный текст
+    q_text_for_header = question_details.get("question", "завершенному вопросу")
+    log_q_ref_text = f"«{q_text_for_header[:30]}...»" if len(q_text_for_header) > 30 else f"«{q_text_for_header}»"
+    log_q_ref = f" (вопрос {q_index_for_log + 1}, {log_q_ref_text}) " if q_index_for_log != -1 else f" ({log_q_ref_text}) "
+
+    if solution:
+        try:
+            # Добавляем заголовок к пояснению, чтобы было понятно, к какому вопросу оно относится
+            solution_message = f"💡 Пояснение к вопросу «{q_text_for_header}»:\n{solution}"
+
+            MAX_MESSAGE_LENGTH = 4096 # Telegram message length limit
+            if len(solution_message) > MAX_MESSAGE_LENGTH:
+                truncate_at = MAX_MESSAGE_LENGTH - 3 # Для "..."
+                solution_message = solution_message[:truncate_at] + "..."
+                logger.warning(f"Пояснение для вопроса{log_q_ref}в чате {chat_id_str} было усечено до {MAX_MESSAGE_LENGTH} символов.")
+
+            await context.bot.send_message(chat_id=chat_id_str, text=solution_message)
+            logger.info(f"Отправлено пояснение для вопроса{log_q_ref}в чате {chat_id_str}.")
+        except Exception as e:
+            logger.error(f"Ошибка при отправке пояснения для вопроса{log_q_ref}в чате {chat_id_str}: {e}", exc_info=True)
+
+
 # --- Логика сессии /quiz10 ---
 
 # send_next_question_in_session: Отправляет следующий вопрос в рамках сессии /quiz10.
@@ -58,11 +83,11 @@ async def send_next_question_in_session(context: ContextTypes.DEFAULT_TYPE, chat
         logger.warning(f"send_next_question_in_session: Сессия для чата {chat_id_str} не найдена или уже удалена.")
         return
 
-    if job := session.get("next_question_job"):
+    if job := session.get("next_question_job"): # Отменяем предыдущий таймаут job, если он был
         try:
             job.schedule_removal()
         except Exception:
-            pass
+            pass # Job мог быть уже выполнен или удален
         session["next_question_job"] = None
 
     current_q_idx = session["current_index"]
@@ -70,6 +95,7 @@ async def send_next_question_in_session(context: ContextTypes.DEFAULT_TYPE, chat
 
     if current_q_idx >= actual_num_q:
         logger.info(f"Все {actual_num_q} вопросов сессии {chat_id_str} были отправлены. Завершение сессии.")
+        # Пояснение к последнему вопросу должно было быть отправлено в handle_current_poll_end или poll_answer_handler
         await show_quiz_session_results(context, chat_id_str)
         return
 
@@ -104,17 +130,18 @@ async def send_next_question_in_session(context: ContextTypes.DEFAULT_TYPE, chat
         )
 
         session["current_poll_id"] = sent_poll_msg.poll.id
-        session["current_index"] += 1
+        session["current_index"] += 1 # Индекс инкрементируется здесь, указывая на следующий вопрос
 
         state.current_poll[sent_poll_msg.poll.id] = {
             "chat_id": chat_id_str,
             "message_id": sent_poll_msg.message_id,
             "correct_index": poll_correct_option_id,
             "quiz_session": True,
-            "question_details": q_details,
+            "question_details": q_details, # Сохраняем детали, включая solution
             "associated_quiz_session_chat_id": chat_id_str,
             "is_last_question": is_last_question,
-            "next_q_triggered_by_answer": False
+            "next_q_triggered_by_answer": False,
+            "question_session_index": current_q_idx # Сохраняем индекс вопроса в сессии
         }
         logger.info(f"Отправлен вопрос {current_q_idx + 1}/{actual_num_q} сессии {chat_id_str}. Poll ID: {sent_poll_msg.poll.id}")
 
@@ -124,13 +151,13 @@ async def send_next_question_in_session(context: ContextTypes.DEFAULT_TYPE, chat
         if context.job_queue:
             existing_jobs = context.job_queue.get_jobs_by_name(job_name)
             for old_job in existing_jobs:
-                old_job.schedule_removal()
+                old_job.schedule_removal() # Удаляем дубликаты, если есть
                 logger.debug(f"Удален дублирующийся/старый job: {old_job.name}")
 
             next_question_timeout_job = context.job_queue.run_once(
-                handle_current_poll_end,
+                handle_current_poll_end, # Эта функция обработает таймаут
                 timedelta(seconds=job_delay_seconds),
-                data={"chat_id": chat_id_str, "ended_poll_id": sent_poll_msg.poll.id, "ended_poll_q_idx": current_q_idx},
+                data={"chat_id": chat_id_str, "ended_poll_id": sent_poll_msg.poll.id}, # q_idx не нужен, т.к. есть в poll_info
                 name=job_name
             )
             session["next_question_job"] = next_question_timeout_job
@@ -147,55 +174,73 @@ async def handle_current_poll_end(context: ContextTypes.DEFAULT_TYPE):
     job_data = context.job.data # type: ignore
     chat_id_str: str = job_data["chat_id"]
     ended_poll_id: str = job_data["ended_poll_id"]
-    ended_poll_q_idx: int = job_data["ended_poll_q_idx"]
+    
+    # Получаем информацию о завершившемся опросе и удаляем его из активных
+    # Это важно сделать до проверок, чтобы избежать гонки состояний
+    poll_info_that_ended = state.current_poll.pop(ended_poll_id, None)
+    
+    # Индекс вопроса, который завершился (если информация о нем доступна)
+    # q_idx_from_poll_info используется для логирования и передачи в send_solution_if_available
+    q_idx_from_poll_info = poll_info_that_ended.get("question_session_index", -1) if poll_info_that_ended else -1
 
-    logger.info(f"Job 'handle_current_poll_end' сработал для чата {chat_id_str}, poll_id {ended_poll_id} (вопрос {ended_poll_q_idx + 1}).")
+    logger.info(f"Job 'handle_current_poll_end' сработал для чата {chat_id_str}, poll_id {ended_poll_id} (вопрос сессии ~{q_idx_from_poll_info + 1}).")
 
     session = state.current_quiz_session.get(chat_id_str)
+
     if not session:
-        logger.warning(f"Сессия {chat_id_str} не найдена при обработке job для poll {ended_poll_id}.")
-        state.current_poll.pop(ended_poll_id, None)
+        logger.warning(f"Сессия {chat_id_str} не найдена при обработке job для poll {ended_poll_id}. Опрос завершен.")
+        if poll_info_that_ended and poll_info_that_ended.get("question_details"):
+             # Попытка отправить пояснение, даже если сессия пропала (маловероятно, но для полноты)
+            await send_solution_if_available(context, chat_id_str, poll_info_that_ended["question_details"], q_idx_from_poll_info)
         return
 
-    poll_info_that_ended = state.current_poll.pop(ended_poll_id, None)
-    if poll_info_that_ended:
-        logger.debug(f"Poll {ended_poll_id} удален из state.current_poll для чата {chat_id_str} (тайм-аут).")
+    # Если poll_info_that_ended не найден, значит, опрос уже был обработан (например, досрочным ответом)
+    if not poll_info_that_ended:
+        logger.warning(f"Poll {ended_poll_id} не найден в state.current_poll при обработке job (вероятно, обработан досрочным ответом). Job для {chat_id_str} завершен.")
+        return
+
+    # Если следующий вопрос уже был инициирован ответом (флаг в самом poll_info)
+    if poll_info_that_ended.get("next_q_triggered_by_answer"):
+        logger.info(f"Job для poll {ended_poll_id} (вопрос {q_idx_from_poll_info + 1}) сработал, но следующий вопрос уже инициирован ответом. Пояснение должно было быть отправлено. Job завершен.")
+        return # Пояснение и следующий вопрос уже обработаны poll_answer_handler
+
+    # Отправляем пояснение для вопроса, который завершился по таймауту
+    await send_solution_if_available(context, chat_id_str, poll_info_that_ended["question_details"], q_idx_from_poll_info)
+
+    # Проверяем, был ли это последний вопрос в сессии
+    is_last_q_from_poll_info = poll_info_that_ended.get("is_last_question", False)
+    
+    if is_last_q_from_poll_info:
+        logger.info(f"Время для последнего вопроса (индекс {q_idx_from_poll_info}) сессии {chat_id_str} истекло. Показ результатов.")
+        await show_quiz_session_results(context, chat_id_str)
     else:
-        logger.warning(f"Poll {ended_poll_id} не найден в state.current_poll при обработке job (возможно, уже обработан).")
-
-    if session.get("current_poll_id") != ended_poll_id and session.get("current_poll_id") is not None:
-        logger.info(f"Job для poll {ended_poll_id} сработал, но активный poll в сессии {chat_id_str} уже {session.get('current_poll_id')}. Job проигнорирован.")
-        return
-
-    if poll_info_that_ended and poll_info_that_ended.get("next_q_triggered_by_answer"):
-        logger.info(f"Следующий вопрос для сессии {chat_id_str} уже был инициирован ответом на poll {ended_poll_id}. Job завершен.")
-        return
-
-    if ended_poll_q_idx >= session["actual_num_questions"] - 1:
-        if session["current_index"] >= session["actual_num_questions"]:
-             logger.info(f"Время для последнего вопроса (индекс {ended_poll_q_idx}) сессии {chat_id_str} истекло. Показ результатов.")
-             await show_quiz_session_results(context, chat_id_str)
+        # Если это не последний вопрос, отправляем следующий
+        # session["current_index"] должен указывать на следующий вопрос для отправки
+        # q_idx_from_poll_info - это индекс только что завершенного вопроса.
+        # Если session["current_index"] == q_idx_from_poll_info + 1, значит, пора отправлять следующий.
+        if session["current_index"] == q_idx_from_poll_info + 1:
+             logger.info(f"Тайм-аут для вопроса {q_idx_from_poll_info + 1} в сессии {chat_id_str} (poll {ended_poll_id}). Отправляем следующий.")
+             await send_next_question_in_session(context, chat_id_str)
         else:
-            logger.warning(f"Job для последнего вопроса {ended_poll_q_idx} сессии {chat_id_str} сработал, "
-                           f"но current_index={session['current_index']}. Завершаем сессию и показываем результаты.")
-            await show_quiz_session_results(context, chat_id_str)
-        return
+            # Эта ситуация может возникнуть, если current_index изменился не так, как ожидалось.
+            # Например, если send_next_question_in_session был вызван другим путем, и current_index уже ушел вперед.
+            logger.warning(f"Job для poll {ended_poll_id} в сессии {chat_id_str} завершен. "
+                           f"Состояние индекса: current_index в сессии={session['current_index']}, "
+                           f"индекс завершенного вопроса={q_idx_from_poll_info}. "
+                           "Следующий вопрос не отправлен этим job'ом, так как состояние индексов расходится с ожидаемым для простого таймаута.")
+            # Возможно, стоит рассмотреть завершение сессии, если состояние некорректно.
+            # Но пока просто логгируем. Если следующий вопрос уже отправлен, то новый current_poll_id будет в сессии.
 
-    if session["current_index"] == ended_poll_q_idx + 1:
-        logger.info(f"Тайм-аут для вопроса {ended_poll_q_idx + 1} в сессии {chat_id_str} (poll {ended_poll_id}). Отправляем следующий.")
-        await send_next_question_in_session(context, chat_id_str)
-    else:
-        logger.debug(f"Job для poll {ended_poll_id} в сессии {chat_id_str} завершен. "
-                     f"Следующий вопрос (индекс {session['current_index']}) уже был инициирован ранее.")
 
 # show_quiz_session_results: Показывает результаты завершенной сессии /quiz10.
 async def show_quiz_session_results(context: ContextTypes.DEFAULT_TYPE, chat_id_str: str, error_occurred: bool = False):
     session = state.current_quiz_session.get(chat_id_str)
     if not session:
         logger.warning(f"show_quiz_session_results: Сессия для чата {chat_id_str} не найдена для показа результатов.")
-        state.current_quiz_session.pop(chat_id_str, None)
+        state.current_quiz_session.pop(chat_id_str, None) # Убедимся, что удалена, если как-то осталась
         return
 
+    # Отменяем job на следующий вопрос, если он еще существует (например, при /stopquiz)
     if job := session.get("next_question_job"):
         try:
             job.schedule_removal()
@@ -213,7 +258,7 @@ async def show_quiz_session_results(context: ContextTypes.DEFAULT_TYPE, chat_id_
             session["session_scores"].items(),
             key=lambda item: (-item[1].get("score", 0), item[1].get("name", "").lower())
         )
-        
+
         for rank, (user_id, data) in enumerate(sorted_session_participants):
             user_name = data.get("name", f"User {user_id}")
             session_score = data.get("score", 0)
@@ -221,9 +266,10 @@ async def show_quiz_session_results(context: ContextTypes.DEFAULT_TYPE, chat_id_
             global_score = global_score_data.get("score", 0) # Глобальный счет пользователя в этом чате
 
             rank_prefix = f"{rank + 1}."
-            # Используем get_player_display для отображения сессионного счета
-            session_display = get_player_display(user_name, session_score)
-            
+            # Используем get_player_display для отображения сессионного счета,
+            # передавая ":" в качестве разделителя
+            session_display = get_player_display(user_name, session_score, separator=":")
+
             results_body += (f"{rank_prefix} {session_display} (из {num_q_in_session} вопр.)\n"
                              f"    Общий счёт в чате: {pluralize_points(global_score)}\n")
 
@@ -235,11 +281,15 @@ async def show_quiz_session_results(context: ContextTypes.DEFAULT_TYPE, chat_id_
     except Exception as e:
         logger.error(f"Ошибка при отправке результатов сессии в чат {chat_id_str}: {e}", exc_info=True)
 
+    # Очищаем информацию о последнем опросе сессии из state.current_poll, если он там остался
     current_poll_id_of_session = session.get("current_poll_id")
     if current_poll_id_of_session and current_poll_id_of_session in state.current_poll:
         if state.current_poll[current_poll_id_of_session].get("associated_quiz_session_chat_id") == chat_id_str:
+            # Это может произойти, если show_quiz_session_results вызывается досрочно (например, /stopquiz)
+            # и poll еще не был удален из state.current_poll через timeout или poll_answer_handler
             del state.current_poll[current_poll_id_of_session]
+            logger.debug(f"Poll {current_poll_id_of_session} удален из state.current_poll при завершении сессии {chat_id_str}.")
+
 
     state.current_quiz_session.pop(chat_id_str, None)
     logger.info(f"Сессия для чата {chat_id_str} очищена.")
-

@@ -1,4 +1,4 @@
-#data_manager.py
+# data_manager.py
 import json
 import os
 import copy
@@ -56,21 +56,39 @@ def load_questions():
                     logger.warning(f"Категория '{category}' не является списком вопросов. Пропущена.")
                     malformed_entries.append({"error_type": "category_not_list", "category": category, "data": questions_list})
                     continue
-                
+
                 processed_category_questions = []
                 for i, q_data in enumerate(questions_list):
-                    is_valid = (isinstance(q_data, dict) and
-                                all(k in q_data for k in ["question", "options", "correct"]) and
-                                isinstance(q_data.get("question"), str) and
-                                isinstance(q_data.get("options"), list) and len(q_data["options"]) >= 2 and
-                                isinstance(q_data.get("correct"), str) and
-                                q_data["correct"] in q_data["options"])
-                    
-                    if not is_valid:
-                        logger.warning(f"Вопрос {i+1} в категории '{category}' некорректен или неполон. Пропущен. Данные: {q_data}")
-                        malformed_entries.append({"error_type": "invalid_question_format", "category": category, "question_index": i, "data": q_data})
+                    # Основная валидация полей
+                    is_struct_valid = (isinstance(q_data, dict) and
+                                       all(k in q_data for k in ["question", "options", "correct"]) and
+                                       isinstance(q_data.get("question"), str) and q_data["question"].strip() and
+                                       isinstance(q_data.get("options"), list) and len(q_data["options"]) >= 2 and
+                                       all(isinstance(opt, str) and opt.strip() for opt in q_data["options"]) and
+                                       isinstance(q_data.get("correct"), str) and q_data["correct"].strip() and
+                                       q_data["correct"] in q_data["options"])
+
+                    # Валидация опционального поля "solution"
+                    has_solution = "solution" in q_data
+                    is_solution_valid = not has_solution or \
+                                        (isinstance(q_data.get("solution"), str) and q_data.get("solution", "").strip())
+
+
+                    if not is_struct_valid or not is_solution_valid:
+                        log_msg_parts = [f"Вопрос {i+1} в категории '{category}' некорректен или неполон. Пропущен."]
+                        if not is_struct_valid:
+                             log_msg_parts.append("Ошибка в основной структуре вопроса/ответов (question, options, correct).")
+                        if not is_solution_valid:
+                             log_msg_parts.append("Ошибка в поле 'solution' - должно быть непустой строкой, если присутствует.")
+                        log_msg_parts.append(f"Данные: {q_data}")
+                        logger.warning(" ".join(log_msg_parts))
+                        malformed_entries.append({
+                            "error_type": "invalid_question_format_or_solution",
+                            "category": category, "question_index": i, "data": q_data,
+                            "reason_struct": not is_struct_valid, "reason_solution": not is_solution_valid
+                        })
                         continue
-                    
+
                     try:
                         correct_option_index = q_data["options"].index(q_data["correct"])
                     except ValueError: # Хотя предыдущая проверка должна это покрыть, но на всякий случай
@@ -78,19 +96,23 @@ def load_questions():
                         malformed_entries.append({"error_type": "correct_not_in_options", "category": category, "question_index": i, "data": q_data})
                         continue
 
-                    processed_category_questions.append({
+                    question_entry = {
                         "question": q_data["question"],
                         "options": q_data["options"],
                         "correct_option_index": correct_option_index,
-                        "original_category": category # Сохраняем исходную категорию
-                    })
+                        "original_category": category
+                    }
+                    if has_solution and is_solution_valid: # Добавляем solution, если он есть и валиден
+                        question_entry["solution"] = q_data["solution"].strip()
+
+                    processed_category_questions.append(question_entry)
                     processed_questions_count += 1
-                
+
                 if processed_category_questions:
                     temp_quiz_data[category] = processed_category_questions
                     valid_categories_count += 1
             state.quiz_data = temp_quiz_data
-        
+
         logger.info(f"Загружено {processed_questions_count} вопросов из {valid_categories_count} категорий.")
 
         if malformed_entries:
@@ -110,7 +132,6 @@ def load_questions():
     except Exception as e:
         logger.error(f"Непредвиденная ошибка загрузки вопросов: {e}", exc_info=True)
         state.quiz_data = {}
-
 
 # save_user_data: Сохраняет state.user_scores в USERS_FILE.
 # Вызывается из command_handlers.py (/start) и poll_answer_handler.py.
@@ -141,4 +162,3 @@ def load_user_data():
     except Exception as e:
         logger.error(f"Непредвиденная ошибка загрузки данных пользователей: {e}", exc_info=True)
         state.user_scores = {}
-

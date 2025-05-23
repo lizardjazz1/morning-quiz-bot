@@ -6,7 +6,8 @@ from telegram.ext import ContextTypes
 from config import logger
 import state # Для доступа к current_poll, user_scores, current_quiz_session
 from data_manager import save_user_data # Для сохранения очков пользователя
-from quiz_logic import send_next_question_in_session # Для запуска следующего вопроса в /quiz10
+# send_next_question_in_session И send_solution_if_available ИЗ quiz_logic
+from quiz_logic import send_next_question_in_session, send_solution_if_available
 from utils import pluralize_points # Обновленная функция для склонения слова "очки"
 
 # Мотивационные сообщения
@@ -45,6 +46,10 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
 
     chat_id_str = poll_info_from_state["chat_id"]
+    question_details = poll_info_from_state.get("question_details") # Получаем детали вопроса, включая возможное решение
+    # Индекс вопроса в сессии (если это сессионный вопрос)
+    question_session_idx = poll_info_from_state.get("question_session_index", -1)
+
 
     # Инициализация или обновление данных пользователя в глобальном хранилище user_scores
     state.user_scores.setdefault(chat_id_str, {}).setdefault(user_id_str, {"name": user_full_name, "score": 0, "answered_polls": set(), "milestones_achieved": set()})
@@ -58,7 +63,6 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if not isinstance(global_user_data.get("milestones_achieved"), set):
         milestones = global_user_data.get("milestones_achieved", [])
         global_user_data["milestones_achieved"] = set(milestones)
-
 
     is_answer_correct = (len(poll_answer.option_ids) == 1 and poll_answer.option_ids[0] == poll_info_from_state["correct_index"])
 
@@ -109,25 +113,29 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
             if is_answer_correct:
                 reply_text_parts.append(f"{user_name_display}, верно! ✅")
             else:
-                q_details = poll_info_from_state.get("question_details")
+                # question_details уже получены выше
                 correct_option_text = "неизвестен"
-                if q_details and "options" in q_details and "correct_option_index" in q_details:
-                     correct_original_idx = q_details["correct_option_index"]
-                     if 0 <= correct_original_idx < len(q_details["options"]):
-                         correct_option_text = q_details["options"][correct_original_idx]
+                if question_details and "options" in question_details and "correct_option_index" in question_details:
+                     correct_original_idx = question_details["correct_option_index"]
+                     if 0 <= correct_original_idx < len(question_details["options"]):
+                         correct_option_text = question_details["options"][correct_original_idx]
                 reply_text_parts.append(f"{user_name_display}, неверно. ❌ Правильный ответ: {correct_option_text}")
 
+            # Добавляем пояснение, если оно есть (ДЛЯ ОДИНОЧНОГО КВИЗА)
+            if question_details and question_details.get("solution"):
+                reply_text_parts.append(f"💡 Пояснение: {question_details['solution']}")
+
             reply_text_parts.append(f"Твой текущий рейтинг в этом чате: {pluralize_points(global_user_data['score'])}.")
-            
+
             # Отправляем сообщение в чат, где был опрос
             await context.bot.send_message(chat_id=chat_id_str, text="\n".join(reply_text_parts))
         except Exception as e:
-            logger.error(f"Не удалось отправить сообщение с рейтингом пользователю {user_id_str} в чат {chat_id_str} после /quiz: {e}", exc_info=True)
+            logger.error(f"Не удалось отправить сообщение с рейтингом/пояснением пользователю {user_id_str} в чат {chat_id_str} после /quiz: {e}", exc_info=True)
 
     # Логика для сессий /quiz10
     if is_quiz_session_poll:
         session_chat_id = poll_info_from_state.get("associated_quiz_session_chat_id")
-        if not session_chat_id:
+        if not session_chat_id: # Должен быть всегда для сессионного опроса
             logger.error(f"Poll {answered_poll_id} помечен как quiz_session, но associated_quiz_session_chat_id отсутствует.")
             return
 
@@ -156,34 +164,67 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 logger.info(
                     f"Пользователь {user_full_name} ({user_id_str}) получил "
                     f"{session_score_change_log} очко в сессии {session_chat_id} "
-                    f"за poll {answered_poll_id}. Сессионный счет: {session_user_scores_data['score']}."
+                    f"за poll {answered_poll_id} (вопрос {question_session_idx + 1}). Сессионный счет: {session_user_scores_data['score']}."
                 )
 
             # Логика досрочного перехода к следующему вопросу в /quiz10
+            # poll_info_from_state["next_q_triggered_by_answer"] предотвращает многократный запуск следующего вопроса от нескольких быстрых ответов
             if not poll_info_from_state.get("is_last_question") and \
                not poll_info_from_state.get("next_q_triggered_by_answer"):
 
                 # Убедимся, что ответ пришел на текущий активный опрос сессии
                 if active_session.get("current_poll_id") == answered_poll_id:
-                    poll_info_from_state["next_q_triggered_by_answer"] = True # Помечаем, что переход инициирован
-                    logger.info(
-                        f"Досрочный ответ на poll {answered_poll_id} в сессии {session_chat_id}. Запускаем следующий вопрос."
-                    )
+                    poll_info_from_state["next_q_triggered_by_answer"] = True # Помечаем, что переход инициирован этим ответом
                     
+                    logger.info(
+                        f"Досрочный ответ на poll {answered_poll_id} (вопрос {question_session_idx + 1}) в сессии {session_chat_id}. Запускаем следующий вопрос."
+                    )
+
+                    # Отправляем пояснение к текущему (завершающемуся) вопросу ПЕРЕД переходом
+                    # question_details из poll_info_from_state, question_session_idx тоже оттуда
+                    if question_details:
+                        await send_solution_if_available(context, session_chat_id, question_details, question_session_idx)
+
                     # Отменяем запланированный job на таймаут текущего вопроса
                     if job := active_session.get("next_question_job"):
                         try:
                             job.schedule_removal()
-                        except Exception: pass
+                            logger.debug(f"Job {job.name} отменен из-за досрочного ответа на poll {answered_poll_id}.")
+                        except Exception: pass # может быть уже выполнен или удален
                         active_session["next_question_job"] = None # Очищаем ссылку на job
+
+                    # Удаляем информацию о текущем опросе из state.current_poll, так как он обработан
+                    # Это критично, чтобы handle_current_poll_end не пытался его обработать снова по таймауту.
+                    state.current_poll.pop(answered_poll_id, None)
+                    logger.debug(f"Poll {answered_poll_id} (вопрос {question_session_idx + 1}) удален из state.current_poll (досрочный ответ).")
 
                     await send_next_question_in_session(context, session_chat_id)
                 else:
                     logger.debug(
                         f"Ответ на poll {answered_poll_id} в сессии {session_chat_id} получен, "
-                        f"но текущий активный poll сессии уже {active_session.get('current_poll_id')}. "
+                        f"но текущий активный poll сессии уже {active_session.get('current_poll_id')} (возможно, ответ запоздал или на старый poll). "
                         "Досрочный переход не инициирован этим ответом."
                     )
+            elif poll_info_from_state.get("is_last_question") and not poll_info_from_state.get("next_q_triggered_by_answer"):
+                 # Если это был последний вопрос, и ответ пришел
+                 if active_session.get("current_poll_id") == answered_poll_id:
+                    poll_info_from_state["next_q_triggered_by_answer"] = True # Помечаем, что обработан
+                    logger.info(f"Досрочный ответ на последний poll {answered_poll_id} (вопрос {question_session_idx + 1}) в сессии {session_chat_id}.")
+                    if question_details:
+                        await send_solution_if_available(context, session_chat_id, question_details, question_session_idx)
+                    
+                    if job := active_session.get("next_question_job"): # Отменяем таймаут последнего вопроса
+                        try: job.schedule_removal()
+                        except: pass
+                        active_session["next_question_job"] = None
+                    
+                    state.current_poll.pop(answered_poll_id, None) # Удаляем из активных
+                    logger.debug(f"Последний poll {answered_poll_id} удален из state.current_poll (досрочный ответ).")
+                    
+                    # Завершаем сессию и показываем результаты
+                    await show_quiz_session_results(context, session_chat_id)
+
+
         else: # active_session не найдена
             logger.warning(
                 f"Сессия для чата {session_chat_id} не найдена в state.current_quiz_session, "

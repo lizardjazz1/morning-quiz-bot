@@ -60,7 +60,7 @@ async def send_solution_if_available(context: ContextTypes.DEFAULT_TYPE, chat_id
     if solution:
         try:
             # Добавляем заголовок к пояснению, чтобы было понятно, к какому вопросу оно относится
-            solution_message = f"💡 Пояснение к вопросу «{q_text_for_header}»:\n{solution}"
+            solution_message = f"💡 {solution}"
 
             MAX_MESSAGE_LENGTH = 4096 # Telegram message length limit
             if len(solution_message) > MAX_MESSAGE_LENGTH:

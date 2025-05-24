@@ -1,13 +1,15 @@
 # handlers/quiz_single_handler.py
 import random
+from datetime import timedelta # ИЗМЕНЕНИЕ: Добавлен импорт timedelta
 from telegram import Update, Poll
 from telegram.ext import ContextTypes
 # from telegram.chat import Chat as TelegramChat # Для аннотации типов, если используется
 
 # Импорты из других модулей проекта
-from config import logger, DEFAULT_POLL_OPEN_PERIOD
+from config import logger, DEFAULT_POLL_OPEN_PERIOD, JOB_GRACE_PERIOD # ИЗМЕНЕНИЕ: Добавлен JOB_GRACE_PERIOD
 import state # Для доступа к quiz_data, current_quiz_session, current_poll, pending_scheduled_quizzes
-from quiz_logic import (get_random_questions, prepare_poll_options) # Основная логика викторины
+from quiz_logic import (get_random_questions, prepare_poll_options,
+                        handle_single_quiz_poll_end) # ИЗМЕНЕНИЕ: Добавлен handle_single_quiz_poll_end
 
 async def quiz_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.effective_chat:
@@ -71,16 +73,39 @@ async def quiz_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             open_period=DEFAULT_POLL_OPEN_PERIOD,
             is_anonymous=False
         )
-        state.current_poll[sent_poll_msg.poll.id] = {
+        poll_state_entry = {
             "chat_id": chat_id_str,
             "message_id": sent_poll_msg.message_id,
             "correct_index": poll_correct_option_id,
             "quiz_session": False,
-            "question_details": single_question_details, # Важно для показа правильного ответа
+            "question_details": single_question_details, # Важно для показа пояснения позже
             "associated_quiz_session_chat_id": None,
-            "next_q_triggered_by_answer": False
+            "next_q_triggered_by_answer": False,
+            "solution_job": None # Инициализируем поле для job'а пояснения
         }
+        state.current_poll[sent_poll_msg.poll.id] = poll_state_entry
+
+        # ИЗМЕНЕНИЕ: Планируем отправку пояснения для одиночного квиза, если оно есть
+        if single_question_details.get("solution") and context.job_queue:
+            job_delay_seconds = DEFAULT_POLL_OPEN_PERIOD + JOB_GRACE_PERIOD
+            job_name = f"single_quiz_solution_{chat_id_str}_{sent_poll_msg.poll.id}"
+
+            # Удаляем дублирующиеся/старые job'ы (на всякий случай)
+            existing_jobs = context.job_queue.get_jobs_by_name(job_name)
+            for old_job in existing_jobs:
+                old_job.schedule_removal()
+                logger.debug(f"Удален дублирующийся/старый job для пояснения одиночного квиза: {old_job.name}")
+
+            solution_job = context.job_queue.run_once(
+                handle_single_quiz_poll_end, # Новая функция в quiz_logic.py для обработки этого
+                timedelta(seconds=job_delay_seconds),
+                data={"chat_id_str": chat_id_str, "poll_id": sent_poll_msg.poll.id},
+                name=job_name
+            )
+            # Сохраняем ссылку на job в информации об опросе
+            state.current_poll[sent_poll_msg.poll.id]["solution_job"] = solution_job
+            logger.info(f"Запланирован job '{job_name}' для отправки пояснения к poll {sent_poll_msg.poll.id} в чате {chat_id_str} (одиночный квиз).")
+
     except Exception as e:
         logger.error(f"Ошибка при создании опроса для /quiz в чате {chat_id_str}: {e}", exc_info=True)
         await update.message.reply_text("Произошла ошибка при попытке создать вопрос.") # type: ignore
-

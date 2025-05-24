@@ -7,7 +7,7 @@ from config import logger
 import state # Для доступа к current_poll, user_scores, current_quiz_session
 from data_manager import save_user_data # Для сохранения очков пользователя
 # send_next_question_in_session И send_solution_if_available ИЗ quiz_logic
-from quiz_logic import send_next_question_in_session, send_solution_if_available, show_quiz_session_results 
+from quiz_logic import send_next_question_in_session, send_solution_if_available, show_quiz_session_results
 from utils import pluralize_points # Обновленная функция для склонения слова "очки"
 
 # Мотивационные сообщения
@@ -61,9 +61,8 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
     # Индекс вопроса в сессии (если это сессионный вопрос)
     question_session_idx = poll_info_from_state.get("question_session_index", -1)
 
-
     # Инициализация или обновление данных пользователя в глобальном хранилище user_scores
-    state.user_scores.setdefault(chat_id_str, {}).setdefault(user_id_str, {"name": user_full_name, "score": 0, "answered_polls": set(), "milestones_achieved": set()})
+    state.user_scores.setdefault(chat_id_str, {}).setdefault(user_id_str, {"name": user.full_name, "score": 0, "answered_polls": set(), "milestones_achieved": set()})
     global_user_data = state.user_scores[chat_id_str][user_id_str]
     global_user_data["name"] = user_full_name # Обновляем имя на случай смены
 
@@ -100,13 +99,13 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
         # --- ОБНОВЛЕННАЯ ЛОГИКА ДЛЯ МОТИВАЦИОННЫХ СООБЩЕНИЙ ---
         current_score = global_user_data["score"]
-        
+
         # Сортируем пороги, чтобы проходить по ним в строгом порядке (от наименьшего к наибольшему)
         sorted_thresholds = sorted(MOTIVATIONAL_MESSAGES.keys())
 
         for threshold in sorted_thresholds:
             message = MOTIVATIONAL_MESSAGES[threshold]
-            
+
             # Если этот порог уже был достигнут/пройден, пропускаем его, чтобы не дублировать сообщения
             if threshold in global_user_data["milestones_achieved"]:
                 continue
@@ -124,7 +123,7 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 try:
                     await context.bot.send_message(chat_id=chat_id_str, text=f"{user.first_name}, {message}")
                     global_user_data["milestones_achieved"].add(threshold)
-                    save_user_data() 
+                    save_user_data()
                 except Exception as e:
                     logger.error(f"Не удалось отправить мотивационное сообщение для {threshold} очков пользователю {user_id_str}: {e}")
         # --- КОНЕЦ ОБНОВЛЕННОЙ ЛОГИКИ ---
@@ -144,17 +143,13 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
             if is_answer_correct:
                 reply_text_parts.append(f"{user_name_display}, верно! ✅")
             else:
-                # question_details уже получены выше
-                correct_option_text = "неизвестен"
-                if question_details and "options" in question_details and "correct_option_index" in question_details:
-                     correct_original_idx = question_details["correct_option_index"]
-                     if 0 <= correct_original_idx < len(question_details["options"]):
-                         correct_option_text = question_details["options"][correct_original_idx]
-                reply_text_parts.append(f"{user_name_display}, неверно. ❌ Правильный ответ: {correct_option_text}")
+                # ИЗМЕНЕНИЕ: Не показываем правильный ответ сразу. Пользователь увидит его в самом опросе, когда тот закроется.
+                reply_text_parts.append(f"{user_name_display}, неверно. ❌")
 
-            # Добавляем пояснение, если оно есть (ДЛЯ ОДИНОЧНОГО КВИЗА)
-            if question_details and question_details.get("solution"):
-                reply_text_parts.append(f"💡 Пояснение: {question_details['solution']}")
+            # ИЗМЕНЕНИЕ: Пояснение для одиночного квиза будет отправлено позже, по истечении времени опроса.
+            # Этот блок удален (он был здесь ранее):
+            # if question_details and question_details.get("solution"):
+            #     reply_text_parts.append(f"💡 Пояснение: {question_details['solution']}")
 
             reply_text_parts.append(f"Твой текущий рейтинг в этом чате: {pluralize_points(global_user_data['score'])}.")
 
@@ -206,7 +201,7 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 # Убедимся, что ответ пришел на текущий активный опрос сессии
                 if active_session.get("current_poll_id") == answered_poll_id:
                     poll_info_from_state["next_q_triggered_by_answer"] = True # Помечаем, что переход инициирован этим ответом
-                    
+
                     logger.info(
                         f"Досрочный ответ на poll {answered_poll_id} (вопрос {question_session_idx + 1}) в сессии {session_chat_id}. Запускаем следующий вопрос."
                     )
@@ -214,6 +209,7 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     # Отправляем пояснение к текущему (завершающемуся) вопросу ПЕРЕД переходом
                     # question_details из poll_info_from_state, question_session_idx тоже оттуда
                     if question_details:
+                        # Пояснение для сессионного вопроса отправляется здесь при досрочном ответе
                         await send_solution_if_available(context, session_chat_id, question_details, question_session_idx)
 
                     # Отменяем запланированный job на таймаут текущего вопроса
@@ -242,19 +238,19 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     poll_info_from_state["next_q_triggered_by_answer"] = True # Помечаем, что обработан
                     logger.info(f"Досрочный ответ на последний poll {answered_poll_id} (вопрос {question_session_idx + 1}) в сессии {session_chat_id}.")
                     if question_details:
+                        # Пояснение для последнего сессионного вопроса при досрочном ответе
                         await send_solution_if_available(context, session_chat_id, question_details, question_session_idx)
-                    
+
                     if job := active_session.get("next_question_job"): # Отменяем таймаут последнего вопроса
                         try: job.schedule_removal()
                         except: pass
                         active_session["next_question_job"] = None
-                    
+
                     state.current_poll.pop(answered_poll_id, None) # Удаляем из активных
                     logger.debug(f"Последний poll {answered_poll_id} удален из state.current_poll (досрочный ответ).")
-                    
+
                     # Завершаем сессию и показываем результаты
                     await show_quiz_session_results(context, session_chat_id)
-
 
         else: # active_session не найдена
             logger.warning(

@@ -1,15 +1,17 @@
 # handlers/quiz_single_handler.py
+# Этот файл остается БЕЗ ИЗМЕНЕНИЙ, так как логика отправки пояснения для одиночного квиза
+# уже была вынесена в handle_single_quiz_poll_end и вызывалась по таймауту.
+# Формат самого пояснения изменится в quiz_logic.py -> send_solution_if_available.
+
 import random
-from datetime import timedelta # ИЗМЕНЕНИЕ: Добавлен импорт timedelta
+from datetime import timedelta
 from telegram import Update, Poll
 from telegram.ext import ContextTypes
-# from telegram.chat import Chat as TelegramChat # Для аннотации типов, если используется
 
-# Импорты из других модулей проекта
-from config import logger, DEFAULT_POLL_OPEN_PERIOD, JOB_GRACE_PERIOD # ИЗМЕНЕНИЕ: Добавлен JOB_GRACE_PERIOD
-import state # Для доступа к quiz_data, current_quiz_session, current_poll, pending_scheduled_quizzes
+from config import logger, DEFAULT_POLL_OPEN_PERIOD, JOB_GRACE_PERIOD
+import state
 from quiz_logic import (get_random_questions, prepare_poll_options,
-                        handle_single_quiz_poll_end) # ИЗМЕНЕНИЕ: Добавлен handle_single_quiz_poll_end
+                        handle_single_quiz_poll_end)
 
 async def quiz_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.effective_chat:
@@ -52,21 +54,18 @@ async def quiz_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     single_question_details = question_details_list[0]
 
     try:
-        # Текст для отображения пользователю (может включать категорию)
         poll_question_header = f"{message_prefix}{single_question_details['question']}"
-
         MAX_POLL_QUESTION_LENGTH = 255
         if len(poll_question_header) > MAX_POLL_QUESTION_LENGTH:
             truncate_at = MAX_POLL_QUESTION_LENGTH - 3
             poll_question_header = poll_question_header[:truncate_at] + "..."
             logger.warning(f"Текст вопроса для /quiz в чате {chat_id_str} был усечен.")
 
-        # prepare_poll_options ожидает только сам вопрос, без префиксов
         _, poll_options, poll_correct_option_id, _ = prepare_poll_options(single_question_details)
 
         sent_poll_msg = await context.bot.send_poll(
             chat_id=chat_id,
-            question=poll_question_header, # Отображаемый текст
+            question=poll_question_header,
             options=poll_options,
             type=Poll.QUIZ,
             correct_option_id=poll_correct_option_id,
@@ -78,34 +77,28 @@ async def quiz_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "message_id": sent_poll_msg.message_id,
             "correct_index": poll_correct_option_id,
             "quiz_session": False,
-            "question_details": single_question_details, # Важно для показа пояснения позже
+            "question_details": single_question_details,
             "associated_quiz_session_chat_id": None,
-            "next_q_triggered_by_answer": False,
-            "solution_job": None # Инициализируем поле для job'а пояснения
+            "next_q_triggered_by_answer": False, # Флаг для одиночного квиза не используется для досрочного завершения
+            "solution_job": None
         }
         state.current_poll[sent_poll_msg.poll.id] = poll_state_entry
 
-        # ИЗМЕНЕНИЕ: Планируем отправку пояснения для одиночного квиза, если оно есть
         if single_question_details.get("solution") and context.job_queue:
             job_delay_seconds = DEFAULT_POLL_OPEN_PERIOD + JOB_GRACE_PERIOD
             job_name = f"single_quiz_solution_{chat_id_str}_{sent_poll_msg.poll.id}"
-
-            # Удаляем дублирующиеся/старые job'ы (на всякий случай)
             existing_jobs = context.job_queue.get_jobs_by_name(job_name)
             for old_job in existing_jobs:
                 old_job.schedule_removal()
-                logger.debug(f"Удален дублирующийся/старый job для пояснения одиночного квиза: {old_job.name}")
-
             solution_job = context.job_queue.run_once(
-                handle_single_quiz_poll_end, # Новая функция в quiz_logic.py для обработки этого
+                handle_single_quiz_poll_end,
                 timedelta(seconds=job_delay_seconds),
                 data={"chat_id_str": chat_id_str, "poll_id": sent_poll_msg.poll.id},
                 name=job_name
             )
-            # Сохраняем ссылку на job в информации об опросе
             state.current_poll[sent_poll_msg.poll.id]["solution_job"] = solution_job
-            logger.info(f"Запланирован job '{job_name}' для отправки пояснения к poll {sent_poll_msg.poll.id} в чате {chat_id_str} (одиночный квиз).")
-
+            logger.info(f"Запланирован job '{job_name}' для отправки пояснения к poll {sent_poll_msg.poll.id} (одиночный квиз).")
     except Exception as e:
         logger.error(f"Ошибка при создании опроса для /quiz в чате {chat_id_str}: {e}", exc_info=True)
         await update.message.reply_text("Произошла ошибка при попытке создать вопрос.") # type: ignore
+

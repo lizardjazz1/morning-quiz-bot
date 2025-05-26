@@ -1,5 +1,5 @@
 # state.py
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Set
 
 # --- Глобальные переменные состояния ---
 # Эти словари хранят данные во время работы бота.
@@ -10,7 +10,7 @@ from typing import List, Dict, Any
 # Используется в quiz_logic.py для получения вопросов, command_handlers.py для /categories
 quiz_data: Dict[str, List[Dict[str, Any]]] = {}
 
-# user_scores: {chat_id: {user_id: {"name": str, "score": int, "answered_polls": set}}}
+# user_scores: {chat_id: {user_id: {"name": str, "score": int, "answered_polls": set, "milestones_achieved": set}}}
 # Загружается из users.json и сохраняется модулем data_manager.py
 # Обновляется в command_handlers.py (/start) и poll_answer_handler.py
 user_scores: Dict[str, Dict[str, Any]] = {}
@@ -27,7 +27,16 @@ current_poll: Dict[str, Dict[str, Any]] = {}
 # Используется в poll_answer_handler.py.
 current_quiz_session: Dict[str, Dict[str, Any]] = {}
 
-# pending_scheduled_quizzes: {chat_id: {"job_name": str, "category_name": str or None, "scheduled_time": datetime}}
+# pending_scheduled_quizzes: {chat_id: {"job_name": str, "category_name": str or None, "scheduled_time": datetime, "starter_user_id": str}}
 # Хранит информацию о квизах /quiz10notify, которые были анонсированы и ожидают запуска.
 pending_scheduled_quizzes: Dict[str, Dict[str, Any]] = {}
+
+# daily_quiz_subscriptions: {chat_id_str}
+# Хранит ID чатов, подписанных на ежедневную викторину.
+# Загружается и сохраняется модулем data_manager.py
+daily_quiz_subscriptions: Set[str] = set()
+
+# active_daily_quizzes: {chat_id_str: {"current_question_index": int, "questions": list, "job_name_next_q": str | None}}
+# Хранит состояние активных ежедневных викторин
+active_daily_quizzes: Dict[str, Dict[str, Any]] = {}
 

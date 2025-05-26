@@ -11,21 +11,27 @@
 # │   ├── common_handlers.py   # Для /start, /categories
 # │   ├── quiz_single_handler.py # Для /quiz
 # │   ├── quiz_session_handlers.py # Для /quiz10, /quiz10notify, /stopquiz и связанной логики
-# │   └── rating_handlers.py   # Для /rating, /globaltop
+# │   ├── rating_handlers.py   # Для /rating, /globaltop
+# │   └── daily_quiz_handlers.py # Для ежедневной викторины
 # ├── poll_answer_handler.py # Обработчик ответов на опросы
 # └── .env                   # Для BOT_TOKEN
 # └── questions.json         # Наш файл с вопросами
 # └── users.json             # Данные пользователей
+# └── daily_quiz_subscriptions.json # Данные о подписках на ежедневную викторину
+
+import datetime
+import pytz # Для работы с временными зонами
 
 from telegram.ext import (ApplicationBuilder, CommandHandler, PollAnswerHandler,
-                          CallbackQueryHandler, ContextTypes)
+                          CallbackQueryHandler, ContextTypes, JobQueue)
+from telegram import Update # Только для error_handler type hint, если раскомментировать часть
 
 # Импорты из других модулей проекта
 from config import (TOKEN, logger,
-                    # CALLBACK_DATA_PREFIX_QUIZ10_CATEGORY, # Старый префикс, может быть в старых сообщениях
-                    CALLBACK_DATA_PREFIX_QUIZ10_CATEGORY_SHORT, # Новый префикс
-                    CALLBACK_DATA_QUIZ10_RANDOM_CATEGORY) # Callback для случайных категорий
-from data_manager import load_questions, load_user_data
+                    CALLBACK_DATA_PREFIX_QUIZ10_CATEGORY_SHORT,
+                    CALLBACK_DATA_QUIZ10_RANDOM_CATEGORY,
+                    DAILY_QUIZ_DEFAULT_HOUR_MSK, DAILY_QUIZ_DEFAULT_MINUTE_MSK)
+from data_manager import load_questions, load_user_data, load_daily_quiz_subscriptions
 
 # Импорт обработчиков из нового пакета handlers
 from handlers.common_handlers import start_command, categories_command
@@ -33,22 +39,29 @@ from handlers.quiz_single_handler import quiz_command
 from handlers.quiz_session_handlers import (quiz10_command, handle_quiz10_category_selection,
                                             quiz10notify_command, stop_quiz_command)
 from handlers.rating_handlers import rating_command, global_top_command
+from handlers.daily_quiz_handlers import (subscribe_daily_quiz_command, unsubscribe_daily_quiz_command,
+                                          master_daily_quiz_scheduler_job) # Импорт для ежедневной викторины
 
 # Импорт обработчика ответов на опросы
-from poll_answer_handler import handle_poll_answer # Этот файл остался на верхнем уровне, как в вашем `BOT.txt`
+from poll_answer_handler import handle_poll_answer
+
+# --- Вспомогательная функция для времени по МСК ---
+def moscow_time(hour: int, minute: int) -> datetime.time:
+    """Создает объект datetime.time для указанного часа и минуты по Московскому времени."""
+    moscow_tz = pytz.timezone('Europe/Moscow')
+    return datetime.time(hour=hour, minute=minute, tzinfo=moscow_tz)
 
 # --- Обработчик ошибок ---
-# Эта функция будет вызываться при возникновении ошибок в других обработчиках.
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # context.error содержит информацию об ошибке
     logger.error("Произошла ошибка при обработке обновления:", exc_info=context.error)
     # Можно добавить отправку сообщения пользователю, если ошибка критична или понятна
     # if isinstance(update, Update) and update.effective_chat:
     #     try:
-    #         await context.bot.send_message(chat_id=update.effective_chat.id, text="Произошла внутренняя ошибка. Пожалуйста, попробуйте позже.")
+    #         error_message_text = "Произошла внутренняя ошибка. Пожалуйста, попробуйте позже."
+    #         logger.debug(f"Attempting to send error message to {update.effective_chat.id}. Text: '{error_message_text}'")
+    #         await context.bot.send_message(chat_id=update.effective_chat.id, text=error_message_text)
     #     except Exception as e:
     #         logger.error(f"Не удалось отправить сообщение об ошибке пользователю: {e}")
-
 
 # --- Основная функция для запуска бота ---
 def main():
@@ -60,8 +73,16 @@ def main():
     load_questions()
     logger.info("Загрузка данных пользователей...")
     load_user_data()
+    logger.info("Загрузка подписок на ежедневную викторину...")
+    load_daily_quiz_subscriptions()
+
 
     application = ApplicationBuilder().token(TOKEN).build()
+    job_queue: JobQueue | None = application.job_queue
+    if not job_queue:
+        logger.error("JobQueue не инициализирован. Запланированные задачи не будут работать.")
+        # Можно решить падать здесь или продолжать без JobQueue
+        # return
 
     # Регистрация общих команд
     application.add_handler(CommandHandler("start", start_command))
@@ -79,19 +100,29 @@ def main():
     application.add_handler(CommandHandler("rating", rating_command))
     application.add_handler(CommandHandler("globaltop", global_top_command))
 
-    # Обработчик для кнопок выбора категории /quiz10
-    # Обновляем паттерн, чтобы реагировать на НОВЫЙ короткий префикс и кнопку случайных категорий.
-    # Если нужно временно поддерживать старые кнопки с длинным префиксом,
-    # можно добавить pattern=f"^{CALLBACK_DATA_PREFIX_QUIZ10_CATEGORY}|..."
-    # Но для исправления ошибки и перехода на новую схему, лучше использовать только новый.
-    application.add_handler(CallbackQueryHandler(handle_quiz10_category_selection,
-                                                 pattern=f"^{CALLBACK_DATA_PREFIX_QUIZ10_CATEGORY_SHORT}|^({CALLBACK_DATA_QUIZ10_RANDOM_CATEGORY})$")) # Обновленный паттерн
+    # Регистрация команд для ежедневной викторины
+    application.add_handler(CommandHandler("subscribe_daily_quiz", subscribe_daily_quiz_command))
+    application.add_handler(CommandHandler("unsubscribe_daily_quiz", unsubscribe_daily_quiz_command))
 
-    # ВНИМАНИЕ: Callback для CALLBACK_DATA_QUIZ10_NOTIFY_START_NOW (если он был бы) не нужен,
-    # так как старт происходит через job_queue и функцию _start_scheduled_quiz10_job_callback
+    # Обработчик для кнопок выбора категории /quiz10
+    application.add_handler(CallbackQueryHandler(handle_quiz10_category_selection,
+                                                 pattern=f"^{CALLBACK_DATA_PREFIX_QUIZ10_CATEGORY_SHORT}|^({CALLBACK_DATA_QUIZ10_RANDOM_CATEGORY})$"))
 
     application.add_handler(PollAnswerHandler(handle_poll_answer))
     application.add_error_handler(error_handler)
+
+    # Планирование ежедневной викторины
+    if job_queue:
+        target_time_msk = moscow_time(DAILY_QUIZ_DEFAULT_HOUR_MSK, DAILY_QUIZ_DEFAULT_MINUTE_MSK)
+        job_queue.run_daily(
+            master_daily_quiz_scheduler_job,
+            time=target_time_msk,
+            name="master_daily_quiz_scheduler"
+        )
+        logger.info(f"Ежедневный мастер-планировщик викторин запланирован на {DAILY_QUIZ_DEFAULT_HOUR_MSK:02d}:{DAILY_QUIZ_DEFAULT_MINUTE_MSK:02d} МСК.")
+    else:
+        logger.warning("JobQueue не доступен, ежедневная викторина не будет запланирована.")
+
 
     logger.info("Бот успешно настроен и запускается...")
     application.run_polling()
@@ -99,3 +130,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

@@ -4,20 +4,17 @@ import os
 import copy
 from typing import List, Dict, Any, Set
 
-# Импорты из других модулей проекта
-from config import logger, QUESTIONS_FILE, USERS_FILE, MALFORMED_QUESTIONS_FILE # Добавили MALFORMED_QUESTIONS_FILE
-import state # Для доступа и изменения глобальных переменных состояния
+from config import logger, QUESTIONS_FILE, USERS_FILE, MALFORMED_QUESTIONS_FILE, DAILY_QUIZ_SUBSCRIPTIONS_FILE
+import state
 
 # --- Вспомогательные функции для сериализации/десериализации ---
-# Эти функции используются только внутри data_manager.py для корректного сохранения set в JSON.
-
 def convert_sets_to_lists_recursively(obj: Any) -> Any:
     if isinstance(obj, dict):
         return {k: convert_sets_to_lists_recursively(v) for k, v in obj.items()}
     if isinstance(obj, list):
         return [convert_sets_to_lists_recursively(elem) for elem in obj]
     if isinstance(obj, set):
-        return list(obj)
+        return sorted(list(obj)) # Сортируем для консистентности в JSON
     return obj
 
 def convert_user_scores_lists_to_sets(scores_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -36,9 +33,6 @@ def convert_user_scores_lists_to_sets(scores_data: Dict[str, Any]) -> Dict[str, 
     return scores_data
 
 # --- Функции загрузки и сохранения данных ---
-
-# load_questions: Загружает вопросы из QUESTIONS_FILE в state.quiz_data.
-# Вызывается из bot.py при старте.
 def load_questions():
     processed_questions_count, valid_categories_count = 0, 0
     malformed_entries = [] # Для сбора некорректных записей
@@ -59,7 +53,6 @@ def load_questions():
 
                 processed_category_questions = []
                 for i, q_data in enumerate(questions_list):
-                    # Основная валидация полей
                     is_struct_valid = (isinstance(q_data, dict) and
                                        all(k in q_data for k in ["question", "options", "correct"]) and
                                        isinstance(q_data.get("question"), str) and q_data["question"].strip() and
@@ -68,11 +61,9 @@ def load_questions():
                                        isinstance(q_data.get("correct"), str) and q_data["correct"].strip() and
                                        q_data["correct"] in q_data["options"])
 
-                    # Валидация опционального поля "solution"
                     has_solution = "solution" in q_data
                     is_solution_valid = not has_solution or \
                                         (isinstance(q_data.get("solution"), str) and q_data.get("solution", "").strip())
-
 
                     if not is_struct_valid or not is_solution_valid:
                         log_msg_parts = [f"Вопрос {i+1} в категории '{category}' некорректен или неполон. Пропущен."]
@@ -133,26 +124,24 @@ def load_questions():
         logger.error(f"Непредвиденная ошибка загрузки вопросов: {e}", exc_info=True)
         state.quiz_data = {}
 
-# save_user_data: Сохраняет state.user_scores в USERS_FILE.
-# Вызывается из command_handlers.py (/start) и poll_answer_handler.py.
 def save_user_data():
+    # Глубокое копирование перед модификацией для сериализации
     data_to_save = copy.deepcopy(state.user_scores)
     data_to_save_serializable = convert_sets_to_lists_recursively(data_to_save)
     try:
         with open(USERS_FILE, 'w', encoding='utf-8') as f:
             json.dump(data_to_save_serializable, f, ensure_ascii=False, indent=4)
+        logger.debug(f"Данные пользователей сохранены в {USERS_FILE}")
     except Exception as e:
         logger.error(f"Ошибка сохранения данных пользователей: {e}", exc_info=True)
 
-# load_user_data: Загружает данные пользователей из USERS_FILE в state.user_scores.
-# Вызывается из bot.py при старте.
 def load_user_data():
     try:
         if os.path.exists(USERS_FILE) and os.path.getsize(USERS_FILE) > 0:
             with open(USERS_FILE, 'r', encoding='utf-8') as f:
                 loaded_data = json.load(f)
             state.user_scores = convert_user_scores_lists_to_sets(loaded_data)
-            logger.info("Данные пользователей загружены.")
+            logger.info(f"Данные пользователей загружены из {USERS_FILE}.")
         else:
             logger.info(f"{USERS_FILE} не найден или пуст. Старт с пустыми данными пользователей.")
             state.user_scores = {}
@@ -162,3 +151,35 @@ def load_user_data():
     except Exception as e:
         logger.error(f"Непредвиденная ошибка загрузки данных пользователей: {e}", exc_info=True)
         state.user_scores = {}
+
+# --- Функции для подписок на ежедневную викторину ---
+def load_daily_quiz_subscriptions():
+    try:
+        if os.path.exists(DAILY_QUIZ_SUBSCRIPTIONS_FILE) and os.path.getsize(DAILY_QUIZ_SUBSCRIPTIONS_FILE) > 0:
+            with open(DAILY_QUIZ_SUBSCRIPTIONS_FILE, 'r', encoding='utf-8') as f:
+                subscriptions_list = json.load(f)
+                if isinstance(subscriptions_list, list):
+                    state.daily_quiz_subscriptions = set(str(item) for item in subscriptions_list) # Убедимся, что ID - строки
+                    logger.info(f"Загружено {len(state.daily_quiz_subscriptions)} подписок на ежедневную викторину из {DAILY_QUIZ_SUBSCRIPTIONS_FILE}.")
+                else:
+                    logger.error(f"{DAILY_QUIZ_SUBSCRIPTIONS_FILE} должен содержать JSON список. Использование пустого списка подписок.")
+                    state.daily_quiz_subscriptions = set()
+        else:
+            logger.info(f"{DAILY_QUIZ_SUBSCRIPTIONS_FILE} не найден или пуст. Нет активных подписок на ежедневную викторину.")
+            state.daily_quiz_subscriptions = set()
+    except json.JSONDecodeError:
+        logger.error(f"Ошибка декодирования JSON в {DAILY_QUIZ_SUBSCRIPTIONS_FILE}. Использование пустого списка подписок.")
+        state.daily_quiz_subscriptions = set()
+    except Exception as e:
+        logger.error(f"Непредвиденная ошибка загрузки подписок на ежедневную викторину: {e}", exc_info=True)
+        state.daily_quiz_subscriptions = set()
+
+def save_daily_quiz_subscriptions():
+    subscriptions_list = sorted(list(state.daily_quiz_subscriptions))
+    try:
+        with open(DAILY_QUIZ_SUBSCRIPTIONS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(subscriptions_list, f, ensure_ascii=False, indent=4)
+        logger.debug(f"Подписки на ежедневную викторину сохранены в {DAILY_QUIZ_SUBSCRIPTIONS_FILE}. Количество: {len(subscriptions_list)}")
+    except Exception as e:
+        logger.error(f"Ошибка сохранения подписок на ежедневную викторину: {e}", exc_info=True)
+

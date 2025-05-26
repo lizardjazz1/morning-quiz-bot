@@ -1,5 +1,5 @@
 # state.py
-from typing import List, Dict, Any, Set
+from typing import List, Dict, Any, Set, Optional
 
 # --- Глобальные переменные состояния ---
 # Эти словари хранят данные во время работы бота.
@@ -19,20 +19,6 @@ user_scores: Dict[str, Dict[str, Any]] = {}
 # Хранит информацию о текущих активных опросах (Poll).
 # Обновляется в command_handlers.py (/quiz) и quiz_logic.py (для /quiz10).
 # Используется в poll_answer_handler.py для проверки ответов.
-# Структура poll_details_dict может включать:
-#   "chat_id": str,
-#   "message_id": int,
-#   "correct_index": int,
-#   "quiz_session": bool,
-#   "daily_quiz": bool,
-#   "question_details": Dict[str, Any],
-#   "associated_quiz_session_chat_id": Optional[str],
-#   "next_q_triggered_by_answer": bool,
-#   "is_last_question": bool, (для /quiz10)
-#   "question_session_index": int, (для /quiz10 и daily)
-#   "solution_placeholder_message_id": Optional[int], # ID сообщения-заглушки "💡"
-#   "processed_by_early_answer": bool, # Флаг для /quiz10, если ответ был досрочным
-#   "open_timestamp": float (для daily_quiz)
 current_poll: Dict[str, Dict[str, Any]] = {}
 
 # current_quiz_session: {chat_id: session_details_dict}
@@ -45,10 +31,10 @@ current_quiz_session: Dict[str, Dict[str, Any]] = {}
 # Хранит информацию о квизах /quiz10notify, которые были анонсированы и ожидают запуска.
 pending_scheduled_quizzes: Dict[str, Dict[str, Any]] = {}
 
-# daily_quiz_subscriptions: {chat_id_str}
-# Хранит ID чатов, подписанных на ежедневную викторину.
+# daily_quiz_subscriptions: {chat_id_str: {"hour": int, "minute": int, "categories": Optional[List[str]]}}
+# Хранит ID чатов, подписанных на ежедневную викторину, и их настройки.
 # Загружается и сохраняется модулем data_manager.py
-daily_quiz_subscriptions: Set[str] = set()
+daily_quiz_subscriptions: Dict[str, Dict[str, Any]] = {}
 
 # active_daily_quizzes: {chat_id_str: {"current_question_index": int, "questions": list, "job_name_next_q": str | None}}
 # Хранит состояние активных ежедневных викторин

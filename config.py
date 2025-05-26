@@ -30,7 +30,8 @@ DAILY_QUIZ_SUBSCRIPTIONS_FILE = 'daily_quiz_subscriptions.json'
 DAILY_QUIZ_DEFAULT_HOUR_MSK = 7
 DAILY_QUIZ_DEFAULT_MINUTE_MSK = 0
 DAILY_QUIZ_QUESTIONS_COUNT = 10
-DAILY_QUIZ_CATEGORIES_TO_PICK = 3 # Количество случайных категорий для выбора
+DAILY_QUIZ_CATEGORIES_TO_PICK = 3 # Количество случайных категорий для выбора (если пользователь не указал свои)
+DAILY_QUIZ_MAX_CUSTOM_CATEGORIES = 3 # Максимальное количество категорий, которые пользователь может выбрать
 DAILY_QUIZ_POLL_OPEN_PERIOD_SECONDS = 600 # Максимальное время для Telegram Poll (10 минут)
 DAILY_QUIZ_QUESTION_INTERVAL_SECONDS = 60 # 1 минута между вопросами
 
@@ -48,4 +49,3 @@ if not TOKEN:
 
 # Выводим фактический уровень логгирования
 logger.info(f"Уровень логирования установлен на: {logging.getLevelName(logger.getEffectiveLevel())}")
-

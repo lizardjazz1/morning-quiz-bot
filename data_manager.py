@@ -2,9 +2,10 @@
 import json
 import os
 import copy
-from typing import List, Dict, Any, Set
+from typing import List, Dict, Any, Set, Optional
 
-from config import logger, QUESTIONS_FILE, USERS_FILE, MALFORMED_QUESTIONS_FILE, DAILY_QUIZ_SUBSCRIPTIONS_FILE
+from config import (logger, QUESTIONS_FILE, USERS_FILE, MALFORMED_QUESTIONS_FILE,
+                    DAILY_QUIZ_SUBSCRIPTIONS_FILE, DAILY_QUIZ_DEFAULT_HOUR_MSK, DAILY_QUIZ_DEFAULT_MINUTE_MSK)
 import state
 
 # --- Вспомогательные функции для сериализации/десериализации ---
@@ -154,32 +155,77 @@ def load_user_data():
 
 # --- Функции для подписок на ежедневную викторину ---
 def load_daily_quiz_subscriptions():
+    migrated_subscriptions: Dict[str, Dict[str, Any]] = {}
+    file_exists_and_not_empty = os.path.exists(DAILY_QUIZ_SUBSCRIPTIONS_FILE) and os.path.getsize(DAILY_QUIZ_SUBSCRIPTIONS_FILE) > 0
+
+    if not file_exists_and_not_empty:
+        logger.info(f"{DAILY_QUIZ_SUBSCRIPTIONS_FILE} не найден или пуст. Нет активных подписок на ежедневную викторину.")
+        state.daily_quiz_subscriptions = {}
+        return
+
     try:
-        if os.path.exists(DAILY_QUIZ_SUBSCRIPTIONS_FILE) and os.path.getsize(DAILY_QUIZ_SUBSCRIPTIONS_FILE) > 0:
-            with open(DAILY_QUIZ_SUBSCRIPTIONS_FILE, 'r', encoding='utf-8') as f:
-                subscriptions_list = json.load(f)
-                if isinstance(subscriptions_list, list):
-                    state.daily_quiz_subscriptions = set(str(item) for item in subscriptions_list) # Убедимся, что ID - строки
-                    logger.info(f"Загружено {len(state.daily_quiz_subscriptions)} подписок на ежедневную викторину из {DAILY_QUIZ_SUBSCRIPTIONS_FILE}.")
-                else:
-                    logger.error(f"{DAILY_QUIZ_SUBSCRIPTIONS_FILE} должен содержать JSON список. Использование пустого списка подписок.")
-                    state.daily_quiz_subscriptions = set()
+        with open(DAILY_QUIZ_SUBSCRIPTIONS_FILE, 'r', encoding='utf-8') as f:
+            raw_data = json.load(f)
+
+        if isinstance(raw_data, list): # Old format: list of chat_id_str
+            logger.info(f"Обнаружен старый формат {DAILY_QUIZ_SUBSCRIPTIONS_FILE} (список ID чатов). Конвертация в новый формат...")
+            for chat_id_old_format in raw_data:
+                chat_id_key = str(chat_id_old_format) # Ensure string
+                migrated_subscriptions[chat_id_key] = {
+                    "hour": DAILY_QUIZ_DEFAULT_HOUR_MSK,
+                    "minute": DAILY_QUIZ_DEFAULT_MINUTE_MSK,
+                    "categories": None # Default to random categories
+                }
+            state.daily_quiz_subscriptions = migrated_subscriptions
+            logger.info(f"Конвертировано {len(migrated_subscriptions)} подписок в новый формат. Сохранение файла...")
+            save_daily_quiz_subscriptions() # Save immediately after migration
+
+        elif isinstance(raw_data, dict): # New format: dict
+            for chat_id_key, details in raw_data.items():
+                chat_id_str = str(chat_id_key) # Ensure string
+                if not isinstance(details, dict):
+                    logger.warning(f"Запись для чата {chat_id_str} в {DAILY_QUIZ_SUBSCRIPTIONS_FILE} имеет неверный формат (не словарь). Пропущено.")
+                    continue
+                
+                categories = details.get("categories")
+                if categories is not None and not (isinstance(categories, list) and all(isinstance(c, str) for c in categories)):
+                    logger.warning(f"Поле 'categories' для чата {chat_id_str} имеет неверный тип (ожидается list[str] или null). Установлено в null.")
+                    categories = None
+                
+                migrated_subscriptions[chat_id_str] = {
+                    "hour": details.get("hour", DAILY_QUIZ_DEFAULT_HOUR_MSK),
+                    "minute": details.get("minute", DAILY_QUIZ_DEFAULT_MINUTE_MSK),
+                    "categories": categories
+                }
+            state.daily_quiz_subscriptions = migrated_subscriptions
+            logger.info(f"Загружено {len(state.daily_quiz_subscriptions)} подписок на ежедневную викторину из {DAILY_QUIZ_SUBSCRIPTIONS_FILE} (новый формат).")
         else:
-            logger.info(f"{DAILY_QUIZ_SUBSCRIPTIONS_FILE} не найден или пуст. Нет активных подписок на ежедневную викторину.")
-            state.daily_quiz_subscriptions = set()
+            logger.error(f"{DAILY_QUIZ_SUBSCRIPTIONS_FILE} содержит данные неизвестного формата. Использование пустого списка подписок.")
+            state.daily_quiz_subscriptions = {}
+
     except json.JSONDecodeError:
         logger.error(f"Ошибка декодирования JSON в {DAILY_QUIZ_SUBSCRIPTIONS_FILE}. Использование пустого списка подписок.")
-        state.daily_quiz_subscriptions = set()
+        state.daily_quiz_subscriptions = {}
     except Exception as e:
         logger.error(f"Непредвиденная ошибка загрузки подписок на ежедневную викторину: {e}", exc_info=True)
-        state.daily_quiz_subscriptions = set()
+        state.daily_quiz_subscriptions = {}
+
 
 def save_daily_quiz_subscriptions():
-    subscriptions_list = sorted(list(state.daily_quiz_subscriptions))
+    # state.daily_quiz_subscriptions уже имеет формат Dict[str, Dict[str, Any]]
+    # Убедимся, что все поля имеют значения по умолчанию, если они отсутствуют (хотя при загрузке это должно быть учтено)
+    data_to_save = {}
+    for chat_id, details in state.daily_quiz_subscriptions.items():
+        data_to_save[str(chat_id)] = { # Убедимся, что chat_id это строка
+            "hour": details.get("hour", DAILY_QUIZ_DEFAULT_HOUR_MSK),
+            "minute": details.get("minute", DAILY_QUIZ_DEFAULT_MINUTE_MSK),
+            "categories": details.get("categories") # Сохраняем None как null в JSON
+        }
+
     try:
         with open(DAILY_QUIZ_SUBSCRIPTIONS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(subscriptions_list, f, ensure_ascii=False, indent=4)
-        logger.debug(f"Подписки на ежедневную викторину сохранены в {DAILY_QUIZ_SUBSCRIPTIONS_FILE}. Количество: {len(subscriptions_list)}")
+            json.dump(data_to_save, f, ensure_ascii=False, indent=4)
+        logger.debug(f"Подписки на ежедневную викторину сохранены в {DAILY_QUIZ_SUBSCRIPTIONS_FILE}. Количество: {len(data_to_save)}")
     except Exception as e:
         logger.error(f"Ошибка сохранения подписок на ежедневную викторину: {e}", exc_info=True)
 

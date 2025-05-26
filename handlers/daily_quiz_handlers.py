@@ -7,7 +7,8 @@ from telegram.constants import ChatMemberStatus, ParseMode
 
 from config import (logger, DAILY_QUIZ_SUBSCRIPTIONS_FILE, DAILY_QUIZ_QUESTIONS_COUNT,
                     DAILY_QUIZ_CATEGORIES_TO_PICK, DAILY_QUIZ_POLL_OPEN_PERIOD_SECONDS,
-                    DAILY_QUIZ_QUESTION_INTERVAL_SECONDS)
+                    DAILY_QUIZ_QUESTION_INTERVAL_SECONDS, DAILY_QUIZ_DEFAULT_HOUR_MSK, # Добавлен импорт
+                    DAILY_QUIZ_DEFAULT_MINUTE_MSK) # Добавлен импорт
 import state
 from data_manager import save_daily_quiz_subscriptions
 from quiz_logic import prepare_poll_options # Используем существующую функцию
@@ -54,7 +55,7 @@ def _get_questions_for_daily_quiz(
     num_to_sample = min(num_categories_to_pick, len(available_categories_with_questions))
     if num_to_sample == 0: # На всякий случай, хотя предыдущая проверка должна это покрыть
         return [], []
-        
+
     picked_category_names = random.sample(list(available_categories_with_questions.keys()), num_to_sample)
 
     # Собираем все вопросы из выбранных категорий
@@ -63,20 +64,19 @@ def _get_questions_for_daily_quiz(
         all_questions_from_picked_categories.extend(
             [q.copy() for q in available_categories_with_questions.get(cat_name, [])]
         )
-    
+
     if not all_questions_from_picked_categories:
         logger.warning(f"Выбранные категории {picked_category_names} не содержат вопросов.")
         return [], picked_category_names # Возвращаем имена, но пустой список вопросов
 
     # Перемешиваем все вопросы из отобранных категорий
     random.shuffle(all_questions_from_picked_categories)
-    
+
     # Отбираем нужное количество вопросов
     questions_for_quiz = all_questions_from_picked_categories[:num_questions]
-    
+
     logger.info(f"Для ежедневной викторины отобрано {len(questions_for_quiz)} вопросов из категорий: {picked_category_names}.")
     return questions_for_quiz, picked_category_names
-
 
 # --- Обработчики команд ---
 async def subscribe_daily_quiz_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -84,7 +84,7 @@ async def subscribe_daily_quiz_command(update: Update, context: ContextTypes.DEF
         return
 
     chat_id_str = str(update.effective_chat.id)
-    
+
     if not await _is_user_admin(update, context):
         reply_text = "Только администраторы могут подписать этот чат на ежедневную викторину."
         logger.debug(f"Attempting to send admin restriction message to {chat_id_str}. Text: '{reply_text}'")
@@ -100,11 +100,10 @@ async def subscribe_daily_quiz_command(update: Update, context: ContextTypes.DEF
                       f"Она будет начинаться примерно в {DAILY_QUIZ_DEFAULT_HOUR_MSK:02d}:{DAILY_QUIZ_DEFAULT_MINUTE_MSK:02d} МСК.\n"
                       f"Будет {DAILY_QUIZ_QUESTIONS_COUNT} вопросов из {DAILY_QUIZ_CATEGORIES_TO_PICK} случайных категорий, "
                       f"по одному вопросу в минуту. Каждый вопрос будет открыт {DAILY_QUIZ_POLL_OPEN_PERIOD_SECONDS // 60} минут.")
-    
+
     logger.debug(f"Attempting to send daily quiz subscription status to {chat_id_str}. Text: '{reply_text}'")
     await update.message.reply_text(reply_text)
     logger.info(f"Чат {chat_id_str} подписан на ежедневную викторину пользователем {update.effective_user.id}.")
-
 
 async def unsubscribe_daily_quiz_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.effective_chat or not update.effective_user:
@@ -140,7 +139,7 @@ async def _send_one_daily_question_job(context: ContextTypes.DEFAULT_TYPE):
     chat_id_str: str = job.data["chat_id_str"]
     current_q_idx: int = job.data["current_question_index"]
     questions_this_session: list[dict] = job.data["questions_this_session"]
-    
+
     active_quiz_state = state.active_daily_quizzes.get(chat_id_str)
     if not active_quiz_state or active_quiz_state.get("current_question_index") != current_q_idx:
         logger.warning(f"Ежедневная викторина для чата {chat_id_str} была прервана или состояние не соответствует job'у. Остановка отправки вопроса {current_q_idx + 1}.")
@@ -161,7 +160,7 @@ async def _send_one_daily_question_job(context: ContextTypes.DEFAULT_TYPE):
         return
 
     q_details = questions_this_session[current_q_idx]
-    
+
     # Подготовка текста вопроса
     poll_question_text_for_api = q_details['question']
     full_poll_question_header = f"Ежедневная викторина! Вопрос {current_q_idx + 1}/{len(questions_this_session)}"
@@ -246,7 +245,6 @@ async def _send_one_daily_question_job(context: ContextTypes.DEFAULT_TYPE):
             )
             logger.debug(f"Запланирован финальный обработчик для ежедневной викторины в чате {chat_id_str} (job: {final_job_name}).")
 
-
 async def _trigger_daily_quiz_for_chat_job(context: ContextTypes.DEFAULT_TYPE):
     job = context.job
     if not job or not job.data:
@@ -254,7 +252,7 @@ async def _trigger_daily_quiz_for_chat_job(context: ContextTypes.DEFAULT_TYPE):
         return
 
     chat_id_str: str = job.data["chat_id_str"]
-    
+
     if chat_id_str in state.active_daily_quizzes:
         logger.warning(f"Попытка запустить ежедневную викторину для чата {chat_id_str}, но она уже активна. Пропуск.")
         return
@@ -281,7 +279,7 @@ async def _trigger_daily_quiz_for_chat_job(context: ContextTypes.DEFAULT_TYPE):
         f"Один вопрос каждую минуту. Каждый вопрос будет доступен {DAILY_QUIZ_POLL_OPEN_PERIOD_SECONDS // 60} минут."
     ]
     intro_text = "\n".join(intro_message_parts)
-    
+
     try:
         logger.debug(f"Attempting to send daily quiz intro message to {chat_id_str}. Text: '{intro_text[:100]}...'")
         await context.bot.send_message(chat_id=chat_id_str, text=intro_text, parse_mode=ParseMode.HTML)
@@ -315,7 +313,6 @@ async def _trigger_daily_quiz_for_chat_job(context: ContextTypes.DEFAULT_TYPE):
         )
         logger.debug(f"Запланирован первый вопрос ежедневной викторины для чата {chat_id_str} (job: {first_q_job_name}).")
 
-
 async def master_daily_quiz_scheduler_job(context: ContextTypes.DEFAULT_TYPE):
     logger.info("Запущен мастер-планировщик ежедневных викторин.")
     if not state.daily_quiz_subscriptions:
@@ -333,7 +330,7 @@ async def master_daily_quiz_scheduler_job(context: ContextTypes.DEFAULT_TYPE):
     for i, chat_id_str in enumerate(active_subscriptions):
         # Небольшая задержка между запусками для разных чатов, чтобы распределить нагрузку
         delay_seconds = i * 2 # Например, 2 секунды на чат
-        
+
         # Удаляем старые незавершенные джобы для этого чата, если есть
         for prefix in ["daily_quiz_trigger_chat_", "daily_quiz_q_", "daily_quiz_finish_chat_"]:
             # Это может быть неэффективно, если джобов много.
@@ -343,7 +340,6 @@ async def master_daily_quiz_scheduler_job(context: ContextTypes.DEFAULT_TYPE):
             # Это делается в _trigger_daily_quiz_for_chat_job и _send_one_daily_question_job (косвенно, через state.active_daily_quizzes)
             pass
 
-
         trigger_job_name = f"daily_quiz_trigger_chat_{chat_id_str}"
         job_queue.run_once(
             _trigger_daily_quiz_for_chat_job,
@@ -352,4 +348,3 @@ async def master_daily_quiz_scheduler_job(context: ContextTypes.DEFAULT_TYPE):
             name=trigger_job_name
         )
         logger.debug(f"Запланирован запуск ежедневной викторины для чата {chat_id_str} (job: {trigger_job_name}) через {delay_seconds} сек.")
-

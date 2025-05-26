@@ -452,7 +452,7 @@ async def _send_one_daily_question_job(context: ContextTypes.DEFAULT_TYPE):
             sorted_scores_list_tuples = sorted(scores_to_sort, key=lambda item: (-item[0], item[1], item[2]))
 
             if sorted_scores_list_tuples:
-                final_text_parts.append("\n\n🏆 Топ-10 игроков этого чата на данный момент:")
+                final_text_parts.append("\n\nТоп-10 игроков чата на данный момент:")
                 for i, (player_score, _, _, player_name_original) in enumerate(sorted_scores_list_tuples[:10]):
                     rank_prefix = f"{i+1}."
                     if player_score > 0:

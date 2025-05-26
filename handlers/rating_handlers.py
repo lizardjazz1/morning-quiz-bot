@@ -5,7 +5,7 @@ from telegram.ext import ContextTypes
 # Импорты из других модулей проекта
 from config import logger
 import state # Для доступа к user_scores
-from utils import pluralize_points
+from utils import pluralize # MODIFIED: pluralize_points -> pluralize
 
 def get_player_display(player_name: str, player_score: int, separator: str = " - ") -> str:
     icon = ""
@@ -21,11 +21,13 @@ def get_player_display(player_name: str, player_score: int, separator: str = " -
     else: # player_score == 0
         icon = "😐" # Нейтрально
 
+    # MODIFIED: pluralize_points -> pluralize, providing specific forms for "очко"
+    score_text = pluralize(player_score, "очко", "очка", "очков")
     # Используем f-string, чтобы корректно вставить separator
     if separator == ":": # Обычно для сессионного рейтинга
-        return f"{icon} {player_name}{separator} {pluralize_points(player_score)}"
+        return f"{icon} {player_name}{separator} {score_text}"
     else: # Для общего рейтинга
-        return f"{icon} {player_name} {separator} {pluralize_points(player_score)}"
+        return f"{icon} {player_name} {separator} {score_text}"
 
 async def rating_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.effective_chat:
@@ -43,7 +45,7 @@ async def rating_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             key=lambda item: (-item[1].get("score", 0), item[1].get("name", "").lower())
         )
 
-        if not sorted_scores_list:
+        if not sorted_scores_list: # Should be caught by the first if, but good for robustness
             reply_text_to_send = "Пока нет игроков с набранными очками в этом чате."
         else:
             top_players_text_parts = ["📊 Топ-10 игроков в этом чате (/rating):\n"]
@@ -61,13 +63,13 @@ async def rating_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_text_to_send = "\n".join(top_players_text_parts)
 
     logger.debug(f"Attempting to send chat rating to {chat_id_str}. Text: '{reply_text_to_send[:100]}...'")
-    await update.message.reply_text(reply_text_to_send)
+    await update.message.reply_text(reply_text_to_send) # No parse_mode needed as get_player_display returns plain text with emoji
 
 async def global_top_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.effective_chat: # effective_chat нужен для chat_id в логах
          logger.warning("global_top_command: message or effective_chat is None.")
          return
-    
+
     chat_id_str = str(update.effective_chat.id) # Для логгирования, откуда пришла команда
     reply_text_to_send = ""
 
@@ -90,8 +92,7 @@ async def global_top_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 # Или если имя было "Игрок X", а стало нормальным
                 elif aggregated_global_scores[user_id]["name"].startswith("Игрок ") and not user_name.startswith("Игрок "):
                      aggregated_global_scores[user_id]["name"] = user_name
-
-
+        
         if not aggregated_global_scores:
             reply_text_to_send = "Нет игроков для отображения в глобальном рейтинге."
         else:
@@ -115,4 +116,4 @@ async def global_top_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
             reply_text_to_send = "\n".join(global_top_text_parts)
             
     logger.debug(f"Attempting to send global rating (invoked in {chat_id_str}). Text: '{reply_text_to_send[:100]}...'")
-    await update.message.reply_text(reply_text_to_send)
+    await update.message.reply_text(reply_text_to_send) # No parse_mode needed

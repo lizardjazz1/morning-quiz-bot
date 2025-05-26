@@ -34,11 +34,12 @@ DAILY_QUIZ_CATEGORIES_TO_PICK = 3 # Количество случайных ка
 DAILY_QUIZ_MAX_CUSTOM_CATEGORIES = 3 # Максимальное количество категорий, которые пользователь может выбрать
 DAILY_QUIZ_POLL_OPEN_PERIOD_SECONDS = 600 # Максимальное время для Telegram Poll (10 минут)
 DAILY_QUIZ_QUESTION_INTERVAL_SECONDS = 60 # 1 минута между вопросами
+DAILY_QUIZ_MENU_MAX_CATEGORIES_DISPLAY = 20 # Макс. категорий в inline меню выбора для ежедневной викторины
 
 # Константы для Callback Data (для кнопок выбора категории ежедневной викторины)
 CALLBACK_DATA_PREFIX_DAILY_QUIZ_CATEGORY_SHORT = "dqcs_" # Daily Quiz Category Short
 CALLBACK_DATA_DAILY_QUIZ_RANDOM_CATEGORY = "dqcr" # Daily Quiz Category Random
-
+CALLBACK_DATA_DAILY_QUIZ_INFO_TOO_MANY_CATS = "dq_info_too_many_cats" # Callback для кнопки "еще N категорий"
 
 # --- Настройка логгера ---
 log_level = getattr(logging, LOG_LEVEL_STR, logging.INFO)

@@ -7,7 +7,7 @@ from typing import Tuple, Optional, List, Dict, Any
 import pytz
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, JobQueue, Application
-from telegram.constants import ChatMemberStatus, ParseMode
+from telegram.constants import ParseMode # ChatMemberStatus removed as _is_user_admin is removed
 
 from config import (logger, DAILY_QUIZ_QUESTIONS_COUNT,
                     DAILY_QUIZ_CATEGORIES_TO_PICK, DAILY_QUIZ_POLL_OPEN_PERIOD_SECONDS,
@@ -15,14 +15,14 @@ from config import (logger, DAILY_QUIZ_QUESTIONS_COUNT,
                     DAILY_QUIZ_DEFAULT_MINUTE_MSK, DAILY_QUIZ_MAX_CUSTOM_CATEGORIES,
                     CALLBACK_DATA_PREFIX_DAILY_QUIZ_CATEGORY_SHORT,
                     CALLBACK_DATA_DAILY_QUIZ_RANDOM_CATEGORY,
-                    DAILY_QUIZ_MENU_MAX_CATEGORIES_DISPLAY, # NEW
-                    CALLBACK_DATA_DAILY_QUIZ_INFO_TOO_MANY_CATS # NEW
+                    DAILY_QUIZ_MENU_MAX_CATEGORIES_DISPLAY,
+                    CALLBACK_DATA_DAILY_QUIZ_INFO_TOO_MANY_CATS
                     )
 import state
 from data_manager import save_daily_quiz_subscriptions
 from quiz_logic import prepare_poll_options
 from handlers.rating_handlers import get_player_display
-from utils import pluralize, escape_markdown_v2 # MODIFIED: pluralize_points -> pluralize, ADDED escape_markdown_v2
+from utils import pluralize, escape_markdown_v2
 
 # --- Вспомогательные функции ---
 
@@ -31,17 +31,7 @@ def moscow_time(hour: int, minute: int) -> time:
     moscow_tz = pytz.timezone('Europe/Moscow')
     return time(hour=hour, minute=minute, tzinfo=moscow_tz)
 
-async def _is_user_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
-    if not update.effective_chat or not update.effective_user:
-        return False
-    if update.effective_chat.type == 'private':
-        return True
-    try:
-        member = await context.bot.get_chat_member(update.effective_chat.id, update.effective_user.id)
-        return member.status in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR]
-    except Exception as e:
-        logger.warning(f"Ошибка проверки статуса администратора для {update.effective_user.id} в {update.effective_chat.id}: {e}")
-        return False
+# _is_user_admin function removed as it's no longer used in this module
 
 def _parse_time_hh_mm(time_str: str) -> Optional[Tuple[int, int]]:
     match_hh_mm = re.fullmatch(r"(\d{1,2})[:.](\d{1,2})", time_str)
@@ -125,9 +115,7 @@ async def subscribe_daily_quiz_command(update: Update, context: ContextTypes.DEF
     if not update.message or not update.effective_chat or not update.effective_user: return
     chat_id_str = str(update.effective_chat.id)
     
-    # if not await _is_user_admin(update, context): # MODIFIED: Admin check removed
-    #     await update.message.reply_text("Только администраторы могут подписать чат на ежедневную викторину.") # MODIFIED: Admin check removed
-    #     return # MODIFIED: Admin check removed
+    # Admin check removed
 
     if chat_id_str in state.daily_quiz_subscriptions:
         sub_details = state.daily_quiz_subscriptions[chat_id_str]
@@ -143,7 +131,7 @@ async def subscribe_daily_quiz_command(update: Update, context: ContextTypes.DEF
         await _schedule_or_reschedule_daily_quiz_for_chat(context.application, chat_id_str)
         reply_text = (f"✅ Чат подписан на ежедневную викторину\\!\nВремя: *{DAILY_QUIZ_DEFAULT_HOUR_MSK:02d}:{DAILY_QUIZ_DEFAULT_MINUTE_MSK:02d} МСК* \\(по умолч\\.\\)\\.\n"
                       f"Категории: *{DAILY_QUIZ_CATEGORIES_TO_PICK} случайных* \\(по умолч\\.\\)\\.\n"
-                      f"Используйте `/setdailyquiztime` и `/setdailyquizcategories` для настройки \\(доступно администраторам\\)\\.")
+                      f"Используйте `/setdailyquiztime` и `/setdailyquizcategories` для настройки\\.") # MODIFIED: Removed admin restriction text
         logger.info(f"Чат {chat_id_str} подписан на ежедневную викторину пользователем {update.effective_user.id}.")
     await update.message.reply_text(reply_text, parse_mode=ParseMode.MARKDOWN_V2)
 
@@ -151,9 +139,7 @@ async def unsubscribe_daily_quiz_command(update: Update, context: ContextTypes.D
     if not update.message or not update.effective_chat or not update.effective_user: return
     chat_id_str = str(update.effective_chat.id)
 
-    # if not await _is_user_admin(update, context): # MODIFIED: Admin check removed
-    #     await update.message.reply_text("Только администраторы могут отписать чат.") # MODIFIED: Admin check removed
-    #     return # MODIFIED: Admin check removed
+    # Admin check removed
 
     if chat_id_str in state.daily_quiz_subscriptions:
         state.daily_quiz_subscriptions.pop(chat_id_str, None)
@@ -167,9 +153,12 @@ async def unsubscribe_daily_quiz_command(update: Update, context: ContextTypes.D
 async def set_daily_quiz_time_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.effective_chat or not update.effective_user: return
     chat_id_str = str(update.effective_chat.id)
-    if not await _is_user_admin(update, context):
-        await update.message.reply_text("Только администраторы могут изменять время.")
-        return
+    
+    # Admin check removed
+    # if not await _is_user_admin(update, context):
+    #     await update.message.reply_text("Только администраторы могут изменять время.")
+    #     return
+
     if chat_id_str not in state.daily_quiz_subscriptions:
         await update.message.reply_text("Чат не подписан. Сначала /subdaily.")
         return
@@ -188,15 +177,17 @@ async def set_daily_quiz_time_command(update: Update, context: ContextTypes.DEFA
     save_daily_quiz_subscriptions()
     await _schedule_or_reschedule_daily_quiz_for_chat(context.application, chat_id_str)
     await update.message.reply_text(f"Время ежедневной викторины установлено на {hour:02d}:{minute:02d} МСК.")
-    logger.info(f"Время ежедневной викторины для {chat_id_str} изменено на {hour:02d}:{minute:02d} МСК.")
+    logger.info(f"Время ежедневной викторины для {chat_id_str} изменено на {hour:02d}:{minute:02d} МСК пользователем {update.effective_user.id}.")
 
 async def set_daily_quiz_categories_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.effective_chat or not update.effective_user: return
     chat_id_str = str(update.effective_chat.id)
 
-    if not await _is_user_admin(update, context):
-        await update.message.reply_text("Только администраторы могут изменять категории.")
-        return
+    # Admin check removed
+    # if not await _is_user_admin(update, context):
+    #     await update.message.reply_text("Только администраторы могут изменять категории.")
+    #     return
+        
     if chat_id_str not in state.daily_quiz_subscriptions:
         await update.message.reply_text("Чат не подписан. Сначала /subdaily.")
         return
@@ -213,7 +204,7 @@ async def set_daily_quiz_categories_command(update: Update, context: ContextType
             state.daily_quiz_subscriptions[chat_id_str]["categories"] = None
             save_daily_quiz_subscriptions()
             await update.message.reply_text("Категории для ежедневной викторины установлены на: *случайные*\\.", parse_mode=ParseMode.MARKDOWN_V2)
-            logger.info(f"Категории для {chat_id_str} изменены на 'случайные' через аргумент.")
+            logger.info(f"Категории для {chat_id_str} изменены на 'случайные' через аргумент пользователем {update.effective_user.id}.")
             return
 
         raw_category_names_from_args = [name.strip() for name in input_string.split(',') if name.strip()]
@@ -254,7 +245,7 @@ async def set_daily_quiz_categories_command(update: Update, context: ContextType
                  f"Указанные категории ({escape_markdown_v2(', '.join(invalid_or_empty_categories_input))}) не найдены или пусты\\. "
                  f"Будут использованы *случайные категории*\\.", parse_mode=ParseMode.MARKDOWN_V2
              )
-             logger.info(f"Попытка установить неверные категории '{invalid_or_empty_categories_input}' для {chat_id_str}. Установлены случайные.")
+             logger.info(f"Попытка установить неверные категории '{invalid_or_empty_categories_input}' для {chat_id_str} пользователем {update.effective_user.id}. Установлены случайные.")
              return
 
         state.daily_quiz_subscriptions[chat_id_str]["categories"] = valid_chosen_categories_canonical or None
@@ -270,7 +261,7 @@ async def set_daily_quiz_categories_command(update: Update, context: ContextType
             reply_parts.append(f"\n*Предупреждение*: категории '{escape_markdown_v2(', '.join(invalid_or_empty_categories_input))}' не найдены/пусты и были проигнорированы\\.")
 
         await update.message.reply_text(" ".join(reply_parts), parse_mode=ParseMode.MARKDOWN_V2)
-        logger.info(f"Категории для {chat_id_str} изменены на {valid_chosen_categories_canonical or 'случайные'} через аргументы. Ввод: '{input_string}'")
+        logger.info(f"Категории для {chat_id_str} изменены на {valid_chosen_categories_canonical or 'случайные'} пользователем {update.effective_user.id} через аргументы. Ввод: '{input_string}'")
 
     else: # No arguments, show inline keyboard menu
         available_categories = [cat_name for cat_name, q_list in state.quiz_data.items() if isinstance(q_list, list) and q_list]
@@ -326,6 +317,7 @@ async def handle_daily_quiz_category_selection(update: Update, context: ContextT
     if not query.message or not query.message.chat or not query.from_user: return
 
     chat_id_str = str(query.message.chat.id)
+    user_id = query.from_user.id # For logging
 
     if query.data == CALLBACK_DATA_DAILY_QUIZ_INFO_TOO_MANY_CATS:
         current_text = query.message.text_markdown_v2 if query.message.text_markdown_v2 else query.message.text
@@ -382,7 +374,7 @@ async def handle_daily_quiz_category_selection(update: Update, context: ContextT
         if "Ошибка" not in message_text_after_selection and "истекло" not in message_text_after_selection:
             state.daily_quiz_subscriptions[chat_id_str]["categories"] = new_categories_selection
             save_daily_quiz_subscriptions()
-            logger.info(f"Категории для ежедневной викторины в чате {chat_id_str} изменены на {new_categories_selection or 'случайные'} через меню.")
+            logger.info(f"Категории для ежедневной викторины в чате {chat_id_str} изменены на {new_categories_selection or 'случайные'} через меню пользователем {user_id}.")
     else:
         message_text_after_selection = "Ошибка: чат не подписан на ежедневную викторину. Настройки не сохранены."
 
@@ -409,9 +401,6 @@ async def show_daily_quiz_settings_command(update: Update, context: ContextTypes
         categories_str = f"Выбранные: *{', '.join(escaped_custom_categories)}*"
     else:
         pluralized_cat_string = pluralize(DAILY_QUIZ_CATEGORIES_TO_PICK, "категория", "категории", "категорий")
-        # The string pluralized_cat_string (e.g. "3 категории") is unlikely to contain special chars,
-        # but escaping it is a good safety measure.
-        # The parentheses ( and ) are part of the f-string and must be escaped.
         categories_str = f"Случайные \\(*{escape_markdown_v2(pluralized_cat_string)}*\\)"
 
     escaped_time_str = escape_markdown_v2(time_str)
@@ -420,7 +409,7 @@ async def show_daily_quiz_settings_command(update: Update, context: ContextTypes
                   f"\\- Время: *{escaped_time_str}*\n"
                   f"\\- Категории: {categories_str}\n"
                   f"\\- Вопросов: {DAILY_QUIZ_QUESTIONS_COUNT}\n"
-                  f"Используйте `/setdailyquiztime` и `/setdailyquizcategories` для изменения \\(доступно администраторам\\)\\.")
+                  f"Используйте `/setdailyquiztime` и `/setdailyquizcategories` для изменения\\.") # MODIFIED: Removed admin restriction text
     await update.message.reply_text(reply_text, parse_mode=ParseMode.MARKDOWN_V2)
 
 # --- Логика запланированных задач (Jobs) ---
@@ -604,3 +593,4 @@ async def _trigger_daily_quiz_for_chat_job(context: ContextTypes.DEFAULT_TYPE):
     else:
         logger.error(f"JobQueue не доступен в _trigger_daily_quiz_for_chat_job для {chat_id_str}. Викторина не начнется.")
         state.active_daily_quizzes.pop(chat_id_str, None)
+

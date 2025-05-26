@@ -2,7 +2,8 @@
 import random
 from datetime import datetime, timedelta, timezone
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes # JobQueue не импортируется напрямую
+from telegram.ext import ContextTypes
+from telegram.constants import ChatMemberStatus
 
 from config import (logger, NUMBER_OF_QUESTIONS_IN_SESSION,
                     CALLBACK_DATA_PREFIX_QUIZ10_CATEGORY_SHORT,
@@ -11,7 +12,24 @@ from config import (logger, NUMBER_OF_QUESTIONS_IN_SESSION,
 import state
 from quiz_logic import (get_random_questions, get_random_questions_from_all,
                         send_next_question_in_session,
-                        show_quiz_session_results) # prepare_poll_options здесь не нужен
+                        show_quiz_session_results)
+# Импорт _is_user_admin из daily_quiz_handlers, если он там останется единственным таким
+# Но лучше его перенести в utils.py или держать копию, если он специфичен.
+# Для простоты предположим, что он доступен или будет перенесен.
+# from .daily_quiz_handlers import _is_user_admin # Если daily_quiz_handlers в том же пакете
+
+# Вспомогательная функция для проверки прав администратора (может быть вынесена в utils.py)
+async def _is_user_chat_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    if not update.effective_chat or not update.effective_user:
+        return False
+    if update.effective_chat.type == 'private':
+        return True # В личных сообщениях пользователь всегда "админ" для своего бота
+    try:
+        member = await context.bot.get_chat_member(update.effective_chat.id, update.effective_user.id)
+        return member.status in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR]
+    except Exception as e:
+        logger.warning(f"Ошибка проверки статуса администратора для пользователя {update.effective_user.id} в чате {update.effective_chat.id}: {e}")
+        return False
 
 # --- Вспомогательная функция для старта сессии (используется quiz10 и quiz10notify) ---
 async def _initiate_quiz10_session(
@@ -77,40 +95,34 @@ async def quiz10_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     chat_id_str = str(update.effective_chat.id)
-    chat_id_int = update.effective_chat.id # Для context.chat_data
-    reply_text_to_send = ""
+    # chat_id_int = update.effective_chat.id # Для context.chat_data, не используется здесь напрямую
 
     if state.current_quiz_session.get(chat_id_str):
-        reply_text_to_send = "В этом чате уже идет игра /quiz10. Дождитесь ее окончания или используйте /stopquiz."
-        logger.debug(f"Attempting to send message to {chat_id_str} (quiz10_command blocked by active session). Text: '{reply_text_to_send}'")
-        await update.message.reply_text(reply_text_to_send)
+        await update.message.reply_text("В этом чате уже идет игра /quiz10. Дождитесь ее окончания или используйте /stopquiz.")
         return
     if state.pending_scheduled_quizzes.get(chat_id_str):
-        reply_text_to_send = f"В этом чате уже запланирована игра /quiz10notify. Дождитесь ее начала или используйте /stopquiz."
-        logger.debug(f"Attempting to send message to {chat_id_str} (quiz10_command blocked by pending session). Text: '{reply_text_to_send}'")
-        await update.message.reply_text(reply_text_to_send)
+        await update.message.reply_text(f"В этом чате уже запланирована игра /quiz10notify. Дождитесь ее начала или используйте /stopquiz.")
+        return
+    if state.active_daily_quizzes.get(chat_id_str):
+        await update.message.reply_text("В этом чате идет ежедневная викторина. Команда /quiz10 временно недоступна. Вы можете остановить ежедневную викторину с помощью /stopquiz (только админ).")
         return
 
     if not state.quiz_data:
-        reply_text_to_send = "Вопросы еще не загружены. Попробуйте /start позже."
-        logger.debug(f"Attempting to send message to {chat_id_str} (quiz10_command, no questions loaded). Text: '{reply_text_to_send}'")
-        await update.message.reply_text(reply_text_to_send)
+        await update.message.reply_text("Вопросы еще не загружены. Попробуйте /start позже.")
         return
 
     available_categories = [cat_name for cat_name, q_list in state.quiz_data.items() if isinstance(q_list, list) and q_list]
     if not available_categories:
-        reply_text_to_send = "Нет доступных категорий с вопросами для /quiz10."
-        logger.debug(f"Attempting to send message to {chat_id_str} (quiz10_command, no categories with questions). Text: '{reply_text_to_send}'")
-        await update.message.reply_text(reply_text_to_send)
+        await update.message.reply_text("Нет доступных категорий с вопросами для /quiz10.")
         return
 
     keyboard = []
     category_map_for_callback: Dict[str, str] = {}
-    for i, cat_name in enumerate(sorted(available_categories)): # Сортируем для предсказуемого порядка кнопок
+    for i, cat_name in enumerate(sorted(available_categories)):
         short_id = f"c{i}"
         category_map_for_callback[short_id] = cat_name
         callback_data = f"{CALLBACK_DATA_PREFIX_QUIZ10_CATEGORY_SHORT}{short_id}"
-        if len(callback_data.encode('utf-8')) > 64: # Проверка длины callback_data
+        if len(callback_data.encode('utf-8')) > 64:
              logger.error(f"Сгенерированный callback_data '{callback_data}' для категории '{cat_name}' слишком длинный! Пропуск кнопки.")
              continue
         keyboard.append([InlineKeyboardButton(cat_name, callback_data=callback_data)])
@@ -118,23 +130,18 @@ async def quiz10_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard.append([InlineKeyboardButton("🎲 Случайные категории", callback_data=CALLBACK_DATA_QUIZ10_RANDOM_CATEGORY)])
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    # Сохраняем временное отображение в chat_data
     chat_data_key = f"quiz10_cat_map_{chat_id_str}"
     context.chat_data[chat_data_key] = category_map_for_callback
     logger.debug(f"Временная карта категорий сохранена в chat_data (ключ: {chat_data_key}) для чата {chat_id_str}.")
 
-    reply_text_to_send = 'Выберите категорию для немедленного старта /quiz10:'
-    logger.debug(f"Attempting to send category selection for /quiz10 to {chat_id_str}. Text: '{reply_text_to_send}'")
-    await update.message.reply_text(reply_text_to_send, reply_markup=reply_markup)
-
+    await update.message.reply_text('Выберите категорию для немедленного старта /quiz10:', reply_markup=reply_markup)
 
 async def handle_quiz10_category_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query:
         logger.error("handle_quiz10_category_selection: query is None.")
         return
-
-    await query.answer() # Отвечаем на callback query, чтобы убрать "часики" у пользователя
+    await query.answer()
 
     if not query.message or not query.message.chat or not query.from_user:
         logger.warning("handle_quiz10_category_selection: message, chat or user is None in query.")
@@ -143,31 +150,23 @@ async def handle_quiz10_category_selection(update: Update, context: ContextTypes
     chat_id_int = query.message.chat.id
     chat_id_str = str(chat_id_int)
     user_id = query.from_user.id
-    
+
     chat_data_key = f"quiz10_cat_map_{chat_id_str}"
     category_map_for_callback: Dict[str, str] | None = context.chat_data.pop(chat_data_key, None)
 
-    if category_map_for_callback is None: # Проверяем строго на None, т.к. пустой словарь тоже False
-        logger.warning(f"Временная карта категорий не найдена в chat_data (ключ: {chat_data_key}) для чата {chat_id_str} при обработке callback. Ответ на старую кнопку или ошибка.")
+    if category_map_for_callback is None:
+        logger.warning(f"Временная карта категорий не найдена в chat_data (ключ: {chat_data_key}) для чата {chat_id_str}. Ответ на старую кнопку или ошибка.")
         message_text_on_error = "Ошибка: Время выбора категории истекло или произошла внутренняя ошибка. Попробуйте начать новую викторину с /quiz10."
-        try:
-            await query.edit_message_text(text=message_text_on_error)
-        except Exception as e_edit:
-            logger.info(f"Не удалось отредактировать сообщение после ошибки выбора категории (map missing): {e_edit}. Отправка нового.")
-            try:
-                 await context.bot.send_message(chat_id=chat_id_int, text=message_text_on_error)
-            except Exception as e_send:
-                 logger.error(f"Не удалось отправить новое сообщение после неудачного редактирования (map missing): {e_send}")
+        try: await query.edit_message_text(text=message_text_on_error)
+        except Exception: pass # Ignore if fails, e.g. message too old
         return
-
-    logger.debug(f"Временная карта категорий (ключ: {chat_data_key}) удалена из chat_data для чата {chat_id_str} после получения callback.")
 
     selected_category_name: str | None = None
     callback_data = query.data
     message_text_after_selection = ""
 
     if callback_data == CALLBACK_DATA_QUIZ10_RANDOM_CATEGORY:
-        selected_category_name = None # Сигнал для _initiate_quiz10_session
+        selected_category_name = None
         message_text_after_selection = "Выбран случайный набор категорий. Начинаем /quiz10..."
     elif callback_data and callback_data.startswith(CALLBACK_DATA_PREFIX_QUIZ10_CATEGORY_SHORT):
         short_id = callback_data[len(CALLBACK_DATA_PREFIX_QUIZ10_CATEGORY_SHORT):]
@@ -175,116 +174,65 @@ async def handle_quiz10_category_selection(update: Update, context: ContextTypes
         if selected_category_name:
              message_text_after_selection = f"Выбрана категория '{selected_category_name}'. Начинаем /quiz10..."
         else:
-             logger.warning(f"Не удалось найти полное имя для короткого ID '{short_id}' в карте категорий для чата {chat_id_str}. Карта была: {category_map_for_callback}")
-             message_text_after_selection = "Произошла ошибка при выборе категории (ID не найден в карте). Попробуйте снова /quiz10."
-             # Не инициируем викторину, просто редактируем сообщение
-             try:
-                 await query.edit_message_text(text=message_text_after_selection)
-             except Exception as e:
-                 logger.info(f"Не удалось отредактировать сообщение после ошибки выбора категории (ID not in map): {e}")
-                 await context.bot.send_message(chat_id=chat_id_int, text=message_text_after_selection)
-             return # Завершаем обработку
+             message_text_after_selection = "Произошла ошибка при выборе категории (ID не найден). Попробуйте /quiz10."
+             # Fall through to edit message and return
     else:
-        logger.warning(f"Неизвестные callback_data в handle_quiz10_category_selection: '{callback_data}'.")
-        message_text_after_selection = "Произошла ошибка при выборе категории (неизвестный тип выбора). Попробуйте снова /quiz10."
-        try:
-            await query.edit_message_text(text=message_text_after_selection)
-        except Exception as e:
-             logger.info(f"Не удалось отредактировать сообщение после неизвестных callback_data: {e}")
-             await context.bot.send_message(chat_id=chat_id_int, text=message_text_after_selection)
-        return # Завершаем обработку
+        message_text_after_selection = "Произошла ошибка (неизвестный тип выбора). Попробуйте /quiz10."
 
-    # Отредактировать сообщение с кнопками
-    logger.debug(f"Attempting to edit message after /quiz10 category selection in {chat_id_str}. New text: '{message_text_after_selection}'")
-    try:
-        await query.edit_message_text(text=message_text_after_selection)
-    except Exception as e_edit_final:
-        logger.info(f"Не удалось отредактировать сообщение с кнопками выбора категории (финальное): {e_edit_final}. Возможно, сообщение удалено.")
-        # Если не удалось отредактировать, не страшно, главное - запустить сессию если надо
+    try: await query.edit_message_text(text=message_text_after_selection)
+    except Exception: pass # Ignore if fails
 
-    # Запускаем сессию, если выбор был успешен (selected_category_name определено или это RANDOM)
-    # Условие `message_text_after_selection.startswith("Выбрана категория")` или `message_text_after_selection.startswith("Выбран случайный")`
-    # может быть использовано как прокси для успешного выбора.
     if "Начинаем /quiz10..." in message_text_after_selection:
          await _initiate_quiz10_session(context, chat_id_int, chat_id_str, user_id, selected_category_name)
 
-
 async def quiz10notify_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.effective_chat or not update.effective_user:
-        logger.warning("quiz10notify_command: message, chat or user is None.")
         return
 
     chat_id_int = update.effective_chat.id
     chat_id_str = str(chat_id_int)
     user_id = update.effective_user.id
-    reply_text_to_send = ""
 
     if state.current_quiz_session.get(chat_id_str):
-        reply_text_to_send = "В этом чате уже идет игра /quiz10. Дождитесь ее окончания или используйте /stopquiz."
-        logger.debug(f"Attempting to send message to {chat_id_str} (quiz10notify blocked by active session). Text: '{reply_text_to_send}'")
-        await update.message.reply_text(reply_text_to_send)
+        await update.message.reply_text("В этом чате уже идет игра /quiz10. Дождитесь ее окончания или используйте /stopquiz.")
         return
-        
     if state.pending_scheduled_quizzes.get(chat_id_str):
-        pending_info = state.pending_scheduled_quizzes[chat_id_str]
-        scheduled_dt_utc = pending_info.get("scheduled_time")
-        time_left_str = "скоро"
-        if scheduled_dt_utc and isinstance(scheduled_dt_utc, datetime):
-            now_utc = datetime.now(timezone.utc)
-            if scheduled_dt_utc > now_utc:
-                time_left = scheduled_dt_utc - now_utc
-                time_left_str = f"примерно через {max(1, int(time_left.total_seconds() / 60))} мин."
-            else: # Время уже прошло, но job еще не сработал/не удалил из pending
-                time_left_str = "очень скоро (возможно, уже началась)"
-        reply_text_to_send = f"В этом чате уже запланирована игра /quiz10notify (начнется {time_left_str}). Дождитесь ее начала или используйте /stopquiz для отмены."
-        logger.debug(f"Attempting to send message to {chat_id_str} (quiz10notify blocked by existing pending). Text: '{reply_text_to_send}'")
-        await update.message.reply_text(reply_text_to_send)
+        await update.message.reply_text(f"В этом чате уже запланирована игра /quiz10notify. Дождитесь ее начала или используйте /stopquiz.")
+        return
+    if state.active_daily_quizzes.get(chat_id_str):
+        await update.message.reply_text("В этом чате идет ежедневная викторина. Команда /quiz10notify временно недоступна. Вы можете остановить ежедневную викторину с помощью /stopquiz (только админ).")
         return
 
     category_name_arg = " ".join(context.args) if context.args else None
-    chosen_category_full_name: str | None = None # Будет None для случайных
-    category_display_name = "случайным категориям" # Для сообщения пользователю
+    chosen_category_full_name: str | None = None
+    category_display_name = "случайным категориям"
 
     if not state.quiz_data:
-        reply_text_to_send = "Вопросы еще не загружены. Попробуйте /start позже."
-        logger.debug(f"Attempting to send message to {chat_id_str} (quiz10notify, no questions loaded). Text: '{reply_text_to_send}'")
-        await update.message.reply_text(reply_text_to_send)
+        await update.message.reply_text("Вопросы еще не загружены. Попробуйте /start позже.")
         return
 
     if category_name_arg:
-        # Ищем категорию без учета регистра для удобства пользователя
         found_cat_name = next((cat for cat in state.quiz_data if cat.lower() == category_name_arg.lower() and state.quiz_data[cat]), None)
         if found_cat_name:
             chosen_category_full_name = found_cat_name
             category_display_name = f"категории '{chosen_category_full_name}'"
         else:
-            reply_text_to_send = f"Категория '{category_name_arg}' не найдена или пуста. Викторина будет запланирована по случайным категориям."
-            logger.debug(f"Attempting to send message to {chat_id_str} (quiz10notify, category not found). Text: '{reply_text_to_send}'")
-            await update.message.reply_text(reply_text_to_send)
-            # Продолжаем со случайными категориями, chosen_category_full_name остается None
+            await update.message.reply_text(f"Категория '{category_name_arg}' не найдена или пуста. Викторина будет запланирована по случайным категориям.")
+            # chosen_category_full_name remains None
 
-    # Если категория не была задана или не найдена, проверяем общую доступность вопросов
-    if not chosen_category_full_name and category_name_arg: # Если была задана, но не найдена
-        pass # Уже сообщили пользователю, chosen_category_full_name останется None -> случайные
-    elif not chosen_category_full_name and not category_name_arg: # Не была задана -> случайные
+    if not chosen_category_full_name and not category_name_arg: # No specific category, check general availability
          all_questions_flat = [q for q_list in state.quiz_data.values() for q in q_list]
          if not all_questions_flat:
-             reply_text_to_send = "Нет доступных вопросов для викторины. Загрузите вопросы (админ)."
-             logger.debug(f"Attempting to send message to {chat_id_str} (quiz10notify, no questions AT ALL). Text: '{reply_text_to_send}'")
-             await update.message.reply_text(reply_text_to_send)
+             await update.message.reply_text("Нет доступных вопросов для викторины.")
              return
 
     delay_seconds = QUIZ10_NOTIFY_DELAY_MINUTES * 60
-    job_name = f"scheduled_quiz10_chat_{chat_id_str}" # Сделаем имя уникальным для чата
-
+    job_name = f"scheduled_quiz10_chat_{chat_id_str}"
     job_context_data = {"chat_id_int": chat_id_int, "user_id": user_id, "category_full_name": chosen_category_full_name}
 
     if context.job_queue:
-        # Удаляем предыдущие джобы с таким же именем для этого чата
         existing_jobs = context.job_queue.get_jobs_by_name(job_name)
-        for old_job in existing_jobs:
-            old_job.schedule_removal()
-            logger.debug(f"Удален старый job для quiz10notify с именем '{old_job.name}' в чате {chat_id_str}.")
+        for old_job in existing_jobs: old_job.schedule_removal()
 
         context.job_queue.run_once(
             _start_scheduled_quiz10_job_callback,
@@ -292,28 +240,19 @@ async def quiz10notify_command(update: Update, context: ContextTypes.DEFAULT_TYP
             data=job_context_data,
             name=job_name
         )
-
         scheduled_time_utc = datetime.now(timezone.utc) + timedelta(seconds=delay_seconds)
         state.pending_scheduled_quizzes[chat_id_str] = {
-            "job_name": job_name,
-            "category_name": chosen_category_full_name, # Сохраняем полное имя или None
-            "starter_user_id": str(user_id),
-            "scheduled_time": scheduled_time_utc
+            "job_name": job_name, "category_name": chosen_category_full_name,
+            "starter_user_id": str(user_id), "scheduled_time": scheduled_time_utc
         }
-
-        reply_text_to_send = (
+        await update.message.reply_text(
             f"🔔 Принято! Викторина /quiz10 по {category_display_name} начнется через {QUIZ10_NOTIFY_DELAY_MINUTES} мин.\n"
             "Чтобы отменить, используйте /stopquiz."
         )
-        logger.debug(f"Attempting to send confirmation for /quiz10notify to {chat_id_str}. Text: '{reply_text_to_send}'")
-        await update.message.reply_text(reply_text_to_send)
         logger.info(f"Запланирован /quiz10notify для чата {chat_id_str} по {category_display_name} через {QUIZ10_NOTIFY_DELAY_MINUTES} мин. Job: {job_name}")
     else:
-        reply_text_to_send = "Ошибка: JobQueue не настроен. Уведомление не может быть установлено."
-        logger.debug(f"Attempting to send error (JobQueue missing) for /quiz10notify to {chat_id_str}. Text: '{reply_text_to_send}'")
-        await update.message.reply_text(reply_text_to_send)
+        await update.message.reply_text("Ошибка: JobQueue не настроен.")
         logger.error("JobQueue не доступен в quiz10notify_command.")
-
 
 async def _start_scheduled_quiz10_job_callback(context: ContextTypes.DEFAULT_TYPE):
     if not context.job or not context.job.data:
@@ -324,31 +263,23 @@ async def _start_scheduled_quiz10_job_callback(context: ContextTypes.DEFAULT_TYP
     chat_id_int: int = job_data["chat_id_int"]
     chat_id_str = str(chat_id_int)
     user_id: int = job_data["user_id"]
-    category_full_name: str | None = job_data.get("category_full_name") # Может быть None
+    category_full_name: str | None = job_data.get("category_full_name")
 
-    # Проверяем, не был ли этот pending quiz отменен
     pending_quiz_info = state.pending_scheduled_quizzes.get(chat_id_str)
     if not pending_quiz_info or pending_quiz_info.get("job_name") != context.job.name:
-        logger.info(f"Запланированный quiz10 (job: {context.job.name}) для чата {chat_id_str} был отменен или заменен другим. Job завершен.")
+        logger.info(f"Запланированный quiz10 (job: {context.job.name}) для чата {chat_id_str} был отменен/заменен. Job завершен.")
         return
-
-    # Удаляем из pending, так как сейчас будем запускать
     state.pending_scheduled_quizzes.pop(chat_id_str, None)
-    logger.debug(f"Удалена запись из pending_scheduled_quizzes для чата {chat_id_str} при запуске job'а.")
 
-    if state.current_quiz_session.get(chat_id_str):
-        logger.warning(f"Попытка запустить запланированный quiz10 в чате {chat_id_str}, но там уже активна другая сессия /quiz10.")
+    if state.current_quiz_session.get(chat_id_str) or state.active_daily_quizzes.get(chat_id_str):
+        logger.warning(f"Попытка запустить запланированный quiz10 в чате {chat_id_str}, но там уже активна другая викторина (/quiz10 или ежедневная).")
         try:
-            error_text = "Не удалось запустить запланированную викторину: в этом чате уже идет другая игра /quiz10."
-            logger.debug(f"Attempting to send message to {chat_id_str} (_start_scheduled_quiz10_job_callback, session conflict). Text: '{error_text}'")
-            await context.bot.send_message(chat_id=chat_id_int, text=error_text)
-        except Exception as e_send:
-             logger.error(f"Ошибка отправки сообщения о конфликте сессий в чат {chat_id_str}: {e_send}")
+            await context.bot.send_message(chat_id=chat_id_int, text="Не удалось запустить запланированную викторину /quiz10: в этом чате уже идет другая игра.")
+        except Exception: pass
         return
 
-    logger.info(f"Запускаем запланированный quiz10 для чата {chat_id_str}. Категория из job: {category_full_name if category_full_name else 'Случайные'}")
+    logger.info(f"Запускаем запланированный quiz10 для чата {chat_id_str}. Категория: {category_full_name if category_full_name else 'Случайные'}")
     await _initiate_quiz10_session(context, chat_id_int, chat_id_str, user_id, category_full_name)
-
 
 async def stop_quiz_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.effective_user or not update.effective_chat:
@@ -358,27 +289,18 @@ async def stop_quiz_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id_int = update.effective_chat.id
     chat_id_str = str(chat_id_int)
     user_id_str = str(update.effective_user.id)
-    reply_text_to_send = ""
+    
+    stopped_messages = []
+    user_is_chat_admin = await _is_user_chat_admin(update, context) # Use the local/imported helper
 
-    user_is_admin = False
-    if update.effective_chat.type != "private":
-        try:
-            chat_member = await context.bot.get_chat_member(chat_id_str, user_id_str)
-            if chat_member.status in [chat_member.ADMINISTRATOR, chat_member.CREATOR]:
-                user_is_admin = True
-        except Exception as e:
-            logger.warning(f"Ошибка проверки статуса админа для {user_id_str} в {chat_id_str}: {e}")
-
-    stopped_something = False
-
-    # Остановка активной сессии /quiz10
+    # 1. Остановка активной сессии /quiz10
     active_session = state.current_quiz_session.get(chat_id_str)
     if active_session:
         session_starter_id = active_session.get("starter_user_id")
-        if user_is_admin or user_id_str == session_starter_id:
-            logger.info(f"/stopquiz от {user_id_str} (admin: {user_is_admin}) в {chat_id_str}. Остановка активной сессии /quiz10, начатой {session_starter_id}.")
-            
-            # Пытаемся остановить текущий опрос сессии, если он есть
+        can_stop_quiz10 = user_is_chat_admin or (user_id_str == session_starter_id)
+        
+        if can_stop_quiz10:
+            logger.info(f"/stopquiz от {user_id_str} (admin: {user_is_chat_admin}) в {chat_id_str}. Остановка активной сессии /quiz10, начатой {session_starter_id}.")
             current_poll_id_in_session = active_session.get("current_poll_id")
             if current_poll_id_in_session:
                 poll_info = state.current_poll.get(current_poll_id_in_session)
@@ -388,23 +310,18 @@ async def stop_quiz_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         logger.debug(f"Текущий опрос {current_poll_id_in_session} активной сессии /quiz10 остановлен.")
                     except Exception as e_stop_poll:
                         logger.warning(f"Ошибка остановки опроса {current_poll_id_in_session} через /stopquiz: {e_stop_poll}")
-            
-            await show_quiz_session_results(context, chat_id_str, error_occurred=True) # Показываем результаты досрочно
-            reply_text_to_send = "Активная викторина /quiz10 остановлена."
-            logger.debug(f"Attempting to send message to {chat_id_str} (active /quiz10 stopped). Text: '{reply_text_to_send}'")
-            await update.message.reply_text(reply_text_to_send)
-            stopped_something = True
+            await show_quiz_session_results(context, chat_id_str, error_occurred=True)
+            stopped_messages.append("✅ Активная викторина /quiz10 остановлена.")
         else:
-            reply_text_to_send = "Только админ или тот, кто начал активную /quiz10, может ее остановить."
-            logger.debug(f"Attempting to send restriction message to {chat_id_str} (stop active /quiz10). Text: '{reply_text_to_send}'")
-            await update.message.reply_text(reply_text_to_send)
-            return # Выходим, если нет прав на остановку активной, не проверяем pending
+            stopped_messages.append("❌ Не удалось остановить активную /quiz10: только админ чата или инициатор викторины может это сделать.")
 
-    # Отмена запланированной /quiz10notify
+    # 2. Отмена запланированной /quiz10notify
     pending_quiz = state.pending_scheduled_quizzes.get(chat_id_str)
     if pending_quiz:
         pending_starter_id = pending_quiz.get("starter_user_id")
-        if user_is_admin or user_id_str == pending_starter_id:
+        can_cancel_pending_quiz10 = user_is_chat_admin or (user_id_str == pending_starter_id)
+
+        if can_cancel_pending_quiz10:
             job_name = pending_quiz.get("job_name")
             if job_name and context.job_queue:
                 jobs = context.job_queue.get_jobs_by_name(job_name)
@@ -413,23 +330,52 @@ async def stop_quiz_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     job.schedule_removal()
                     removed_count +=1
                 if removed_count > 0:
-                    logger.info(f"Отменен(о) {removed_count} запланированный(х) quiz10notify (job name pattern: {job_name}) в чате {chat_id_str} командой /stopquiz от {user_id_str} (admin: {user_is_admin}).")
-
+                    logger.info(f"Отменен(о) {removed_count} запланированный(х) quiz10notify (job: {job_name}) в {chat_id_str} от {user_id_str}.")
             state.pending_scheduled_quizzes.pop(chat_id_str, None)
-            reply_text_to_send = "Запланированная викторина /quiz10notify отменена."
-            logger.debug(f"Attempting to send message to {chat_id_str} (pending /quiz10notify cancelled). Text: '{reply_text_to_send}'")
-            await update.message.reply_text(reply_text_to_send)
-            stopped_something = True
+            stopped_messages.append("✅ Запланированная викторина /quiz10notify отменена.")
         else:
-            # Это сообщение будет отправлено, только если не было активной сессии ИЛИ не было прав ее остановить,
-            # И сейчас нет прав остановить запланированную.
-            if not active_session: # Если не было активной сессии (или ее не смогли остановить выше)
-                 reply_text_to_send = "Только админ или тот, кто запланировал /quiz10notify, может ее отменить."
-                 logger.debug(f"Attempting to send restriction message to {chat_id_str} (stop pending /quiz10notify). Text: '{reply_text_to_send}'")
-                 await update.message.reply_text(reply_text_to_send)
-            return
+            stopped_messages.append("❌ Не удалось отменить запланированную /quiz10notify: только админ чата или инициатор может это сделать.")
 
-    if not stopped_something:
-        reply_text_to_send = "В этом чате нет активных или запланированных викторин /quiz10 для остановки/отмены."
-        logger.debug(f"Attempting to send message to {chat_id_str} (nothing to stop for /quiz10). Text: '{reply_text_to_send}'")
-        await update.message.reply_text(reply_text_to_send)
+    # 3. Остановка активной ежедневной викторины
+    active_daily_quiz_info = state.active_daily_quizzes.get(chat_id_str)
+    if active_daily_quiz_info:
+        can_stop_daily = user_is_chat_admin # Включает приватный чат, где user_is_chat_admin = True
+
+        if can_stop_daily:
+            logger.info(f"/stopquiz от {user_id_str} (admin: {user_is_chat_admin}) в {chat_id_str}. Остановка активной ежедневной викторины.")
+            job_name_next_daily_q = active_daily_quiz_info.get("job_name_next_q")
+            if job_name_next_daily_q and context.job_queue:
+                jobs = context.job_queue.get_jobs_by_name(job_name_next_daily_q)
+                removed_count = 0
+                for job in jobs:
+                    job.schedule_removal()
+                    removed_count +=1
+                if removed_count > 0:
+                    logger.info(f"Отменен(о) {removed_count} следующий(х) вопрос(ов) ежедневной викторины (job: {job_name_next_daily_q}) в {chat_id_str}.")
+            
+            state.active_daily_quizzes.pop(chat_id_str, None)
+            stopped_messages.append("✅ Активная ежедневная викторина остановлена. Следующие вопросы не будут отправлены.")
+        else: # Групповой чат, пользователь не админ
+            stopped_messages.append("❌ Не удалось остановить ежедневную викторину: только админ чата может это сделать.")
+            
+    # Отправка итогового сообщения
+    if not stopped_messages:
+        await update.message.reply_text("В этом чате нет активных или запланированных викторин (/quiz10, /quiz10notify, ежедневная) для остановки/отмены.")
+    else:
+        # Фильтруем сообщения об успешной остановке, если таковые были.
+        # Если были только сообщения об ошибках прав, то добавим общее "нечего остановить или нет прав".
+        success_stops = [msg for msg in stopped_messages if "✅" in msg]
+        permission_errors = [msg for msg in stopped_messages if "❌" in msg]
+
+        final_reply = ""
+        if success_stops:
+            final_reply += "\n".join(success_stops)
+        
+        if permission_errors:
+            if final_reply: final_reply += "\n\n" # Добавляем разделитель, если были успешные остановки
+            final_reply += "\n".join(permission_errors)
+        
+        if not final_reply: # Теоретически не должно случиться, если stopped_messages не пуст
+             final_reply = "Не удалось выполнить команду /stopquiz."
+
+        await update.message.reply_text(final_reply)

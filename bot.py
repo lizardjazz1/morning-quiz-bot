@@ -20,20 +20,20 @@
 # └── daily_quiz_subscriptions.json # Данные о подписках на ежедневную викторину
 
 import datetime
-import pytz # Для работы с временными зонами
+import pytz 
 
 from telegram.ext import (Application, ApplicationBuilder, CommandHandler, PollAnswerHandler,
                           CallbackQueryHandler, ContextTypes, JobQueue)
-from telegram import Update # Только для error_handler type hint, если раскомментировать часть
+from telegram import Update 
 
-# Импорты из других модулей проекта
 from config import (TOKEN, logger,
                     CALLBACK_DATA_PREFIX_QUIZ10_CATEGORY_SHORT,
-                    CALLBACK_DATA_QUIZ10_RANDOM_CATEGORY) # Убраны DAILY_QUIZ_DEFAULT_HOUR_MSK, DAILY_QUIZ_DEFAULT_MINUTE_MSK, т.к. мастер-джоб удален
-import state # для schedule_all_daily_quizzes_on_startup
+                    CALLBACK_DATA_QUIZ10_RANDOM_CATEGORY,
+                    CALLBACK_DATA_PREFIX_DAILY_QUIZ_CATEGORY_SHORT, # New import
+                    CALLBACK_DATA_DAILY_QUIZ_RANDOM_CATEGORY) # New import
+import state 
 from data_manager import load_questions, load_user_data, load_daily_quiz_subscriptions
 
-# Импорт обработчиков из нового пакета handlers
 from handlers.common_handlers import start_command, categories_command
 from handlers.quiz_single_handler import quiz_command
 from handlers.quiz_session_handlers import (quiz10_command, handle_quiz10_category_selection,
@@ -41,24 +41,14 @@ from handlers.quiz_session_handlers import (quiz10_command, handle_quiz10_catego
 from handlers.rating_handlers import rating_command, global_top_command
 from handlers.daily_quiz_handlers import (subscribe_daily_quiz_command, unsubscribe_daily_quiz_command,
                                           set_daily_quiz_time_command, set_daily_quiz_categories_command,
-                                          show_daily_quiz_settings_command, _schedule_or_reschedule_daily_quiz_for_chat)
+                                          show_daily_quiz_settings_command, _schedule_or_reschedule_daily_quiz_for_chat,
+                                          handle_daily_quiz_category_selection) # New import
 
-# Импорт обработчика ответов на опросы
 from poll_answer_handler import handle_poll_answer
 
-# --- Обработчик ошибок ---
-async def error_handler_callback(update: object, context: ContextTypes.DEFAULT_TYPE) -> None: # Переименовал для ясности, что это колбэк
+async def error_handler_callback(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.error("Произошла ошибка при обработке обновления:", exc_info=context.error)
-    # Можно добавить отправку сообщения пользователю, если ошибка критична или понятна
-    # if isinstance(update, Update) and update.effective_chat:
-    #     try:
-    #         error_message_text = "Произошла внутренняя ошибка. Пожалуйста, попробуйте позже."
-    #         logger.debug(f"Attempting to send error message to {update.effective_chat.id}. Text: '{error_message_text}'")
-    #         await context.bot.send_message(chat_id=update.effective_chat.id, text=error_message_text)
-    #     except Exception as e:
-    #         logger.error(f"Не удалось отправить сообщение об ошибке пользователю: {e}")
 
-# --- Функция для планирования всех ежедневных викторин при запуске ---
 async def schedule_all_daily_quizzes_on_startup(application: Application):
     if not state.daily_quiz_subscriptions:
         logger.info("Нет чатов, подписанных на ежедневную викторину. Планирование не требуется.")
@@ -68,13 +58,11 @@ async def schedule_all_daily_quizzes_on_startup(application: Application):
     scheduled_count = 0
     for chat_id_str in state.daily_quiz_subscriptions.keys():
         try:
-            # Передаем application в _schedule_or_reschedule_daily_quiz_for_chat
             await _schedule_or_reschedule_daily_quiz_for_chat(application, chat_id_str)
             scheduled_count += 1
         except Exception as e:
             logger.error(f"Ошибка при планировании ежедневной викторины для чата {chat_id_str} при запуске: {e}", exc_info=True)
     logger.info(f"Завершено планирование ежедневных викторин при запуске. Запланировано для {scheduled_count} чатов.")
-
 # --- Основная функция для запуска бота ---
 async def main_async(): # Переименовано в main_async для использования await
     if not TOKEN:
@@ -164,7 +152,7 @@ def main(): # Оставляем main синхронным
     # asyncio.run(main_async())
     # Но так как run_polling блокирующий, и post_init теперь используется,
     # логика из main_async переносится сюда, а post_init будет вызван PTB.
-
+    
     if not TOKEN:
         print("Токен BOT_TOKEN не найден! Пожалуйста, проверьте ваш .env файл и переменную BOT_TOKEN.")
         return
@@ -179,7 +167,7 @@ def main(): # Оставляем main синхронным
     application = ApplicationBuilder().token(TOKEN).build()
 
     # Регистрация обработчиков команд
-    application.add_handler(CommandHandler("help", start_command)) # CHANGED: start -> help
+    application.add_handler(CommandHandler("help", start_command))
     application.add_handler(CommandHandler("categories", categories_command))
     application.add_handler(CommandHandler("quiz", quiz_command))
     application.add_handler(CommandHandler("quiz10", quiz10_command))
@@ -187,23 +175,24 @@ def main(): # Оставляем main синхронным
     application.add_handler(CommandHandler("stopquiz", stop_quiz_command))
     application.add_handler(CommandHandler("rating", rating_command))
     application.add_handler(CommandHandler("globaltop", global_top_command))
-    application.add_handler(CommandHandler("subdaily", subscribe_daily_quiz_command)) # CHANGED: subscribedailyquiz -> subdaily
-    application.add_handler(CommandHandler("unsubdaily", unsubscribe_daily_quiz_command)) # CHANGED: unsubscribedailyquiz -> unsubdaily
+    application.add_handler(CommandHandler("subdaily", subscribe_daily_quiz_command))
+    application.add_handler(CommandHandler("unsubdaily", unsubscribe_daily_quiz_command))
     application.add_handler(CommandHandler("setdailyquiztime", set_daily_quiz_time_command))
     application.add_handler(CommandHandler("setdailyquizcategories", set_daily_quiz_categories_command))
     application.add_handler(CommandHandler("showdailyquizsettings", show_daily_quiz_settings_command))
-    
+
     # Регистрация обработчика для кнопок выбора категории /quiz10
     application.add_handler(CallbackQueryHandler(handle_quiz10_category_selection,
                                                  pattern=f"^{CALLBACK_DATA_PREFIX_QUIZ10_CATEGORY_SHORT}|^({CALLBACK_DATA_QUIZ10_RANDOM_CATEGORY})$"))
-    # Регистрация обработчика ответов на опросы
-    application.add_handler(PollAnswerHandler(handle_poll_answer))
+    
+    # Регистрация обработчика для кнопок выбора категории ежедневной викторины
+    application.add_handler(CallbackQueryHandler(handle_daily_quiz_category_selection,
+                                                 pattern=f"^{CALLBACK_DATA_PREFIX_DAILY_QUIZ_CATEGORY_SHORT}|^({CALLBACK_DATA_DAILY_QUIZ_RANDOM_CATEGORY})$|^(dq_info_too_many_cats)$"))
 
-    # Регистрация обработчика ошибок
-    # FIXED: Use add_error_handler for the error handling callback
+
+    application.add_handler(PollAnswerHandler(handle_poll_answer))
     application.add_error_handler(error_handler_callback)
 
-    # Назначаем post_init хук для планирования задач после инициализации приложения
     async def post_init_hook(app: Application):
         logger.info("Выполняется post_init хук для планирования ежедневных викторин...")
         await schedule_all_daily_quizzes_on_startup(app)

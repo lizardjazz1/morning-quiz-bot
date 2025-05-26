@@ -19,7 +19,7 @@ NUMBER_OF_QUESTIONS_IN_SESSION = 10 # Для /quiz10
 JOB_GRACE_PERIOD = 2 # Секунды запаса для задач JobQueue после закрытия опроса (увеличено для надежности)
 
 # Константы для Callback Data (для кнопок выбора категории /quiz10)
-CALLBACK_DATA_PREFIX_QUIZ10_CATEGORY_SHORT = "q10s_" # НОВЫЙ короткий префикс для category selection callback data
+CALLBACK_DATA_PREFIX_QUIZ10_CATEGORY_SHORT = "q10s_"
 CALLBACK_DATA_QUIZ10_RANDOM_CATEGORY = "quiz10_cat_random"
 
 # Константы для /quiz10notify
@@ -34,6 +34,11 @@ DAILY_QUIZ_CATEGORIES_TO_PICK = 3 # Количество случайных ка
 DAILY_QUIZ_MAX_CUSTOM_CATEGORIES = 3 # Максимальное количество категорий, которые пользователь может выбрать
 DAILY_QUIZ_POLL_OPEN_PERIOD_SECONDS = 600 # Максимальное время для Telegram Poll (10 минут)
 DAILY_QUIZ_QUESTION_INTERVAL_SECONDS = 60 # 1 минута между вопросами
+
+# Константы для Callback Data (для кнопок выбора категории ежедневной викторины)
+CALLBACK_DATA_PREFIX_DAILY_QUIZ_CATEGORY_SHORT = "dqcs_" # Daily Quiz Category Short
+CALLBACK_DATA_DAILY_QUIZ_RANDOM_CATEGORY = "dqcr" # Daily Quiz Category Random
+
 
 # --- Настройка логгера ---
 log_level = getattr(logging, LOG_LEVEL_STR, logging.INFO)

@@ -8,7 +8,7 @@ import state
 from data_manager import save_user_data
 from quiz_logic import send_next_question_in_session
 # quiz_logic.send_solution_if_available будет вызываться из обработчиков таймаутов
-from utils import pluralize_points
+from utils import pluralize # MODIFIED: pluralize_points -> pluralize
 
 # Мотивационные сообщения
 MOTIVATIONAL_MESSAGES = {
@@ -38,8 +38,8 @@ async def _ensure_user_initialized(chat_id_str: str, user: TelegramUser) -> Dict
         "name": user.full_name, "score": 0,
         "answered_polls": set(), "milestones_achieved": set()
     })
-    user_data["name"] = user.full_name
-    if not isinstance(user_data.get("answered_polls"), set):
+    user_data["name"] = user.full_name # Always update name, in case it changed
+    if not isinstance(user_data.get("answered_polls"), set): # Ensure sets for older data
         user_data["answered_polls"] = set(user_data.get("answered_polls", []))
     if not isinstance(user_data.get("milestones_achieved"), set):
         user_data["milestones_achieved"] = set(user_data.get("milestones_achieved", []))
@@ -61,7 +61,7 @@ async def _process_global_score_and_motivation(
         score_change = 1 if is_answer_correct else -1
         global_user_data["score"] += score_change
         global_user_data["answered_polls"].add(answered_poll_id)
-        save_user_data()
+        save_user_data() # Save after any change to global score or milestones
         score_updated_this_time = True
 
         logger.info(
@@ -76,11 +76,14 @@ async def _process_global_score_and_motivation(
 
         for threshold in sorted(MOTIVATIONAL_MESSAGES.keys()):
             if threshold in milestones_achieved_set:
-                continue
+                continue # Already achieved this milestone
+            
             send_motivational_message = False
+            # Check for positive thresholds: crossed from below
             if threshold > 0 and previous_score < threshold <= current_score:
                 send_motivational_message = True
-            elif threshold < 0 and previous_score > threshold >= current_score: # Для отрицательных порогов
+            # Check for negative thresholds: crossed from above (e.g. score went from -10 to -55, previous_score > threshold >= current_score)
+            elif threshold < 0 and previous_score > threshold >= current_score:
                  send_motivational_message = True
 
             if send_motivational_message:
@@ -89,7 +92,7 @@ async def _process_global_score_and_motivation(
                 try:
                     await context.bot.send_message(chat_id=chat_id_str, text=motivational_text)
                     milestones_achieved_set.add(threshold)
-                    save_user_data()
+                    save_user_data() # Save after adding a milestone
                 except Exception as e:
                     logger.error(f"Не удалось отправить мотивационное сообщение для {threshold} очков пользователю {user_id_str}: {e}")
     else:
@@ -107,9 +110,11 @@ async def _send_single_quiz_feedback(
     context: ContextTypes.DEFAULT_TYPE
 ):
     result_text = "верно! ✅" if is_answer_correct else "неверно. ❌"
+    # MODIFIED: pluralize_points -> pluralize, providing specific forms for "очко"
+    score_text = pluralize(global_user_score, "очко", "очка", "очков")
     reply_text = (
         f"{user.first_name}, {result_text}\n"
-        f"Твой текущий рейтинг в этом чате: {pluralize_points(global_user_score)}."
+        f"Твой текущий рейтинг в этом чате: {score_text}."
     )
     logger.debug(f"Attempting to send single quiz result to {str(user.id)} in {chat_id_str}. Text: '{reply_text}'")
     try:
@@ -126,7 +131,8 @@ async def _handle_quiz10_session_poll_answer(
     context: ContextTypes.DEFAULT_TYPE
 ):
     user_id_str = str(user.id)
-    session_chat_id_from_poll = poll_info_from_state.get("associated_quiz_session_chat_id")
+    # This is the chat_id where the /quiz10 session is running, usually same as poll_info_from_state["chat_id"]
+    session_chat_id_from_poll = poll_info_from_state.get("associated_quiz_session_chat_id") 
 
     if not session_chat_id_from_poll:
         logger.error(f"Poll {answered_poll_id} marked as quiz_session, but associated_quiz_session_chat_id is missing.")
@@ -140,15 +146,18 @@ async def _handle_quiz10_session_poll_answer(
         )
         return
 
+    # Initialize or get session-specific scores for the user
     session_scores_root = active_session.setdefault("session_scores", {})
     session_user_data = session_scores_root.setdefault(
-        user_id_str,
+        user_id_str, 
         {"name": user.full_name, "score": 0, "answered_this_session_polls": set()}
     )
-    session_user_data["name"] = user.full_name
-    if not isinstance(session_user_data.get("answered_this_session_polls"), set):
+    session_user_data["name"] = user.full_name # Update name
+    if not isinstance(session_user_data.get("answered_this_session_polls"), set): # Ensure set
          session_user_data["answered_this_session_polls"] = set(session_user_data.get("answered_this_session_polls", []))
 
+
+    # Update session score only if this is the first time user answers THIS poll in THIS session
     if answered_poll_id not in session_user_data["answered_this_session_polls"]:
         session_score_change = 1 if is_answer_correct else -1
         session_user_data["score"] += session_score_change
@@ -156,18 +165,20 @@ async def _handle_quiz10_session_poll_answer(
         logger.info(
             f"Пользователь {user.full_name} ({user_id_str}) получил "
             f"{('+1' if session_score_change > 0 else '-1')} очко в сессии /quiz10 {session_chat_id_from_poll} "
-            f"за poll {answered_poll_id} (вопрос {question_session_idx + 1}). "
+            f"за poll {answered_poll_id} (вопрос {question_session_idx + 1}). " # +1 for 1-based indexing for logs
             f"Сессионный счет: {session_user_data['score']}."
         )
+    # else: user already answered this poll in this session, session score not changed again
 
-    # Early transition / last question handling
+    # Logic for early transition to next question / handling last question
+    # This should only happen if the answered poll is the *current* one for the session
     if active_session.get("current_poll_id") == answered_poll_id:
         is_last_q = poll_info_from_state.get("is_last_question", False)
-
+        
         # next_q_triggered_by_answer: флаг, чтобы только первый ответивший инициировал переход/логику
         if not poll_info_from_state.get("next_q_triggered_by_answer", False):
             poll_info_from_state["next_q_triggered_by_answer"] = True # Помечаем, что этот ответ инициировал логику
-
+            
             if not is_last_q:
                 logger.info(
                     f"Досрочный ответ на НЕ последний poll {answered_poll_id} (вопрос {question_session_idx + 1}) "
@@ -176,14 +187,8 @@ async def _handle_quiz10_session_poll_answer(
                 )
                 # Помечаем, что этот poll был обработан досрочно,
                 # чтобы handle_current_poll_end не запускал следующий вопрос повторно
-                poll_info_from_state["processed_by_early_answer"] = True
-
-                # MODIFICATION: Remove this block.
-                # The timeout job for the answered_poll_id (which is active_session.get("next_question_job") at this point)
-                # MUST run to handle the solution display and poll cleanup at its original timeout.
-                #
-                # [LINES REMOVED AS PER MODIFICATION]
-
+                poll_info_from_state["processed_by_early_answer"] = True 
+                
                 # НЕ удаляем poll_info_from_state из state.current_poll здесь.
                 # НЕ вызываем send_solution_if_available здесь.
                 # handle_current_poll_end позаботится о пояснении и удалении poll_info.
@@ -197,7 +202,6 @@ async def _handle_quiz10_session_poll_answer(
                 # Также помечаем, чтобы handle_current_poll_end знал (хотя для последнего это менее критично)
                 poll_info_from_state["processed_by_early_answer"] = True
                 # Таймаут-job (handle_current_poll_end) сам обработает пояснение и вызовет show_quiz_session_results.
-                # Do not cancel the job for this last poll.
     else:
         logger.debug(
             f"Ответ на poll {answered_poll_id} в сессии {session_chat_id_from_poll} получен, "
@@ -226,9 +230,10 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
     question_session_idx = poll_info_from_state.get("question_session_index", -1)
 
     global_user_data = await _ensure_user_initialized(chat_id_str, user)
-
-    is_answer_correct = (len(poll_answer.option_ids) == 1 and
+    
+    is_answer_correct = (len(poll_answer.option_ids) == 1 and 
                          poll_answer.option_ids[0] == poll_info_from_state["correct_index"])
+
 
     score_updated_this_time = await _process_global_score_and_motivation(
         global_user_data, user, chat_id_str, answered_poll_id, is_answer_correct, context
@@ -241,7 +246,7 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await _send_single_quiz_feedback(
             user, chat_id_str, is_answer_correct, global_user_data["score"], context
         )
-
+    
     if is_quiz10_session_poll:
         await _handle_quiz10_session_poll_answer(
             user, answered_poll_id, poll_info_from_state, is_answer_correct, question_session_idx, context

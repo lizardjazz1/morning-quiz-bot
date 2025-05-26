@@ -47,6 +47,7 @@ from handlers.daily_quiz_handlers import (subscribe_daily_quiz_command, unsubscr
 from poll_answer_handler import handle_poll_answer
 
 
+
 # --- Обработчик ошибок ---
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.error("Произошла ошибка при обработке обновления:", exc_info=context.error)

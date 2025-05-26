@@ -46,8 +46,6 @@ from handlers.daily_quiz_handlers import (subscribe_daily_quiz_command, unsubscr
 # Импорт обработчика ответов на опросы
 from poll_answer_handler import handle_poll_answer
 
-
-
 # --- Обработчик ошибок ---
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.error("Произошла ошибка при обработке обновления:", exc_info=context.error)
@@ -77,7 +75,6 @@ async def schedule_all_daily_quizzes_on_startup(application: Application):
             logger.error(f"Ошибка при планировании ежедневной викторины для чата {chat_id_str} при запуске: {e}", exc_info=True)
     logger.info(f"Завершено планирование ежедневных викторин при запуске. Запланировано для {scheduled_count} чатов.")
 
-
 # --- Основная функция для запуска бота ---
 async def main_async(): # Переименовано в main_async для использования await
     if not TOKEN:
@@ -99,7 +96,7 @@ async def main_async(): # Переименовано в main_async для исп
         return
 
     # Регистрация общих команд
-    application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("help", start_command)) # CHANGED: start -> help
     application.add_handler(CommandHandler("categories", categories_command))
 
     # Регистрация команды для одиночного квиза
@@ -115,8 +112,8 @@ async def main_async(): # Переименовано в main_async для исп
     application.add_handler(CommandHandler("globaltop", global_top_command))
 
     # Регистрация команд для ежедневной викторины
-    application.add_handler(CommandHandler("subscribedailyquiz", subscribe_daily_quiz_command))
-    application.add_handler(CommandHandler("unsubscribedailyquiz", unsubscribe_daily_quiz_command))
+    application.add_handler(CommandHandler("subdaily", subscribe_daily_quiz_command)) # CHANGED: subscribedailyquiz -> subdaily
+    application.add_handler(CommandHandler("unsubdaily", unsubscribe_daily_quiz_command)) # CHANGED: unsubscribedailyquiz -> unsubdaily
     application.add_handler(CommandHandler("setdailyquiztime", set_daily_quiz_time_command))
     application.add_handler(CommandHandler("setdailyquizcategories", set_daily_quiz_categories_command))
     application.add_handler(CommandHandler("showdailyquizsettings", show_daily_quiz_settings_command))
@@ -143,20 +140,12 @@ async def main_async(): # Переименовано в main_async для исп
     # For simplicity with the provided structure, let's keep main() synchronous and schedule_all_daily_quizzes_on_startup
     # will be awaited if necessary within an async context or called synchronously if possible.
 
-    # Если schedule_all_daily_quizzes_on_startup действительно async, то main тоже должна быть.
-    # Иначе, если PTB < 20 или используется специфичный запуск, application.start() и updater.start_polling() могут быть разделены.
-    # PTB 21.x: application.run_polling() is blocking and should be the last call.
-    # To call an async function like schedule_all_daily_quizzes_on_startup before run_polling,
-    # application.job_queue.run_once(schedule_all_daily_quizzes_on_startup_job_wrapper, when=1, data=application)
-    # or better, use application.post_init
-    
     # A more robust way for post-initialization tasks in PTB 20+
     async def post_init_hook(app: Application):
         await schedule_all_daily_quizzes_on_startup(app)
         logger.info("Post-initialization hook executed: daily quizzes scheduled.")
 
     application.post_init = post_init_hook
-
 
     # Старый способ:
     # if job_queue:
@@ -188,9 +177,9 @@ def main(): # Оставляем main синхронным
     load_daily_quiz_subscriptions()
 
     application = ApplicationBuilder().token(TOKEN).build()
-    
+
     # Регистрация обработчиков (как в main_async)
-    application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("help", start_command)) # CHANGED: start -> help
     application.add_handler(CommandHandler("categories", categories_command))
     application.add_handler(CommandHandler("quiz", quiz_command))
     application.add_handler(CommandHandler("quiz10", quiz10_command))
@@ -198,15 +187,15 @@ def main(): # Оставляем main синхронным
     application.add_handler(CommandHandler("stopquiz", stop_quiz_command))
     application.add_handler(CommandHandler("rating", rating_command))
     application.add_handler(CommandHandler("globaltop", global_top_command))
-    application.add_handler(CommandHandler("subscribe_daily_quiz", subscribe_daily_quiz_command))
-    application.add_handler(CommandHandler("unsubscribe_daily_quiz", unsubscribe_daily_quiz_command))
+    application.add_handler(CommandHandler("subdaily", subscribe_daily_quiz_command)) # CHANGED: subscribedailyquiz -> subdaily
+    application.add_handler(CommandHandler("unsubdaily", unsubscribe_daily_quiz_command)) # CHANGED: unsubscribedailyquiz -> unsubdaily
     application.add_handler(CommandHandler("setdailyquiztime", set_daily_quiz_time_command))
     application.add_handler(CommandHandler("setdailyquizcategories", set_daily_quiz_categories_command))
     application.add_handler(CommandHandler("showdailyquizsettings", show_daily_quiz_settings_command))
     application.add_handler(CallbackQueryHandler(handle_quiz10_category_selection,
                                                  pattern=f"^{CALLBACK_DATA_PREFIX_QUIZ10_CATEGORY_SHORT}|^({CALLBACK_DATA_QUIZ10_RANDOM_CATEGORY})$"))
     application.add_handler(PollAnswerHandler(handle_poll_answer))
-    application.add_error_handler(error_handler)
+    application.add_handler(error_handler)
 
     # Назначаем post_init хук
     async def post_init_hook(app: Application):
@@ -215,11 +204,10 @@ def main(): # Оставляем main синхронным
         logger.info("Post-initialization хук выполнен: ежедневные викторины запланированы.")
 
     application.post_init = post_init_hook
-    
+
     logger.info("Бот успешно настроен и запускается...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
     logger.info("Бот остановлен.")
-
 
 if __name__ == '__main__':
     main()

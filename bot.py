@@ -47,7 +47,7 @@ from handlers.daily_quiz_handlers import (subscribe_daily_quiz_command, unsubscr
 from poll_answer_handler import handle_poll_answer
 
 # --- Обработчик ошибок ---
-async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def error_handler_callback(update: object, context: ContextTypes.DEFAULT_TYPE) -> None: # Переименовал для ясности, что это колбэк
     logger.error("Произошла ошибка при обработке обновления:", exc_info=context.error)
     # Можно добавить отправку сообщения пользователю, если ошибка критична или понятна
     # if isinstance(update, Update) and update.effective_chat:
@@ -178,7 +178,7 @@ def main(): # Оставляем main синхронным
 
     application = ApplicationBuilder().token(TOKEN).build()
 
-    # Регистрация обработчиков (как в main_async)
+    # Регистрация обработчиков команд
     application.add_handler(CommandHandler("help", start_command)) # CHANGED: start -> help
     application.add_handler(CommandHandler("categories", categories_command))
     application.add_handler(CommandHandler("quiz", quiz_command))
@@ -192,12 +192,18 @@ def main(): # Оставляем main синхронным
     application.add_handler(CommandHandler("setdailyquiztime", set_daily_quiz_time_command))
     application.add_handler(CommandHandler("setdailyquizcategories", set_daily_quiz_categories_command))
     application.add_handler(CommandHandler("showdailyquizsettings", show_daily_quiz_settings_command))
+    
+    # Регистрация обработчика для кнопок выбора категории /quiz10
     application.add_handler(CallbackQueryHandler(handle_quiz10_category_selection,
                                                  pattern=f"^{CALLBACK_DATA_PREFIX_QUIZ10_CATEGORY_SHORT}|^({CALLBACK_DATA_QUIZ10_RANDOM_CATEGORY})$"))
+    # Регистрация обработчика ответов на опросы
     application.add_handler(PollAnswerHandler(handle_poll_answer))
-    application.add_handler(error_handler)
 
-    # Назначаем post_init хук
+    # Регистрация обработчика ошибок
+    # FIXED: Use add_error_handler for the error handling callback
+    application.add_error_handler(error_handler_callback)
+
+    # Назначаем post_init хук для планирования задач после инициализации приложения
     async def post_init_hook(app: Application):
         logger.info("Выполняется post_init хук для планирования ежедневных викторин...")
         await schedule_all_daily_quizzes_on_startup(app)

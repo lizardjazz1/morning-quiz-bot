@@ -30,21 +30,22 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Используем MarkdownV2 для форматирования команд
     start_message_text = (
-        f"Привет, {user.first_name}\\! Я бот для викторин\\.\n\n"
+        f"Привет, {user.first_name}! Я бот для викторин.\n\n"
         "Доступные команды:\n"
-        "/quiz [категория] \\- 1 случайный вопрос \\(можно без категории\\)\\.\n"
-        "/quiz10 \\- Сессия из 10 вопросов с выбором категории\\.\n"
-        f"/quiz10notify [категория] \\- Анонс /quiz10 через {QUIZ10_NOTIFY_DELAY_MINUTES} мин\\.\n"
-        "/categories \\- Список всех доступных категорий\\.\n"
-        "/rating \\- Топ\\-10 игроков в этом чате\\.\n"
-        "/globaltop \\- Топ\\-10 игроков по всем чатам\\.\n"
-        "/stopquiz \\- Остановить текущую или запланированную /quiz10\\.\n\n"
+        "/quiz [категория] - 1 случайный вопрос (можно без категории).\n"
+        "/quiz10 - Сессия из 10 вопросов с выбором категории.\n"
+        f"/quiz10notify [категория] - Анонс /quiz10 через {QUIZ10_NOTIFY_DELAY_MINUTES} мин.\n"
+        "/categories - Список всех доступных категорий.\n"
+        "/rating - Топ-10 игроков в этом чате.\n"
+        "/globaltop - Топ-10 игроков по всем чатам.\n"
+        "/stopquiz - Остановить текущую или запланированную /quiz10.\n\n"
         "*Ежедневная викторина*:\n"
-        "/subscribe_daily_quiz \\- Подписаться/показать статус подписки\\.\n"
-        "/unsubscribe_daily_quiz \\- Отписаться от ежедневной викторины\\.\n"
-        "/setdailyquiztime HH:MM \\- Установить время рассылки \\(МСК\\)\\.\n"
-        "/setdailyquizcategories [кат1] [кат2] \\.\\.\\. \\- Выбрать до 3 категорий \\(без аргументов \\- случайные\\)\\.\n"
-        "/showdailyquizsettings \\- Показать текущие настройки ежедневной викторины\\."
+        "/subscribe_daily_quiz - Подписаться/показать статус подписки.\n"
+        "/unsubscribe_daily_quiz - Отписаться от ежедневной викторины.\n"
+        "/setdailyquiztime HH:MM - Установить время рассылки (МСК).\n"
+        "/setdailyquizcategories [кат1] [кат2] ... - Выбрать до 3 категорий (без аргументов - случайные).\n"
+        "/showdailyquizsettings - Показать текущие настройки ежедневной викторины."
+
     )
     logger.debug(f"Attempting to send start message to {chat_id_str}. Text: '{start_message_text[:100]}...'")
     await update.message.reply_text(start_message_text, parse_mode=ParseMode.MARKDOWN_V2)
@@ -63,8 +64,8 @@ async def categories_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         for name, questions_list in state.quiz_data.items():
             if isinstance(questions_list, list) and questions_list:
                 # Экранируем специальные символы для MarkdownV2, если они могут быть в именах категорий
-                escaped_name = name.replace("_", "\\_").replace("*", "\\*").replace("[", "\\[").replace("]", "\\]").replace("(", "\\(").replace(")", "\\)").replace("~", "\\~").replace("", "\\").replace(">", "\\>").replace("#", "\\#").replace("+", "\\+").replace("-", "\\-").replace("=", "\\=").replace("|", "\\|").replace("{", "\\{").replace("}", "\\}").replace(".", "\\.").replace("!", "\\!")
-                category_names.append(f"\\- *{escaped_name}* \\(вопросов: {len(questions_list)}\\)")
+                escaped_name = name.replace("_", "_").replace("*", "*").replace("[", "[").replace("]", "]").replace("(", "(").replace(")", ")").replace("~", "~").replace("", "").replace(">", ">").replace("#", "#").replace("+", "+").replace("-", "-").replace("=", "=").replace("|", "|").replace("{", "{").replace("}", "}").replace(".", ".").replace("!", "!")
+                category_names.append(f"- *{escaped_name}* (вопросов: {len(questions_list)})")
 
 
         if category_names:

@@ -36,18 +36,18 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     start_msg_txt = ( # Renamed start_message_text
         f"Привет, {md_escape(user.first_name)}\\! Я бот для викторин\\.\n\n"
         "Доступные команды:\n"
-        "/quiz [категория] \\- 1 случайный вопрос \\(можно без категории\\)\\.\n"
+        "/quiz \\[категория\\] \\- 1 случайный вопрос \\(можно без категории\\)\\.\n"
         "/quiz10 \\- Сессия из 10 вопросов с выбором категории\\.\n"
-        f"/quiz10notify [категория] \\- Анонс /quiz10 через {Q10_NOTIFY_DELAY_M} мин\\.\n" # Use renamed const
+        f"/quiz10notify \\[категория\\] \\- Анонс /quiz10 через {Q10_NOTIFY_DELAY_M} мин\\.\n" # Use renamed const
         "/categories \\- Список всех доступных категорий\\.\n"
         "/rating \\- Топ\\-10 игроков в этом чате\\.\n"
         "/globaltop \\- Топ\\-10 игроков по всем чатам\\.\n"
         "/stopquiz \\- Остановить текущую или запланированную /quiz10\\.\n\n"
         "*Ежедневная викторина*:\n"
-        "/subscribe_daily_quiz \\- Подписаться/показать статус подписки\\.\n"
-        "/unsubscribe_daily_quiz \\- Отписаться от ежедневной викторины\\.\n"
+        "/subscribe\\_daily\\_quiz \\- Подписаться/показать статус подписки\\.\n" # Escaped underscore
+        "/unsubscribe\\_daily\\_quiz \\- Отписаться от ежедневной викторины\\.\n" # Escaped underscore
         "/setdailyquiztime HH:MM \\- Установить время рассылки \\(МСК\\)\\.\n"
-        "/setdailyquizcategories [кат1] [кат2] \\.\\.\\. \\- Выбрать до 3 категорий \\(без аргументов \\- случайные\\)\\.\n"
+        "/setdailyquizcategories \\[кат1\\] \\[кат2\\] \\.\\.\\. \\- Выбрать до 3 категорий \\(без аргументов \\- случайные\\)\\.\n"
         "/showdailyquizsettings \\- Показать текущие настройки ежедневной викторины\\."
     )
     logger.debug(f"Attempting to send start message to {cid_str}. Text: '{start_msg_txt[:100]}...'")
@@ -67,11 +67,7 @@ async def categories_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         for name, q_list in state.qs_data.items(): # Use renamed state var
             if isinstance(q_list, list) and q_list:
                 escaped_name = md_escape(name) # **FIXED escaping here**
-                # Note: The initial '\-' for bullet points needs careful handling if this line is part of a list itself.
-                # The prompt showed f"\\- *{escaped_name}* ..."
-                # For MarkdownV2, list items are typically like: \- List item
                 cat_names_formatted.append(f"\\- *{escaped_name}* \\(вопросов: {len(q_list)}\\)")
-
 
         if cat_names_formatted:
             reply_txt = "Доступные категории:\n" + "\n".join(sorted(cat_names_formatted))

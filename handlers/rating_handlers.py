@@ -17,7 +17,11 @@ def get_player_display(p_name: str, p_score: int, sep: str = " - ") -> str: # Re
         else: icon = "🙂"
     elif p_score < 0: icon = "💀"
     else: icon = "😐"
-    return f"{icon} {p_name}{sep if sep == ':' else f' {sep} '}{plural_pts(p_score)}" # Adjusted separator logic
+    # Adjusted separator logic to match prompt example output for quiz_logic.py
+    if sep == ":":
+         return f"{icon} {p_name}{sep} {plural_pts(p_score)}"
+    return f"{icon} {p_name} {sep} {plural_pts(p_score)}"
+
 
 async def rating_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.effective_chat: return
@@ -39,7 +43,7 @@ async def rating_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 p_name = data.get('name', f'Игрок {uid}') # Renamed
                 p_score = data.get('score', 0) # Renamed
                 rank_pfx = f"{i+1}." # Renamed
-                if p_score > 0:
+                if p_score > 0: # Check score before assigning medal
                     if i == 0: rank_pfx = "🥇"
                     elif i == 1: rank_pfx = "🥈"
                     elif i == 2: rank_pfx = "🥉"
@@ -49,7 +53,7 @@ async def rating_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def global_top_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.effective_chat: return
-    cid_str = str(update.effective_chat.id)
+    # cid_str = str(update.effective_chat.id) # Not used
     reply_txt = ""
 
     if not state.usr_scores:
@@ -57,16 +61,21 @@ async def global_top_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     else:
         agg_g_scores: Dict[str, Dict[str, Any]] = {} # Renamed
         for users_in_chat in state.usr_scores.values(): # Renamed
-            for uid, data in users_in_chat.items(): # Renamed
+            for uid, data in users_in_chat.items(): # Renamed user_id to uid
                 usr_name = data.get("name", f"Игрок {uid}") # Renamed
                 chat_score = data.get("score", 0) # Renamed
 
                 if uid not in agg_g_scores:
                     agg_g_scores[uid] = {"name": usr_name, "total_score": 0}
-                agg_g_scores[uid]["total_score"] += chat_score
-                if len(usr_name) > len(agg_g_scores[uid]["name"]) or \
-                   (agg_g_scores[uid]["name"].startswith("Игрок ") and not usr_name.startswith("Игрок ")):
+                
+                # Use the longest or non-generic name encountered for the user
+                current_agg_name = agg_g_scores[uid]["name"]
+                if len(usr_name) > len(current_agg_name) or \
+                   (current_agg_name.startswith("Игрок ") and not usr_name.startswith("Игрок ")):
                      agg_g_scores[uid]["name"] = usr_name
+                
+                agg_g_scores[uid]["total_score"] += chat_score
+
 
         if not agg_g_scores:
             reply_txt = "Нет игроков для глобального рейтинга."
@@ -80,7 +89,7 @@ async def global_top_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 p_name = data["name"]
                 total_score = data["total_score"] # Renamed
                 rank_pfx = f"{i+1}."
-                if total_score > 0:
+                if total_score > 0: # Check score before assigning medal
                     if i == 0: rank_pfx = "🥇"
                     elif i == 1: rank_pfx = "🥈"
                     elif i == 2: rank_pfx = "🥉"

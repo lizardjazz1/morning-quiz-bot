@@ -91,24 +91,27 @@ async def send_next_q_in_sess(context: ContextTypes.DEFAULT_TYPE, cid_str: str):
         return
 
     cur_q_idx = session["current_index"] # Renamed
-    actual_q_num = session["actual_num_questions"] # Renamed
+    actual_qs_num = session["actual_num_questions"] # Renamed
 
-    if cur_q_idx >= actual_q_num:
-        logger.info(f"Все {actual_q_num} вопросов сессии {cid_str} отправлены. Завершение управляется on_sess_poll_end.")
+    if cur_q_idx >= actual_qs_num:
+        logger.info(f"Все {actual_qs_num} вопросов сессии {cid_str} отправлены. Завершение управляется on_sess_poll_end.")
         return
 
     q_item = session["questions"][cur_q_idx] # Renamed
-    is_last_q = (cur_q_idx == actual_q_num - 1)
+    is_last_q = (cur_q_idx == actual_qs_num - 1)
     poll_open_duration = POLL_OPEN_S # Renamed constant
 
     poll_q_txt_api = q_item['question'] # Renamed
-    full_poll_q_hdr = f"Вопрос {cur_q_idx + 1}/{actual_q_num}" # Renamed
+    full_poll_q_hdr = f"Вопрос {cur_q_idx + 1}/{actual_qs_num}" # Renamed
     if orig_cat := q_item.get("original_category"): # Renamed
         full_poll_q_hdr += f" (Кат: {orig_cat})"
     full_poll_q_hdr += f"\n{poll_q_txt_api}"
 
-    MAX_POLL_Q_LEN = 255 # Renamed
+    # Telegram API limit for poll question is 300 characters (UTF-16), but python-telegram-bot might have its own or be more lenient.
+    # Sticking to a safe limit like 255-300 is good practice. The prompt had 255.
+    MAX_POLL_Q_LEN = 255 # Renamed 
     if len(full_poll_q_hdr) > MAX_POLL_Q_LEN:
+        # Ensure enough space for "..."
         full_poll_q_hdr = full_poll_q_hdr[:MAX_POLL_Q_LEN - 3] + "..."
         logger.warning(f"Текст вопроса для poll в {cid_str} усечен (вопрос сессии {cur_q_idx + 1}).")
 
@@ -126,16 +129,17 @@ async def send_next_q_in_sess(context: ContextTypes.DEFAULT_TYPE, cid_str: str):
 
         cur_poll_entry = { # Renamed
             "chat_id": cid_str, "message_id": sent_poll.message_id,
-            "correct_index": poll_correct_id, "quiz_session": True,
+            "correct_index": poll_correct_id, "quiz_session": True, "daily_quiz": False, # Added daily_quiz
             "question_details": q_item, "associated_quiz_session_chat_id": cid_str,
             "is_last_question": is_last_q,
             "next_q_triggered_by_answer": False,
             "question_session_index": cur_q_idx,
             "solution_placeholder_message_id": None,
-            "processed_by_early_answer": False
+            "processed_by_early_answer": False,
+            "timeout_job": None # Added timeout_job field
         }
         state.cur_polls[sent_poll.poll.id] = cur_poll_entry
-        logger.info(f"Отправлен вопрос {cur_q_idx + 1}/{actual_q_num} сессии {cid_str}. Poll ID: {sent_poll.poll.id}. Last: {is_last_q}")
+        logger.info(f"Отправлен вопрос {cur_q_idx + 1}/{actual_qs_num} сессии {cid_str}. Poll ID: {sent_poll.poll.id}. Last: {is_last_q}")
 
         if q_item.get("solution"):
             try:
@@ -153,7 +157,10 @@ async def send_next_q_in_sess(context: ContextTypes.DEFAULT_TYPE, cid_str: str):
                 on_sess_poll_end, timedelta(seconds=job_delay_s), # Renamed handler
                 data={"chat_id_str": cid_str, "ended_poll_id": sent_poll.poll.id}, name=job_name
             )
-            session["next_question_job"] = poll_end_job
+            # Storing the job in session to manage it (e.g. remove if session stopped early)
+            session["next_question_job"] = poll_end_job 
+            # Also store it in the poll entry if a generic poll timeout job is needed, as in /quiz
+            state.cur_polls[sent_poll.poll.id]["timeout_job"] = poll_end_job
     except Exception as e:
         logger.error(f"Ошибка при отправке вопроса сессии ({cur_q_idx + 1}) в {cid_str}: {e}", exc_info=True)
         await show_q_sess_res(context, cid_str, error_occurred=True) # Renamed
@@ -172,7 +179,7 @@ async def on_sess_poll_end(context: ContextTypes.DEFAULT_TYPE): # Renamed from h
 
     if not poll_info:
         logger.warning(f"Job 'on_sess_poll_end' для poll {ended_poll_id} в {cid_str}: poll_info не найден.")
-        if session:
+        if session: # If session still exists but poll info is gone, something is wrong
             logger.error(f"Нештатно: poll_info для {ended_poll_id} нет, но сессия {cid_str} активна. Завершение.")
             await show_q_sess_res(context, cid_str, error_occurred=True)
         return
@@ -185,10 +192,11 @@ async def on_sess_poll_end(context: ContextTypes.DEFAULT_TYPE): # Renamed from h
     is_last_q_poll = poll_info.get("is_last_question", False) # Renamed
     proc_early = poll_info.get("processed_by_early_answer", False) # Renamed
 
+    # Clean up the processed poll from cur_polls
     state.cur_polls.pop(ended_poll_id, None)
     logger.debug(f"Poll {ended_poll_id} удален из state.cur_polls после таймаута.")
 
-    if not session:
+    if not session: # Session might have been stopped externally
         logger.info(f"Сессия {cid_str} не активна при таймауте poll {ended_poll_id}.")
         return
 
@@ -196,11 +204,12 @@ async def on_sess_poll_end(context: ContextTypes.DEFAULT_TYPE): # Renamed from h
         logger.info(f"Время для ПОСЛЕДНЕГО вопроса (индекс {q_idx_poll}, poll {ended_poll_id}) сессии {cid_str} истекло.")
         await show_q_sess_res(context, cid_str)
     else:
-        if not proc_early:
+        if not proc_early: # If not processed by an early answer, send next question now
             logger.info(f"Тайм-аут для НЕ последнего вопроса (индекс {q_idx_poll}, poll {ended_poll_id}) в сессии {cid_str}. Отправляем следующий.")
             await send_next_q_in_sess(context, cid_str)
-        else:
-            logger.info(f"Таймаут для poll {ended_poll_id} (вопрос {q_idx_poll + 1}), но следующий уже отправлен.")
+        else: # Next question was already triggered by an early answer
+            logger.info(f"Таймаут для poll {ended_poll_id} (вопрос {q_idx_poll + 1}), но следующий уже отправлен (proc_early=True).")
+
 
 async def on_single_q_poll_end(context: ContextTypes.DEFAULT_TYPE): # Renamed from handle_single_quiz_poll_end
     if not context.job or not context.job.data:
@@ -216,28 +225,32 @@ async def on_single_q_poll_end(context: ContextTypes.DEFAULT_TYPE): # Renamed fr
 
     if poll_info:
         q_item = poll_info.get("question_details") # Renamed
+        # Ensure this is indeed a single quiz poll and not a session/daily quiz poll misrouted
         if not poll_info.get("quiz_session", False) and \
            not poll_info.get("daily_quiz", False) and q_item:
             await send_sol_if_avail(context, cid_str, q_item, poll_id_lookup=poll_id)
+        
         state.cur_polls.pop(poll_id, None)
         logger.info(f"Одиночный квиз (poll {poll_id}) обработан и удален из state.cur_polls.")
     else:
         logger.warning(f"on_single_q_poll_end: Информация для poll {poll_id} ({cid_str}) не найдена.")
+
 
 async def show_q_sess_res(context: ContextTypes.DEFAULT_TYPE, cid_str: str, error_occurred: bool = False): # Renamed
     session = state.cur_q_sessions.get(cid_str)
 
     if not session:
         logger.warning(f"show_q_sess_res: Сессия для {cid_str} не найдена.")
-        state.cur_q_sessions.pop(cid_str, None)
+        state.cur_q_sessions.pop(cid_str, None) # Ensure cleanup if called erroneously
         return
 
+    # Cancel any pending next question job for this session
     if job := session.get("next_question_job"):
         try:
             job.schedule_removal()
-            session["next_question_job"] = None
+            session["next_question_job"] = None # Clear the job from session state
             logger.debug(f"Job {job.name} удален при показе результатов сессии {cid_str}.")
-        except Exception: pass
+        except Exception: pass # Job might have already run or been removed
 
     num_q_sess = session.get("actual_num_questions", QS_PER_SESSION) # Renamed
     res_hdr = "🏁 Викторина завершена! 🏁\n\nРезультаты:\n" if not error_occurred \
@@ -259,11 +272,13 @@ async def show_q_sess_res(context: ContextTypes.DEFAULT_TYPE, cid_str: str, erro
             g_score = g_score_data.get("score", 0) # Renamed
             rank_pfx = f"{rank + 1}." # Renamed
 
-            if rank == 0 and sess_score > 0 : rank_pfx = "🥇"
-            elif rank == 1 and sess_score > 0 : rank_pfx = "🥈"
-            elif rank == 2 and sess_score > 0 : rank_pfx = "🥉"
+            if sess_score > 0: # Only assign medals for positive scores
+                if rank == 0 : rank_pfx = "🥇"
+                elif rank == 1 : rank_pfx = "🥈"
+                elif rank == 2 : rank_pfx = "🥉"
 
-            sess_display = get_player_display(usr_name, sess_score, separator=":")
+            # Use ':' as separator for session display as per prompt example
+            sess_display = get_player_display(usr_name, sess_score, sep=":")
             res_body += (f"{rank_pfx} {sess_display} (из {num_q_sess} вопр.)\n"
                          f"    Общий счёт: {plural_pts(g_score)}\n") # Renamed
         if len(sorted_parts) > 3:
@@ -276,14 +291,22 @@ async def show_q_sess_res(context: ContextTypes.DEFAULT_TYPE, cid_str: str, erro
     except Exception as e:
         logger.error(f"Ошибка при отправке результатов сессии в {cid_str}: {e}", exc_info=True)
 
+    # Clean up the current poll associated with this session if it's still in cur_polls
     cur_poll_id_sess = session.get("current_poll_id") # Renamed
     if cur_poll_id_sess:
         poll_info_rm = state.cur_polls.get(cur_poll_id_sess) # Renamed
         if poll_info_rm and \
            poll_info_rm.get("quiz_session") and \
            str(poll_info_rm.get("associated_quiz_session_chat_id")) == str(cid_str):
+            # If the poll's timeout job exists, try to remove it
+            if timeout_job := poll_info_rm.get("timeout_job"):
+                try:
+                    timeout_job.schedule_removal()
+                    logger.debug(f"Timeout job for poll {cur_poll_id_sess} removed during session cleanup.")
+                except Exception: pass
             state.cur_polls.pop(cur_poll_id_sess, None)
             logger.debug(f"Poll {cur_poll_id_sess} (сессия) удален из state.cur_polls при завершении сессии {cid_str}.")
 
     state.cur_q_sessions.pop(cid_str, None)
     logger.info(f"Сессия /quiz10 для {cid_str} очищена (show_q_sess_res).")
+

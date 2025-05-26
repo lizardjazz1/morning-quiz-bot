@@ -1,5 +1,6 @@
 # state.py
 from typing import List, Dict, Any, Set, Optional
+import datetime # Added for pending_scheduled_quizzes type hint
 
 # --- Глобальные переменные состояния ---
 # Эти словари хранят данные во время работы бота.
@@ -39,4 +40,3 @@ daily_q_subs: Dict[str, Dict[str, Any]] = {}
 # active_daily_qs: {chat_id_str: {"current_question_index": int, "questions": list, "job_name_next_q": str | None}}
 # Хранит состояние активных ежедневных викторин
 active_daily_qs: Dict[str, Dict[str, Any]] = {}
-

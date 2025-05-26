@@ -37,6 +37,7 @@ async def quiz_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if not cat_arg:
+        # Get all categories that have questions
         avail_cats = [name for name, ql in state.qs_data.items() if isinstance(ql, list) and ql] # Renamed
         if not avail_cats:
             reply_txt = "Нет доступных категорий с вопросами."
@@ -44,18 +45,24 @@ async def quiz_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         chosen_cat = random.choice(avail_cats) # Renamed
         q_item_list = get_rand_qs(chosen_cat, 1)
-        msg_pfx = f"Случайный вопрос из категории: {chosen_cat}\n"
+        if q_item_list: # Check if question was actually found
+            msg_pfx = f"Случайный вопрос из категории: {chosen_cat}\n"
     else:
         q_item_list = get_rand_qs(cat_arg, 1)
 
-    if not q_item_list:
+    if not q_item_list: # This covers both cases: category not found, or category found but empty
         reply_txt = f"Не найдено вопросов в категории '{cat_arg if cat_arg else 'случайной'}'. Проверьте: /categories"
         await update.message.reply_text(reply_txt)
         return
 
     single_q_item = q_item_list[0] # Renamed
-    poll_q_hdr = f"{msg_pfx}{single_q_item['question']}" # Renamed
+    
+    # Telegram API limit for poll question is 300 chars. Let's use 255 to be safe.
+    # MAX_POLL_Q_LEN = 255, as used in prompt
     MAX_POLL_Q_LEN = 255
+    
+    poll_q_hdr = f"{msg_pfx}{single_q_item['question']}" # Renamed
+    
     if len(poll_q_hdr) > MAX_POLL_Q_LEN:
         poll_q_hdr = poll_q_hdr[:MAX_POLL_Q_LEN - 3] + "..."
         logger.warning(f"Текст вопроса для /quiz в {cid_str} был усечен.")
@@ -73,7 +80,7 @@ async def quiz_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "correct_index": poll_correct_id, "quiz_session": False, "daily_quiz": False,
             "question_details": single_q_item, "associated_quiz_session_chat_id": None,
             "next_q_triggered_by_answer": False, "solution_placeholder_message_id": None,
-            "processed_by_early_answer": False, "timeout_job": None # Renamed solution_job
+            "processed_by_early_answer": False, "timeout_job": None # Renamed solution_job to timeout_job
         }
         state.cur_polls[sent_poll.poll.id] = poll_entry
 
@@ -88,13 +95,14 @@ async def quiz_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             job_delay_s = POLL_OPEN_S + JOB_GRACE_S # Renamed consts
             job_name = f"sq_timeout_chat_{cid_str}_poll_{sent_poll.poll.id}" # Shorter
 
+            # Remove any existing job with the same name before scheduling a new one
             for old_job in context.job_queue.get_jobs_by_name(job_name): old_job.schedule_removal()
 
             timeout_job = context.job_queue.run_once(
                 on_single_q_poll_end, timedelta(seconds=job_delay_s), # Renamed handler
                 data={"chat_id_str": cid_str, "poll_id": sent_poll.poll.id}, name=job_name
             )
-            state.cur_polls[sent_poll.poll.id]["timeout_job"] = timeout_job
+            state.cur_polls[sent_poll.poll.id]["timeout_job"] = timeout_job # Store the job object
             logger.info(f"Запланирован job '{job_name}' для таймаута poll {sent_poll.poll.id} (/quiz).")
     except Exception as e:
         logger.error(f"Ошибка при создании опроса для /quiz в {cid_str}: {e}", exc_info=True)

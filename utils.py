@@ -1,4 +1,6 @@
 # utils.py
+import re
+
 def pluralize(count: int, form_one: str, form_two: str, form_five: str) -> str:
     """
     Возвращает строку с числом и правильной формой слова в зависимости от числа.
@@ -12,4 +14,12 @@ def pluralize(count: int, form_one: str, form_two: str, form_five: str) -> str:
     else:
         form = form_five
     return f"{count} {form}"
+
+def escape_markdown_v2(text: str) -> str:
+    """
+    Escapes characters for Telegram MarkdownV2.
+    Characters to escape: _ * [ ] ( ) ~ ` > # + - = | { } . !
+    """
+    escape_chars = r'_*[]()~`>#+-=|{}.!'
+    return re.sub(f'([{re.escape(escape_chars)}])', r'\\\1', text)
 

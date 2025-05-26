@@ -22,7 +22,7 @@ import state
 from data_manager import save_daily_quiz_subscriptions
 from quiz_logic import prepare_poll_options
 from handlers.rating_handlers import get_player_display
-from utils import pluralize # MODIFIED: pluralize_points -> pluralize
+from utils import pluralize, escape_markdown_v2 # MODIFIED: pluralize_points -> pluralize, ADDED escape_markdown_v2
 
 # --- Вспомогательные функции ---
 
@@ -132,8 +132,8 @@ async def subscribe_daily_quiz_command(update: Update, context: ContextTypes.DEF
         sub_details = state.daily_quiz_subscriptions[chat_id_str]
         time_str = f"{sub_details.get('hour', DAILY_QUIZ_DEFAULT_HOUR_MSK):02d}:{sub_details.get('minute', DAILY_QUIZ_DEFAULT_MINUTE_MSK):02d} МСК"
         cats = sub_details.get("categories")
-        cat_str = f"категориям: {', '.join(cats)}" if cats else "случайным категориям"
-        reply_text = (f"Этот чат уже подписан\\.\nВремя: *{time_str}*\\. Категории: *{cat_str}*\\.")
+        cat_str = f"категориям: *{escape_markdown_v2(', '.join(cats))}*" if cats else "случайным категориям"
+        reply_text = (f"Этот чат уже подписан\\.\nВремя: *{escape_markdown_v2(time_str)}*\\. Категории: {cat_str}\\.")
     else:
         state.daily_quiz_subscriptions[chat_id_str] = {
             "hour": DAILY_QUIZ_DEFAULT_HOUR_MSK, "minute": DAILY_QUIZ_DEFAULT_MINUTE_MSK, "categories": None
@@ -240,7 +240,7 @@ async def set_daily_quiz_categories_command(update: Update, context: ContextType
         if len(valid_chosen_categories_canonical) > DAILY_QUIZ_MAX_CUSTOM_CATEGORIES:
             await update.message.reply_text(
                 f"Можно выбрать до {DAILY_QUIZ_MAX_CUSTOM_CATEGORIES} категорий\\. Вы указали {len(valid_chosen_categories_canonical)} валидных: "
-                f"*{', '.join(valid_chosen_categories_canonical)}*\\. Пожалуйста, сократите список\\.",
+                f"*{escape_markdown_v2(', '.join(valid_chosen_categories_canonical))}*\\. Пожалуйста, сократите список\\.",
                 parse_mode=ParseMode.MARKDOWN_V2
             )
             return
@@ -249,7 +249,7 @@ async def set_daily_quiz_categories_command(update: Update, context: ContextType
              state.daily_quiz_subscriptions[chat_id_str]["categories"] = None
              save_daily_quiz_subscriptions()
              await update.message.reply_text(
-                 f"Указанные категории ({', '.join(invalid_or_empty_categories_input)}) не найдены или пусты\\. "
+                 f"Указанные категории ({escape_markdown_v2(', '.join(invalid_or_empty_categories_input))}) не найдены или пусты\\. "
                  f"Будут использованы *случайные категории*\\.", parse_mode=ParseMode.MARKDOWN_V2
              )
              logger.info(f"Попытка установить неверные категории '{invalid_or_empty_categories_input}' для {chat_id_str}. Установлены случайные.")
@@ -260,12 +260,12 @@ async def set_daily_quiz_categories_command(update: Update, context: ContextType
 
         reply_parts = []
         if valid_chosen_categories_canonical:
-            reply_parts.append(f"Категории для ежедневной викторины установлены: *{', '.join(valid_chosen_categories_canonical)}*\\.")
+            reply_parts.append(f"Категории для ежедневной викторины установлены: *{escape_markdown_v2(', '.join(valid_chosen_categories_canonical))}*\\.")
         else:
             reply_parts.append(f"Категории сброшены на *случайные*\\.")
 
         if invalid_or_empty_categories_input:
-            reply_parts.append(f"\n*Предупреждение*: категории '{', '.join(invalid_or_empty_categories_input)}' не найдены/пусты и были проигнорированы\\.")
+            reply_parts.append(f"\n*Предупреждение*: категории '{escape_markdown_v2(', '.join(invalid_or_empty_categories_input))}' не найдены/пусты и были проигнорированы\\.")
 
         await update.message.reply_text(" ".join(reply_parts), parse_mode=ParseMode.MARKDOWN_V2)
         logger.info(f"Категории для {chat_id_str} изменены на {valid_chosen_categories_canonical or 'случайные'} через аргументы. Ввод: '{input_string}'")
@@ -301,16 +301,16 @@ async def set_daily_quiz_categories_command(update: Update, context: ContextType
         current_sel_list = current_subscription_settings.get("categories")
         current_selection_str_display = ""
         if current_sel_list:
-            current_selection_str_display = f"\nТекущий выбор: *{', '.join(current_sel_list)}*\\."
+            current_selection_str_display = f"\nТекущий выбор: *{escape_markdown_v2(', '.join(current_sel_list))}*\\."
         else:
             cat_plural_str = pluralize(DAILY_QUIZ_CATEGORIES_TO_PICK, "категория", "категории", "категорий")
-            current_selection_str_display = f"\nТекущий выбор: *случайные категории* \\(по умолчанию {cat_plural_str}\\)\\."
+            current_selection_str_display = f"\nТекущий выбор: *случайные категории* \\(по умолчанию {escape_markdown_v2(cat_plural_str)}\\)\\."
 
         msg_text = (
             f"Выберите *одну* категорию из меню ниже для ежедневной викторины\\.\n\n"
             f"Для выбора *нескольких* категорий \\(до {DAILY_QUIZ_MAX_CUSTOM_CATEGORIES}\\) или категории с пробелами в названии, используйте команду с названиями через *запятую*, например:\n"
             f"`/setdailyquizcategories Категория Один, Очень Длинная Категория Два, Третья`\n\n"
-            f"Чтобы использовать случайный набор категорий \\(бот выберет {pluralize(DAILY_QUIZ_CATEGORIES_TO_PICK, 'случайную категорию', 'случайные категории', 'случайных категорий')}\\), нажмите кнопку '🎲 Использовать случайные категории' или введите:\n"
+            f"Чтобы использовать случайный набор категорий \\(бот выберет {escape_markdown_v2(pluralize(DAILY_QUIZ_CATEGORIES_TO_PICK, 'случайную категорию', 'случайные категории', 'случайных категорий'))}\\), нажмите кнопку '🎲 Использовать случайные категории' или введите:\n"
             f"`/setdailyquizcategories случайные`"
             f"{current_selection_str_display}"
         )
@@ -327,12 +327,10 @@ async def handle_daily_quiz_category_selection(update: Update, context: ContextT
 
     if query.data == CALLBACK_DATA_DAILY_QUIZ_INFO_TOO_MANY_CATS:
         current_text = query.message.text_markdown_v2 if query.message.text_markdown_v2 else query.message.text
-        
-        # Remove existing note about "Для выбора категорий не из списка..." if it exists to avoid duplication
-        # This is a bit fragile if the text changes significantly.
+
         note_to_remove_pattern = r"\n\n\(Для выбора категорий не из списка.*?\)\.?$"
         text_without_old_note = re.sub(note_to_remove_pattern, "", current_text, flags=re.DOTALL | re.MULTILINE)
-        
+
         new_text_parts = [text_without_old_note.strip()]
         new_text_parts.append(
             f"\n\n(Для выбора категорий не из этого списка или для выбора *нескольких* категорий \\(до {DAILY_QUIZ_MAX_CUSTOM_CATEGORIES}\\), "
@@ -347,7 +345,6 @@ async def handle_daily_quiz_category_selection(update: Update, context: ContextT
             )
         except Exception as e:
             logger.error(f"Error editing message for CALLBACK_DATA_DAILY_QUIZ_INFO_TOO_MANY_CATS: {e}")
-            # Fallback if Markdown fails or message is too old
             try: await query.edit_message_text(text=query.message.text + "\n\n(Для выбора категорий не из списка или нескольких, используйте команду с аргументами через запятую).", reply_markup=None)
             except: pass
         return
@@ -367,20 +364,20 @@ async def handle_daily_quiz_category_selection(update: Update, context: ContextT
         message_text_after_selection = "Для ежедневной викторины будут использоваться *случайные категории*\\."
     elif query.data and query.data.startswith(CALLBACK_DATA_PREFIX_DAILY_QUIZ_CATEGORY_SHORT):
         short_id = query.data[len(CALLBACK_DATA_PREFIX_DAILY_QUIZ_CATEGORY_SHORT):]
-        if category_map_for_callback: # Check if map exists
+        if category_map_for_callback: 
             selected_category_name = category_map_for_callback.get(short_id)
             if selected_category_name:
-                new_categories_selection = [selected_category_name] # Menu selects one category
-                message_text_after_selection = f"Для ежедневной викторины выбрана категория: *{selected_category_name}*\\."
+                new_categories_selection = [selected_category_name] 
+                message_text_after_selection = f"Для ежедневной викторины выбрана категория: *{escape_markdown_v2(selected_category_name)}*\\."
             else:
                 message_text_after_selection = "Ошибка при выборе категории (ID не найден). Настройки не изменены."
-        else: # Map was not found (e.g. expired from chat_data)
+        else: 
              message_text_after_selection = "Ошибка: время выбора категории истекло (карта категорий не найдена). Попробуйте снова /setdailyquizcategories."
     else:
         message_text_after_selection = "Произошла неизвестная ошибка выбора. Настройки не изменены."
 
     if chat_id_str in state.daily_quiz_subscriptions:
-        if "Ошибка" not in message_text_after_selection and "истекло" not in message_text_after_selection: # Only save if selection was successful
+        if "Ошибка" not in message_text_after_selection and "истекло" not in message_text_after_selection: 
             state.daily_quiz_subscriptions[chat_id_str]["categories"] = new_categories_selection
             save_daily_quiz_subscriptions()
             logger.info(f"Категории для ежедневной викторины в чате {chat_id_str} изменены на {new_categories_selection or 'случайные'} через меню.")
@@ -388,7 +385,7 @@ async def handle_daily_quiz_category_selection(update: Update, context: ContextT
         message_text_after_selection = "Ошибка: чат не подписан на ежедневную викторину. Настройки не сохранены."
 
     try: await query.edit_message_text(text=message_text_after_selection, reply_markup=None, parse_mode=ParseMode.MARKDOWN_V2)
-    except Exception: pass # Ignore if message too old or not modified
+    except Exception: pass 
 
 async def show_daily_quiz_settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.effective_chat: return
@@ -406,15 +403,21 @@ async def show_daily_quiz_settings_command(update: Update, context: ContextTypes
 
     categories_str = ""
     if custom_categories:
-        categories_str = f"Выбранные: *{', '.join(custom_categories)}*"
+        escaped_custom_categories = [escape_markdown_v2(cat) for cat in custom_categories]
+        categories_str = f"Выбранные: *{', '.join(escaped_custom_categories)}*"
     else:
         pluralized_cat_string = pluralize(DAILY_QUIZ_CATEGORIES_TO_PICK, "категория", "категории", "категорий")
-        categories_str = f"Случайные (*{pluralized_cat_string}*)"
+        # The string pluralized_cat_string (e.g. "3 категории") is unlikely to contain special chars,
+        # but escaping it is a good safety measure.
+        # The parentheses ( and ) are part of the f-string and must be escaped.
+        categories_str = f"Случайные \\(*{escape_markdown_v2(pluralized_cat_string)}*\\)"
+        
+    escaped_time_str = escape_markdown_v2(time_str)
 
     reply_text = (f"⚙️ Настройки ежедневной викторины:\n"
-                  f"\\- Время: *{time_str}*\n"
+                  f"\\- Время: *{escaped_time_str}*\n"
                   f"\\- Категории: {categories_str}\n"
-                  f"\\- Вопросов: {DAILY_QUIZ_QUESTIONS_COUNT}\n" # This is a constant, not pluralized with count
+                  f"\\- Вопросов: {DAILY_QUIZ_QUESTIONS_COUNT}\n" 
                   f"Используйте `/setdailyquiztime` и `/setdailyquizcategories` для изменения\\.")
     await update.message.reply_text(reply_text, parse_mode=ParseMode.MARKDOWN_V2)
 
@@ -456,7 +459,7 @@ async def _send_one_daily_question_job(context: ContextTypes.DEFAULT_TYPE):
                         if i == 0: rank_prefix = "🥇"
                         elif i == 1: rank_prefix = "🥈"
                         elif i == 2: rank_prefix = "🥉"
-                    display_name = get_player_display(player_name_original, player_score) # get_player_display returns HTML safe string
+                    display_name = get_player_display(player_name_original, player_score) 
                     final_text_parts.append(f"{rank_prefix} {display_name}")
             else:
                 final_text_parts.append("\n\nВ этом чате пока нет игроков с очками в рейтинге.")
@@ -474,7 +477,7 @@ async def _send_one_daily_question_job(context: ContextTypes.DEFAULT_TYPE):
     if original_cat := q_details.get("original_category"): full_poll_question_header += f" (Кат: {original_cat})"
     full_poll_question_header += f"\n\n{poll_question_text_for_api}"
 
-    MAX_POLL_QUESTION_LENGTH = 300
+    MAX_POLL_QUESTION_LENGTH = 300 
     if len(full_poll_question_header) > MAX_POLL_QUESTION_LENGTH:
         full_poll_question_header = full_poll_question_header[:(MAX_POLL_QUESTION_LENGTH - 3)] + "..."
         logger.warning(f"Текст вопроса ежедневной викторины для poll в {chat_id_str} усечен до {MAX_POLL_QUESTION_LENGTH} символов.")
@@ -511,7 +514,7 @@ async def _send_one_daily_question_job(context: ContextTypes.DEFAULT_TYPE):
     job_data_for_next = { "chat_id_str": chat_id_str, "current_question_index": next_q_idx, "questions_this_session": questions_this_session }
     next_job_base_name = f"daily_quiz_q_process_{next_q_idx}"
     next_job_name = f"{next_job_base_name}_chat_{chat_id_str}"
-
+    
     existing_jobs = job_queue.get_jobs_by_name(next_job_name)
     for old_job in existing_jobs:
         old_job.schedule_removal()
@@ -560,13 +563,12 @@ async def _trigger_daily_quiz_for_chat_job(context: ContextTypes.DEFAULT_TYPE):
     elif 12 <= current_hour_moscow <= 17: greeting = "🌞 Добрый день!"
     else: greeting = "🌆 Добрый вечер!"
 
-    cats_display = f"<b>{', '.join(picked_categories)}</b>" if picked_categories else "<b>случайные</b>"
-    
+    cats_display = f"<b>{escape_markdown_v2(', '.join(picked_categories))}</b>" if picked_categories else "<b>случайные</b>"
+
     q_count_str = pluralize(len(questions_for_quiz), "вопрос", "вопроса", "вопросов")
     poll_open_str = pluralize(DAILY_QUIZ_POLL_OPEN_PERIOD_SECONDS // 60, "минуту", "минуты", "минут")
     interval_val = DAILY_QUIZ_QUESTION_INTERVAL_SECONDS // 60
     interval_str = pluralize(interval_val, "минуту", "минуты", "минут") if interval_val > 0 else pluralize(DAILY_QUIZ_QUESTION_INTERVAL_SECONDS, "секунду", "секунды", "секунд")
-
 
     intro_message_parts = [
         f"{greeting} Начинаем ежедневную викторину ({q_count_str})!",
@@ -574,7 +576,7 @@ async def _trigger_daily_quiz_for_chat_job(context: ContextTypes.DEFAULT_TYPE):
         f"Один вопрос каждую {interval_str}. Каждый вопрос будет доступен {poll_open_str}."
     ]
     intro_text = "\n".join(intro_message_parts)
-
+    
     try:
         await context.bot.send_message(chat_id=chat_id_str, text=intro_text, parse_mode=ParseMode.HTML)
         logger.info(f"Ежедневная викторина инициирована для {chat_id_str} ({len(questions_for_quiz)} вопр. из: {picked_categories}).")
@@ -592,7 +594,7 @@ async def _trigger_daily_quiz_for_chat_job(context: ContextTypes.DEFAULT_TYPE):
         first_q_job_name = f"daily_quiz_q_process_0_chat_{chat_id_str}"
         state.active_daily_quizzes[chat_id_str]["job_name_next_q"] = first_q_job_name
         job_queue.run_once(
-            _send_one_daily_question_job, timedelta(seconds=5),
+            _send_one_daily_question_job, timedelta(seconds=5), 
             data={ "chat_id_str": chat_id_str, "current_question_index": 0, "questions_this_session": questions_for_quiz, },
             name=first_q_job_name
         )

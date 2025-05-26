@@ -1,6 +1,5 @@
 # utils.py
-def pluralize_points(count: int) -> str:
-    # Для логики склонения используется модуль числа
+def plural_pts(count: int) -> str: # Renamed from pluralize_points
     abs_count = abs(count)
     if abs_count % 10 == 1 and abs_count % 100 != 11:
         form = "очко"
@@ -9,4 +8,3 @@ def pluralize_points(count: int) -> str:
     else:
         form = "очков"
     return f"{count} {form}"
-

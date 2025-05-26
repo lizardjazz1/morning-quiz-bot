@@ -4,228 +4,211 @@ import os
 import copy
 from typing import List, Dict, Any, Set, Optional
 
-from config import (logger, QUESTIONS_FILE, USERS_FILE, MALFORMED_QUESTIONS_FILE,
-                    DAILY_QUIZ_SUBSCRIPTIONS_FILE, DAILY_QUIZ_DEFAULT_HOUR_MSK, DAILY_QUIZ_DEFAULT_MINUTE_MSK)
+from config import (logger, QS_F, USRS_F, BAD_QS_F, # Renamed constants
+                    DQS_F, DQ_DEF_H, DQ_DEF_M)
 import state
 
 # --- Вспомогательные функции для сериализации/десериализации ---
-def convert_sets_to_lists_recursively(obj: Any) -> Any:
+def sets_to_lists_rec(obj: Any) -> Any: # Renamed from convert_sets_to_lists_recursively
     if isinstance(obj, dict):
-        return {k: convert_sets_to_lists_recursively(v) for k, v in obj.items()}
+        return {k: sets_to_lists_rec(v) for k, v in obj.items()}
     if isinstance(obj, list):
-        return [convert_sets_to_lists_recursively(elem) for elem in obj]
+        return [sets_to_lists_rec(elem) for elem in obj]
     if isinstance(obj, set):
-        return sorted(list(obj)) # Сортируем для консистентности в JSON
+        return sorted(list(obj))
     return obj
 
-def convert_user_scores_lists_to_sets(scores_data: Dict[str, Any]) -> Dict[str, Any]:
+def usr_scores_lists_to_sets(scores_data: Dict[str, Any]) -> Dict[str, Any]: # Renamed from convert_user_scores_lists_to_sets
     if not isinstance(scores_data, dict):
-        return scores_data # Возвращаем как есть, если это не словарь
-    for chat_id, users_in_chat in scores_data.items():
+        return scores_data
+    for cid, users_in_chat in scores_data.items():
         if isinstance(users_in_chat, dict):
-            for user_id, user_data_val in users_in_chat.items():
-                if isinstance(user_data_val, dict):
-                    # Обновляем answered_polls
-                    if 'answered_polls' in user_data_val and isinstance(user_data_val['answered_polls'], list):
-                        user_data_val['answered_polls'] = set(user_data_val['answered_polls'])
-                    # Обновляем milestones_achieved (если есть)
-                    if 'milestones_achieved' in user_data_val and isinstance(user_data_val['milestones_achieved'], list):
-                        user_data_val['milestones_achieved'] = set(user_data_val['milestones_achieved'])
+            for uid, usr_data_val in users_in_chat.items():
+                if isinstance(usr_data_val, dict):
+                    if 'answered_polls' in usr_data_val and isinstance(usr_data_val['answered_polls'], list):
+                        usr_data_val['answered_polls'] = set(usr_data_val['answered_polls'])
+                    if 'milestones_achieved' in usr_data_val and isinstance(usr_data_val['milestones_achieved'], list):
+                        usr_data_val['milestones_achieved'] = set(usr_data_val['milestones_achieved'])
     return scores_data
 
 # --- Функции загрузки и сохранения данных ---
-def load_questions():
-    processed_questions_count, valid_categories_count = 0, 0
-    malformed_entries = [] # Для сбора некорректных записей
+def load_qs(): # Renamed from load_questions
+    proc_qs_count, valid_cats_count = 0, 0
+    bad_entries = []
     try:
-        with open(QUESTIONS_FILE, 'r', encoding='utf-8') as f:
+        with open(QS_F, 'r', encoding='utf-8') as f:
             raw_data = json.load(f)
         if not isinstance(raw_data, dict):
-            logger.error(f"{QUESTIONS_FILE} должен содержать JSON объект (словарь категорий).")
-            malformed_entries.append({"error_type": "root_not_dict", "data": raw_data})
-            state.quiz_data = {} # Устанавливаем пустые данные
+            logger.error(f"{QS_F} должен содержать JSON объект (словарь категорий).")
+            bad_entries.append({"error_type": "root_not_dict", "data": raw_data})
+            state.qs_data = {}
         else:
-            temp_quiz_data = {}
-            for category, questions_list in raw_data.items():
-                if not isinstance(questions_list, list):
-                    logger.warning(f"Категория '{category}' не является списком вопросов. Пропущена.")
-                    malformed_entries.append({"error_type": "category_not_list", "category": category, "data": questions_list})
+            temp_qs_data = {}
+            for cat, qs_list in raw_data.items():
+                if not isinstance(qs_list, list):
+                    logger.warning(f"Категория '{cat}' не является списком вопросов. Пропущена.")
+                    bad_entries.append({"error_type": "category_not_list", "category": cat, "data": qs_list})
                     continue
 
-                processed_category_questions = []
-                for i, q_data in enumerate(questions_list):
-                    is_struct_valid = (isinstance(q_data, dict) and
-                                       all(k in q_data for k in ["question", "options", "correct"]) and
-                                       isinstance(q_data.get("question"), str) and q_data["question"].strip() and
-                                       isinstance(q_data.get("options"), list) and len(q_data["options"]) >= 2 and
-                                       all(isinstance(opt, str) and opt.strip() for opt in q_data["options"]) and
-                                       isinstance(q_data.get("correct"), str) and q_data["correct"].strip() and
-                                       q_data["correct"] in q_data["options"])
+                proc_cat_qs = []
+                for i, q_item in enumerate(qs_list): # Renamed q_data to q_item
+                    is_struct_ok = (isinstance(q_item, dict) and
+                                   all(k in q_item for k in ["question", "options", "correct"]) and
+                                   isinstance(q_item.get("question"), str) and q_item["question"].strip() and
+                                   isinstance(q_item.get("options"), list) and len(q_item["options"]) >= 2 and
+                                   all(isinstance(opt, str) and opt.strip() for opt in q_item["options"]) and
+                                   isinstance(q_item.get("correct"), str) and q_item["correct"].strip() and
+                                   q_item["correct"] in q_item["options"])
 
-                    has_solution = "solution" in q_data
-                    is_solution_valid = not has_solution or \
-                                        (isinstance(q_data.get("solution"), str) and q_data.get("solution", "").strip())
+                    has_sol = "solution" in q_item
+                    is_sol_ok = not has_sol or \
+                                     (isinstance(q_item.get("solution"), str) and q_item.get("solution", "").strip())
 
-                    if not is_struct_valid or not is_solution_valid:
-                        log_msg_parts = [f"Вопрос {i+1} в категории '{category}' некорректен или неполон. Пропущен."]
-                        if not is_struct_valid:
-                             log_msg_parts.append("Ошибка в основной структуре вопроса/ответов (question, options, correct).")
-                        if not is_solution_valid:
-                             log_msg_parts.append("Ошибка в поле 'solution' - должно быть непустой строкой, если присутствует.")
-                        log_msg_parts.append(f"Данные: {q_data}")
-                        logger.warning(" ".join(log_msg_parts))
-                        malformed_entries.append({
-                            "error_type": "invalid_question_format_or_solution",
-                            "category": category, "question_index": i, "data": q_data,
-                            "reason_struct": not is_struct_valid, "reason_solution": not is_solution_valid
+                    if not is_struct_ok or not is_sol_ok:
+                        log_parts = [f"Вопрос {i+1} в категории '{cat}' некорректен. Пропущен."]
+                        if not is_struct_ok: log_parts.append("Ошибка в структуре (question, options, correct).")
+                        if not is_sol_ok: log_parts.append("Ошибка в 'solution'.")
+                        log_parts.append(f"Данные: {q_item}")
+                        logger.warning(" ".join(log_parts))
+                        bad_entries.append({
+                            "error_type": "invalid_q_format", "category": cat, "q_idx": i, "data": q_item, # Renamed fields
+                            "reason_struct": not is_struct_ok, "reason_solution": not is_sol_ok
                         })
                         continue
-
                     try:
-                        correct_option_index = q_data["options"].index(q_data["correct"])
-                    except ValueError: # Хотя предыдущая проверка должна это покрыть, но на всякий случай
-                        logger.warning(f"Правильный ответ для вопроса {i+1} в '{category}' не найден в опциях. Пропущен. Данные: {q_data}")
-                        malformed_entries.append({"error_type": "correct_not_in_options", "category": category, "question_index": i, "data": q_data})
+                        correct_opt_idx = q_item["options"].index(q_item["correct"])
+                    except ValueError:
+                        logger.warning(f"Правильный ответ для вопроса {i+1} в '{cat}' не найден в опциях. Пропущен. Данные: {q_item}")
+                        bad_entries.append({"error_type": "correct_not_in_opts", "category": cat, "q_idx": i, "data": q_item})
                         continue
 
-                    question_entry = {
-                        "question": q_data["question"],
-                        "options": q_data["options"],
-                        "correct_option_index": correct_option_index,
-                        "original_category": category
+                    q_entry = {
+                        "question": q_item["question"],
+                        "options": q_item["options"],
+                        "correct_option_index": correct_opt_idx,
+                        "original_category": cat
                     }
-                    if has_solution and is_solution_valid: # Добавляем solution, если он есть и валиден
-                        question_entry["solution"] = q_data["solution"].strip()
+                    if has_sol and is_sol_ok:
+                        q_entry["solution"] = q_item["solution"].strip()
 
-                    processed_category_questions.append(question_entry)
-                    processed_questions_count += 1
+                    proc_cat_qs.append(q_entry)
+                    proc_qs_count += 1
 
-                if processed_category_questions:
-                    temp_quiz_data[category] = processed_category_questions
-                    valid_categories_count += 1
-            state.quiz_data = temp_quiz_data
+                if proc_cat_qs:
+                    temp_qs_data[cat] = proc_cat_qs
+                    valid_cats_count += 1
+            state.qs_data = temp_qs_data
 
-        logger.info(f"Загружено {processed_questions_count} вопросов из {valid_categories_count} категорий.")
+        logger.info(f"Загружено {proc_qs_count} вопросов из {valid_cats_count} категорий.")
 
-        if malformed_entries:
-            logger.warning(f"Обнаружено {len(malformed_entries)} некорректных записей в {QUESTIONS_FILE}. Они записаны в {MALFORMED_QUESTIONS_FILE}")
+        if bad_entries:
+            logger.warning(f"Обнаружено {len(bad_entries)} некорректных записей в {QS_F}. Они записаны в {BAD_QS_F}")
             try:
-                with open(MALFORMED_QUESTIONS_FILE, 'w', encoding='utf-8') as mf:
-                    json.dump(malformed_entries, mf, ensure_ascii=False, indent=4)
+                with open(BAD_QS_F, 'w', encoding='utf-8') as mf:
+                    json.dump(bad_entries, mf, ensure_ascii=False, indent=4)
             except Exception as e_mf:
-                logger.error(f"Не удалось записать некорректные записи в {MALFORMED_QUESTIONS_FILE}: {e_mf}")
+                logger.error(f"Не удалось записать некорректные записи в {BAD_QS_F}: {e_mf}")
 
     except FileNotFoundError:
-        logger.error(f"{QUESTIONS_FILE} не найден.")
-        state.quiz_data = {}
+        logger.error(f"{QS_F} не найден.")
+        state.qs_data = {}
     except json.JSONDecodeError:
-        logger.error(f"Ошибка декодирования JSON в {QUESTIONS_FILE}.")
-        state.quiz_data = {}
+        logger.error(f"Ошибка декодирования JSON в {QS_F}.")
+        state.qs_data = {}
     except Exception as e:
         logger.error(f"Непредвиденная ошибка загрузки вопросов: {e}", exc_info=True)
-        state.quiz_data = {}
+        state.qs_data = {}
 
-def save_user_data():
-    # Глубокое копирование перед модификацией для сериализации
-    data_to_save = copy.deepcopy(state.user_scores)
-    data_to_save_serializable = convert_sets_to_lists_recursively(data_to_save)
+def save_usr_data(): # Renamed from save_user_data
+    data_to_save = copy.deepcopy(state.usr_scores)
+    serializable_data = sets_to_lists_rec(data_to_save) # Renamed var
     try:
-        with open(USERS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(data_to_save_serializable, f, ensure_ascii=False, indent=4)
-        logger.debug(f"Данные пользователей сохранены в {USERS_FILE}")
+        with open(USRS_F, 'w', encoding='utf-8') as f:
+            json.dump(serializable_data, f, ensure_ascii=False, indent=4)
+        logger.debug(f"Данные пользователей сохранены в {USRS_F}")
     except Exception as e:
         logger.error(f"Ошибка сохранения данных пользователей: {e}", exc_info=True)
 
-def load_user_data():
+def load_usr_data(): # Renamed from load_user_data
     try:
-        if os.path.exists(USERS_FILE) and os.path.getsize(USERS_FILE) > 0:
-            with open(USERS_FILE, 'r', encoding='utf-8') as f:
+        if os.path.exists(USRS_F) and os.path.getsize(USRS_F) > 0:
+            with open(USRS_F, 'r', encoding='utf-8') as f:
                 loaded_data = json.load(f)
-            state.user_scores = convert_user_scores_lists_to_sets(loaded_data)
-            logger.info(f"Данные пользователей загружены из {USERS_FILE}.")
+            state.usr_scores = usr_scores_lists_to_sets(loaded_data)
+            logger.info(f"Данные пользователей загружены из {USRS_F}.")
         else:
-            logger.info(f"{USERS_FILE} не найден или пуст. Старт с пустыми данными пользователей.")
-            state.user_scores = {}
+            logger.info(f"{USRS_F} не найден или пуст. Старт с пустыми данными пользователей.")
+            state.usr_scores = {}
     except json.JSONDecodeError:
-        logger.error(f"Ошибка декодирования JSON в {USERS_FILE}. Использование пустых данных пользователей.")
-        state.user_scores = {}
+        logger.error(f"Ошибка декодирования JSON в {USRS_F}. Использование пустых данных.")
+        state.usr_scores = {}
     except Exception as e:
         logger.error(f"Непредвиденная ошибка загрузки данных пользователей: {e}", exc_info=True)
-        state.user_scores = {}
+        state.usr_scores = {}
 
 # --- Функции для подписок на ежедневную викторину ---
-def load_daily_quiz_subscriptions():
-    migrated_subscriptions: Dict[str, Dict[str, Any]] = {}
-    file_exists_and_not_empty = os.path.exists(DAILY_QUIZ_SUBSCRIPTIONS_FILE) and os.path.getsize(DAILY_QUIZ_SUBSCRIPTIONS_FILE) > 0
+def load_daily_q_subs(): # Renamed from load_daily_quiz_subscriptions
+    migrated_subs: Dict[str, Dict[str, Any]] = {}
+    file_ok = os.path.exists(DQS_F) and os.path.getsize(DQS_F) > 0
 
-    if not file_exists_and_not_empty:
-        logger.info(f"{DAILY_QUIZ_SUBSCRIPTIONS_FILE} не найден или пуст. Нет активных подписок на ежедневную викторину.")
-        state.daily_quiz_subscriptions = {}
+    if not file_ok:
+        logger.info(f"{DQS_F} не найден или пуст. Нет активных подписок.")
+        state.daily_q_subs = {}
         return
 
     try:
-        with open(DAILY_QUIZ_SUBSCRIPTIONS_FILE, 'r', encoding='utf-8') as f:
+        with open(DQS_F, 'r', encoding='utf-8') as f:
             raw_data = json.load(f)
 
-        if isinstance(raw_data, list): # Old format: list of chat_id_str
-            logger.info(f"Обнаружен старый формат {DAILY_QUIZ_SUBSCRIPTIONS_FILE} (список ID чатов). Конвертация в новый формат...")
-            for chat_id_old_format in raw_data:
-                chat_id_key = str(chat_id_old_format) # Ensure string
-                migrated_subscriptions[chat_id_key] = {
-                    "hour": DAILY_QUIZ_DEFAULT_HOUR_MSK,
-                    "minute": DAILY_QUIZ_DEFAULT_MINUTE_MSK,
-                    "categories": None # Default to random categories
+        if isinstance(raw_data, list):
+            logger.info(f"Обнаружен старый формат {DQS_F}. Конвертация...")
+            for cid_old in raw_data:
+                cid_key = str(cid_old)
+                migrated_subs[cid_key] = {
+                    "hour": DQ_DEF_H, "minute": DQ_DEF_M, "categories": None
                 }
-            state.daily_quiz_subscriptions = migrated_subscriptions
-            logger.info(f"Конвертировано {len(migrated_subscriptions)} подписок в новый формат. Сохранение файла...")
-            save_daily_quiz_subscriptions() # Save immediately after migration
-
-        elif isinstance(raw_data, dict): # New format: dict
-            for chat_id_key, details in raw_data.items():
-                chat_id_str = str(chat_id_key) # Ensure string
+            state.daily_q_subs = migrated_subs
+            logger.info(f"Конвертировано {len(migrated_subs)} подписок. Сохранение...")
+            save_daily_q_subs()
+        elif isinstance(raw_data, dict):
+            for cid_key, details in raw_data.items():
+                cid_str = str(cid_key)
                 if not isinstance(details, dict):
-                    logger.warning(f"Запись для чата {chat_id_str} в {DAILY_QUIZ_SUBSCRIPTIONS_FILE} имеет неверный формат (не словарь). Пропущено.")
+                    logger.warning(f"Запись для чата {cid_str} в {DQS_F} неверна. Пропущено.")
                     continue
-                
-                categories = details.get("categories")
-                if categories is not None and not (isinstance(categories, list) and all(isinstance(c, str) for c in categories)):
-                    logger.warning(f"Поле 'categories' для чата {chat_id_str} имеет неверный тип (ожидается list[str] или null). Установлено в null.")
-                    categories = None
-                
-                migrated_subscriptions[chat_id_str] = {
-                    "hour": details.get("hour", DAILY_QUIZ_DEFAULT_HOUR_MSK),
-                    "minute": details.get("minute", DAILY_QUIZ_DEFAULT_MINUTE_MSK),
-                    "categories": categories
+                cats = details.get("categories")
+                if cats is not None and not (isinstance(cats, list) and all(isinstance(c, str) for c in cats)):
+                    logger.warning(f"Поле 'categories' для чата {cid_str} неверно. Установлено в null.")
+                    cats = None
+                migrated_subs[cid_str] = {
+                    "hour": details.get("hour", DQ_DEF_H),
+                    "minute": details.get("minute", DQ_DEF_M),
+                    "categories": cats
                 }
-            state.daily_quiz_subscriptions = migrated_subscriptions
-            logger.info(f"Загружено {len(state.daily_quiz_subscriptions)} подписок на ежедневную викторину из {DAILY_QUIZ_SUBSCRIPTIONS_FILE} (новый формат).")
+            state.daily_q_subs = migrated_subs
+            logger.info(f"Загружено {len(state.daily_q_subs)} подписок из {DQS_F}.")
         else:
-            logger.error(f"{DAILY_QUIZ_SUBSCRIPTIONS_FILE} содержит данные неизвестного формата. Использование пустого списка подписок.")
-            state.daily_quiz_subscriptions = {}
+            logger.error(f"{DQS_F} содержит данные неизвестного формата.")
+            state.daily_q_subs = {}
 
     except json.JSONDecodeError:
-        logger.error(f"Ошибка декодирования JSON в {DAILY_QUIZ_SUBSCRIPTIONS_FILE}. Использование пустого списка подписок.")
-        state.daily_quiz_subscriptions = {}
+        logger.error(f"Ошибка декодирования JSON в {DQS_F}.")
+        state.daily_q_subs = {}
     except Exception as e:
-        logger.error(f"Непредвиденная ошибка загрузки подписок на ежедневную викторину: {e}", exc_info=True)
-        state.daily_quiz_subscriptions = {}
+        logger.error(f"Непредвиденная ошибка загрузки подписок: {e}", exc_info=True)
+        state.daily_q_subs = {}
 
-
-def save_daily_quiz_subscriptions():
-    # state.daily_quiz_subscriptions уже имеет формат Dict[str, Dict[str, Any]]
-    # Убедимся, что все поля имеют значения по умолчанию, если они отсутствуют (хотя при загрузке это должно быть учтено)
+def save_daily_q_subs(): # Renamed from save_daily_quiz_subscriptions
     data_to_save = {}
-    for chat_id, details in state.daily_quiz_subscriptions.items():
-        data_to_save[str(chat_id)] = { # Убедимся, что chat_id это строка
-            "hour": details.get("hour", DAILY_QUIZ_DEFAULT_HOUR_MSK),
-            "minute": details.get("minute", DAILY_QUIZ_DEFAULT_MINUTE_MSK),
-            "categories": details.get("categories") # Сохраняем None как null в JSON
+    for cid, details in state.daily_q_subs.items():
+        data_to_save[str(cid)] = {
+            "hour": details.get("hour", DQ_DEF_H),
+            "minute": details.get("minute", DQ_DEF_M),
+            "categories": details.get("categories")
         }
-
     try:
-        with open(DAILY_QUIZ_SUBSCRIPTIONS_FILE, 'w', encoding='utf-8') as f:
+        with open(DQS_F, 'w', encoding='utf-8') as f:
             json.dump(data_to_save, f, ensure_ascii=False, indent=4)
-        logger.debug(f"Подписки на ежедневную викторину сохранены в {DAILY_QUIZ_SUBSCRIPTIONS_FILE}. Количество: {len(data_to_save)}")
+        logger.debug(f"Подписки на ежедневную викторину сохранены в {DQS_F}. Кол-во: {len(data_to_save)}")
     except Exception as e:
-        logger.error(f"Ошибка сохранения подписок на ежедневную викторину: {e}", exc_info=True)
-
+        logger.error(f"Ошибка сохранения подписок: {e}", exc_info=True)

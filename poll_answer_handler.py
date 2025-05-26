@@ -3,13 +3,15 @@ from typing import Dict, Any
 from telegram import Update, PollAnswer, User as TelegramUser
 from telegram.ext import ContextTypes
 
-from config import logger # No specific constants needed here directly that were renamed
+from config import logger
 import state
-from data_manager import save_usr_data # Renamed
-from quiz_logic import send_next_q_in_sess # Renamed
-from utils import plural_pts # Renamed
+from data_manager import save_user_data
+from quiz_logic import send_next_question_in_session
+# quiz_logic.send_solution_if_available будет вызываться из обработчиков таймаутов
+from utils import pluralize_points
 
-MOTIV_MSGS = { # Renamed from MOTIVATIONAL_MESSAGES
+# Мотивационные сообщения
+MOTIVATIONAL_MESSAGES = {
     -1000: "💀 Да ты блин издеваешься, такое не возможно вообще! Попробуй не вытворять больше!",
     -500: "😵 Ну и нуб, прям с порога падает... Поправься уже!",
     -200: "🤦‍♂️ Опять промах? Кажется, тебе пора на тренировку.",
@@ -29,222 +31,222 @@ MOTIV_MSGS = { # Renamed from MOTIVATIONAL_MESSAGES
     5000: "💥 5000 очков! Э-э-это ты создатель вселенной?!",
 }
 
-async def _init_usr_score(cid_str: str, user: TelegramUser) -> Dict[str, Any]: # Renamed
-    uid_str = str(user.id)
-    state.usr_scores.setdefault(cid_str, {})
-    usr_data = state.usr_scores[cid_str].setdefault(uid_str, { # Renamed
+async def _ensure_user_initialized(chat_id_str: str, user: TelegramUser) -> Dict[str, Any]:
+    user_id_str = str(user.id)
+    state.user_scores.setdefault(chat_id_str, {})
+    user_data = state.user_scores[chat_id_str].setdefault(user_id_str, {
         "name": user.full_name, "score": 0,
         "answered_polls": set(), "milestones_achieved": set()
     })
-    # Always update name in case it changed
-    usr_data["name"] = user.full_name 
-    # Ensure sets are actually sets, in case of data corruption or old format
-    if not isinstance(usr_data.get("answered_polls"), set):
-        usr_data["answered_polls"] = set(usr_data.get("answered_polls", []))
-    if not isinstance(usr_data.get("milestones_achieved"), set):
-        usr_data["milestones_achieved"] = set(usr_data.get("milestones_achieved", []))
-    return usr_data
+    user_data["name"] = user.full_name
+    if not isinstance(user_data.get("answered_polls"), set):
+        user_data["answered_polls"] = set(user_data.get("answered_polls", []))
+    if not isinstance(user_data.get("milestones_achieved"), set):
+        user_data["milestones_achieved"] = set(user_data.get("milestones_achieved", []))
+    return user_data
 
-async def _proc_global_score_motiv( # Renamed
-    g_usr_data: Dict[str, Any], # Renamed
+async def _process_global_score_and_motivation(
+    global_user_data: Dict[str, Any],
     user: TelegramUser,
-    cid_str: str,
-    ans_poll_id: str, # Renamed
-    is_correct: bool, # Renamed
+    chat_id_str: str,
+    answered_poll_id: str,
+    is_answer_correct: bool,
     context: ContextTypes.DEFAULT_TYPE
 ) -> bool:
-    score_updated = False # Renamed
-    uid_str = str(user.id)
-    prev_score = g_usr_data["score"] # Renamed
+    score_updated_this_time = False
+    user_id_str = str(user.id)
+    previous_score = global_user_data["score"]
 
-    if ans_poll_id not in g_usr_data["answered_polls"]:
-        score_chg = 1 if is_correct else -1 # Renamed
-        g_usr_data["score"] += score_chg
-        g_usr_data["answered_polls"].add(ans_poll_id)
-        save_usr_data() # Save after score update and adding to answered_polls
-        score_updated = True
+    if answered_poll_id not in global_user_data["answered_polls"]:
+        score_change = 1 if is_answer_correct else -1
+        global_user_data["score"] += score_change
+        global_user_data["answered_polls"].add(answered_poll_id)
+        save_user_data()
+        score_updated_this_time = True
 
         logger.info(
-            f"User {user.full_name} ({uid_str}) answered poll {ans_poll_id} "
-            f"{'correctly' if is_correct else 'incorrectly'} in chat {cid_str}. " # Shorter
-            f"Global score change: {'+1' if score_chg > 0 else '-1'}. "
-            f"Total score: {g_usr_data['score']}."
+            f"Пользователь {user.full_name} ({user_id_str}) ответил на poll {answered_poll_id} "
+            f"{'правильно' if is_answer_correct else 'неправильно'} в чате {chat_id_str}. "
+            f"Изменение глобального счета: {('+1' if score_change > 0 else '-1')} очко. "
+            f"Общий счет: {global_user_data['score']}."
         )
 
-        cur_score = g_usr_data["score"] # Renamed
-        milestones_set = g_usr_data["milestones_achieved"] # Renamed
+        current_score = global_user_data["score"]
+        milestones_achieved_set = global_user_data["milestones_achieved"]
 
-        for threshold in sorted(MOTIV_MSGS.keys()):
-            if threshold in milestones_set: # Already achieved this milestone
+        for threshold in sorted(MOTIVATIONAL_MESSAGES.keys()):
+            if threshold in milestones_achieved_set:
                 continue
-            
-            send_motiv = False # Renamed
-            # Check for positive milestones crossed upwards
-            if threshold > 0 and prev_score < threshold <= cur_score:
-                send_motiv = True
-            # Check for negative milestones crossed downwards
-            elif threshold < 0 and prev_score > threshold >= cur_score: # Note: prev_score > threshold ensures it wasn't already "worse"
-                 send_motiv = True
+            send_motivational_message = False
+            if threshold > 0 and previous_score < threshold <= current_score:
+                send_motivational_message = True
+            elif threshold < 0 and previous_score > threshold >= current_score: # Для отрицательных порогов
+                 send_motivational_message = True
 
-            if send_motiv:
-                motiv_txt = f"{user.first_name}, {MOTIV_MSGS[threshold]}" # Renamed
-                logger.debug(f"Sending motiv msg to {uid_str} in {cid_str}. Text: '{motiv_txt}'")
+            if send_motivational_message:
+                motivational_text = f"{user.first_name}, {MOTIVATIONAL_MESSAGES[threshold]}"
+                logger.debug(f"Attempting to send motivational message to {user_id_str} in {chat_id_str}. Text: '{motivational_text}'")
                 try:
-                    await context.bot.send_message(chat_id=cid_str, text=motiv_txt)
-                    milestones_set.add(threshold) # Add to achieved set
-                    save_usr_data() # Save after adding milestone
+                    await context.bot.send_message(chat_id=chat_id_str, text=motivational_text)
+                    milestones_achieved_set.add(threshold)
+                    save_user_data()
                 except Exception as e:
-                    logger.error(f"Failed to send motiv msg for {threshold} pts to {uid_str}: {e}")
+                    logger.error(f"Не удалось отправить мотивационное сообщение для {threshold} очков пользователю {user_id_str}: {e}")
     else:
         logger.debug(
-            f"User {user.full_name} ({uid_str}) already answered poll {ans_poll_id}. "
-            "Global score not changed."
+            f"Пользователь {user.full_name} ({user_id_str}) уже отвечал на poll {answered_poll_id}. "
+            "Глобальный счет не изменен этим ответом."
         )
-    return score_updated
+    return score_updated_this_time
 
-async def _send_single_q_feedback( # Renamed
+async def _send_single_quiz_feedback(
     user: TelegramUser,
-    cid_str: str,
-    is_correct: bool,
-    g_usr_score: int, # Renamed
+    chat_id_str: str,
+    is_answer_correct: bool,
+    global_user_score: int,
     context: ContextTypes.DEFAULT_TYPE
 ):
-    res_txt = "верно! ✅" if is_correct else "неверно. ❌" # Renamed
-    reply_txt = ( # Renamed
-        f"{user.first_name}, {res_txt}\n"
-        f"Твой рейтинг в чате: {plural_pts(g_usr_score)}." # Renamed
+    result_text = "верно! ✅" if is_answer_correct else "неверно. ❌"
+    reply_text = (
+        f"{user.first_name}, {result_text}\n"
+        f"Твой текущий рейтинг в этом чате: {pluralize_points(global_user_score)}."
     )
-    logger.debug(f"Sending single quiz result to {str(user.id)} in {cid_str}. Text: '{reply_txt}'")
+    logger.debug(f"Attempting to send single quiz result to {str(user.id)} in {chat_id_str}. Text: '{reply_text}'")
     try:
-        await context.bot.send_message(chat_id=cid_str, text=reply_txt)
+        await context.bot.send_message(chat_id=chat_id_str, text=reply_text)
     except Exception as e:
-        logger.error(f"Failed to send rating msg for /quiz to {user.id} in {cid_str}: {e}", exc_info=True)
+        logger.error(f"Не удалось отправить сообщение с рейтингом для /quiz пользователю {str(user.id)} в чат {chat_id_str}: {e}", exc_info=True)
 
-async def _proc_q10_poll_answer( # Renamed
+async def _handle_quiz10_session_poll_answer(
     user: TelegramUser,
-    ans_poll_id: str,
-    poll_info: Dict[str, Any], # Renamed
-    is_correct: bool,
-    q_sess_idx: int, # Renamed, -1 if not applicable
+    answered_poll_id: str,
+    poll_info_from_state: Dict[str, Any],
+    is_answer_correct: bool,
+    question_session_idx: int,
     context: ContextTypes.DEFAULT_TYPE
 ):
-    uid_str = str(user.id)
-    # associated_quiz_session_chat_id is the chat_id where the session is running
-    sess_cid_from_poll = poll_info.get("associated_quiz_session_chat_id") # Renamed
+    user_id_str = str(user.id)
+    session_chat_id_from_poll = poll_info_from_state.get("associated_quiz_session_chat_id")
 
-    if not sess_cid_from_poll:
-        logger.error(f"Poll {ans_poll_id} is quiz_session, but associated_quiz_session_chat_id missing.")
+    if not session_chat_id_from_poll:
+        logger.error(f"Poll {answered_poll_id} marked as quiz_session, but associated_quiz_session_chat_id is missing.")
         return
 
-    active_sess = state.cur_q_sessions.get(sess_cid_from_poll) # Renamed
-    if not active_sess:
+    active_session = state.current_quiz_session.get(session_chat_id_from_poll)
+    if not active_session:
         logger.warning(
-            f"/quiz10 session for {sess_cid_from_poll} not found (poll {ans_poll_id}). "
-            f"Answer from {user.full_name} processed only for global score."
+            f"Сессия /quiz10 для чата {session_chat_id_from_poll} не найдена, "
+            f"хотя poll {answered_poll_id} указывает на нее. Ответ от {user.full_name} обработан только для глобального счета."
         )
         return
 
-    # Initialize session-specific scores for the user if not present
-    sess_scores_root = active_sess.setdefault("session_scores", {})
-    sess_usr_data = sess_scores_root.setdefault( # Renamed
-        uid_str,
+    session_scores_root = active_session.setdefault("session_scores", {})
+    session_user_data = session_scores_root.setdefault(
+        user_id_str,
         {"name": user.full_name, "score": 0, "answered_this_session_polls": set()}
     )
-    sess_usr_data["name"] = user.full_name # Update name
-    # Ensure 'answered_this_session_polls' is a set
-    if not isinstance(sess_usr_data.get("answered_this_session_polls"), set):
-         sess_usr_data["answered_this_session_polls"] = set(sess_usr_data.get("answered_this_session_polls", []))
+    session_user_data["name"] = user.full_name
+    if not isinstance(session_user_data.get("answered_this_session_polls"), set):
+         session_user_data["answered_this_session_polls"] = set(session_user_data.get("answered_this_session_polls", []))
 
-    # Update session score if this poll hasn't been answered by this user in this session yet
-    if ans_poll_id not in sess_usr_data["answered_this_session_polls"]:
-        sess_score_chg = 1 if is_correct else -1 # Renamed
-        sess_usr_data["score"] += sess_score_chg
-        sess_usr_data["answered_this_session_polls"].add(ans_poll_id)
+    if answered_poll_id not in session_user_data["answered_this_session_polls"]:
+        session_score_change = 1 if is_answer_correct else -1
+        session_user_data["score"] += session_score_change
+        session_user_data["answered_this_session_polls"].add(answered_poll_id)
         logger.info(
-            f"User {user.full_name} ({uid_str}) got {('+1' if sess_score_chg > 0 else '-1')} pt in session {sess_cid_from_poll} "
-            f"for poll {ans_poll_id} (q {q_sess_idx + 1 if q_sess_idx != -1 else 'N/A'}). Session score: {sess_usr_data['score']}."
+            f"Пользователь {user.full_name} ({user_id_str}) получил "
+            f"{('+1' if session_score_change > 0 else '-1')} очко в сессии /quiz10 {session_chat_id_from_poll} "
+            f"за poll {answered_poll_id} (вопрос {question_session_idx + 1}). "
+            f"Сессионный счет: {session_user_data['score']}."
         )
 
-    # Check if this answer is for the *current* poll of the session
-    # and if the next question hasn't been triggered by another user's answer yet.
-    if active_sess.get("current_poll_id") == ans_poll_id:
-        is_last_q = poll_info.get("is_last_question", False)
+    # Early transition / last question handling
+    if active_session.get("current_poll_id") == answered_poll_id:
+        is_last_q = poll_info_from_state.get("is_last_question", False)
 
-        # Trigger next question only once per poll, on first valid answer
-        if not poll_info.get("next_q_triggered_by_answer", False):
-            poll_info["next_q_triggered_by_answer"] = True # Mark that this poll has triggered a next q
-            poll_info["processed_by_early_answer"] = True # Mark for the on_sess_poll_end logic
+        # next_q_triggered_by_answer: флаг, чтобы только первый ответивший инициировал переход/логику
+        if not poll_info_from_state.get("next_q_triggered_by_answer", False):
+            poll_info_from_state["next_q_triggered_by_answer"] = True # Помечаем, что этот ответ инициировал логику
 
             if not is_last_q:
                 logger.info(
-                    f"Early answer on NOT last poll {ans_poll_id} (q {q_sess_idx + 1 if q_sess_idx != -1 else 'N/A'}) "
-                    f"in session {sess_cid_from_poll}. Next Q sent IMMEDIATELY. "
-                    f"Poll {ans_poll_id} remains open; solution at its timeout."
+                    f"Досрочный ответ на НЕ последний poll {answered_poll_id} (вопрос {question_session_idx + 1}) "
+                    f"в сессии {session_chat_id_from_poll}. Следующий вопрос будет отправлен НЕМЕДЛЕННО. "
+                    f"Текущий poll {answered_poll_id} останется открытым до своего таймаута, пояснение по нему будет тогда же."
                 )
-                await send_next_q_in_sess(context, sess_cid_from_poll) # Renamed
-            else: # It's the last question
+                # Помечаем, что этот poll был обработан досрочно,
+                # чтобы handle_current_poll_end не запускал следующий вопрос повторно
+                poll_info_from_state["processed_by_early_answer"] = True
+
+                # MODIFICATION: Remove this block.
+                # The timeout job for the answered_poll_id (which is active_session.get("next_question_job") at this point)
+                # MUST run to handle the solution display and poll cleanup at its original timeout.
+                #
+                # if job := active_session.get("next_question_job"):
+                #     try: job.schedule_removal()
+                #     except Exception: pass
+                #     active_session["next_question_job"] = None
+                #     logger.debug(f"Таймаут-job для poll {answered_poll_id} помечен на удаление из-за досрочного ответа.") # This log is now incorrect
+
+                # НЕ удаляем poll_info_from_state из state.current_poll здесь.
+                # НЕ вызываем send_solution_if_available здесь.
+                # handle_current_poll_end позаботится о пояснении и удалении poll_info.
+                await send_next_question_in_session(context, session_chat_id_from_poll)
+            else: # This is the last question
                 logger.info(
-                    f"Early answer on LAST poll {ans_poll_id} (q {q_sess_idx + 1 if q_sess_idx != -1 else 'N/A'}) "
-                    f"in session {sess_cid_from_poll}. Poll {ans_poll_id} remains open. "
-                    f"Solution and results will be shown at its timeout (via on_sess_poll_end)."
+                    f"Досрочный ответ на ПОСЛЕДНИЙ poll {answered_poll_id} (вопрос {question_session_idx + 1}) "
+                    f"в сессии {session_chat_id_from_poll}. Этот poll {answered_poll_id} останется открытым до своего таймаута. "
+                    f"Пояснение и результаты будут по таймауту этого вопроса."
                 )
-                # No need to call send_next_q_in_sess, results are handled by on_sess_poll_end
+                # Также помечаем, чтобы handle_current_poll_end знал (хотя для последнего это менее критично)
+                poll_info_from_state["processed_by_early_answer"] = True
+                # Таймаут-job (handle_current_poll_end) сам обработает пояснение и вызовет show_quiz_session_results.
+                # Do not cancel the job for this last poll.
     else:
         logger.debug(
-            f"Answer to poll {ans_poll_id} in session {sess_cid_from_poll} received, "
-            f"but current active poll is {active_sess.get('current_poll_id')}. "
-            "Early transition not triggered by this specific answer."
+            f"Ответ на poll {answered_poll_id} в сессии {session_chat_id_from_poll} получен, "
+            f"но текущий активный poll сессии уже {active_session.get('current_poll_id')}. "
+            "Досрочный переход не инициирован этим ответом."
         )
 
-
-async def on_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE): # Renamed
+async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.poll_answer:
-        logger.debug("on_poll_answer: update.poll_answer is None, ignored.")
+        logger.debug("handle_poll_answer: update.poll_answer is None, проигнорировано.")
         return
 
-    poll_ans: PollAnswer = update.poll_answer # Renamed
-    user: TelegramUser = poll_ans.user
-    ans_poll_id: str = poll_ans.poll_id # Renamed
+    poll_answer: PollAnswer = update.poll_answer
+    user: TelegramUser = poll_answer.user
+    answered_poll_id: str = poll_answer.poll_id
 
-    poll_info = state.cur_polls.get(ans_poll_id) # Renamed
-    if not poll_info:
+    poll_info_from_state = state.current_poll.get(answered_poll_id)
+    if not poll_info_from_state:
         logger.debug(
-            f"Info for poll_id {ans_poll_id} not found in state.cur_polls. "
-            f"Answer from {user.full_name} ({user.id}) ignored."
+            f"Информация для poll_id {answered_poll_id} не найдена в state.current_poll. "
+            f"Ответ от {user.full_name} ({user.id}) проигнорирован (опрос мог быть завершен/удален)."
         )
         return
 
-    # chat_id where the poll was sent
-    cid_str = poll_info["chat_id"] 
-    # Index of the question within its session (for /quiz10 or daily_quiz)
-    q_sess_idx = poll_info.get("question_session_index", -1) # Renamed, -1 if not applicable
+    chat_id_str = poll_info_from_state["chat_id"]
+    question_session_idx = poll_info_from_state.get("question_session_index", -1)
 
-    # Initialize global score for the user in this chat if it doesn't exist
-    g_usr_data = await _init_usr_score(cid_str, user) # Renamed
+    global_user_data = await _ensure_user_initialized(chat_id_str, user)
 
-    is_correct = (len(poll_ans.option_ids) == 1 and # User selected only one option
-                  poll_ans.option_ids[0] == poll_info["correct_index"]) # Renamed
+    is_answer_correct = (len(poll_answer.option_ids) == 1 and
+                         poll_answer.option_ids[0] == poll_info_from_state["correct_index"])
 
-    # Update global score and send motivational messages if thresholds are crossed
-    score_updated = await _proc_global_score_motiv( # Renamed
-        g_usr_data, user, cid_str, ans_poll_id, is_correct, context
+    score_updated_this_time = await _process_global_score_and_motivation(
+        global_user_data, user, chat_id_str, answered_poll_id, is_answer_correct, context
     )
 
-    is_q10_poll = poll_info.get("quiz_session", False) # Renamed
-    is_daily_q_poll = poll_info.get("daily_quiz", False) # Renamed
+    is_quiz10_session_poll = poll_info_from_state.get("quiz_session", False)
+    is_daily_quiz_poll = poll_info_from_state.get("daily_quiz", False)
 
-    # For single /quiz polls, send immediate feedback if score was updated
-    if not is_q10_poll and not is_daily_q_poll and score_updated:
-        await _send_single_q_feedback( # Renamed
-            user, cid_str, is_correct, g_usr_data["score"], context
+    if not is_quiz10_session_poll and not is_daily_quiz_poll and score_updated_this_time:
+        await _send_single_quiz_feedback(
+            user, chat_id_str, is_answer_correct, global_user_data["score"], context
         )
 
-    # If this poll is part of a /quiz10 session, process session-specific logic
-    if is_q10_poll:
-        await _proc_q10_poll_answer( # Renamed
-            user, ans_poll_id, poll_info, is_correct, q_sess_idx, context
+    if is_quiz10_session_poll:
+        await _handle_quiz10_session_poll_answer(
+            user, answered_poll_id, poll_info_from_state, is_answer_correct, question_session_idx, context
         )
-    
-    # Note: For daily_quiz, score updates are global. No immediate "next question" logic here
-    # as daily_quiz questions are sent on a fixed interval by a job.
-    # Motivational messages from _proc_global_score_motiv cover daily quiz answers too.

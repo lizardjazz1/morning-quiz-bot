@@ -2,97 +2,117 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 
+# Импорты из других модулей проекта
 from config import logger
-import state
-from utils import plural_pts # Renamed function
+import state # Для доступа к user_scores
+from utils import pluralize_points
 
-def get_player_display(p_name: str, p_score: int, sep: str = " - ") -> str: # Renamed args
+def get_player_display(player_name: str, player_score: int, separator: str = " - ") -> str:
     icon = ""
-    if p_score > 0:
-        if p_score >= 1000: icon = "🌟"
-        elif p_score >= 500: icon = "🏆"
-        elif p_score >= 100: icon = "👑"
-        elif p_score >= 50: icon = "🔥"
-        elif p_score >= 10: icon = "👍"
-        else: icon = "🙂"
-    elif p_score < 0: icon = "💀"
-    else: icon = "😐"
-    # Adjusted separator logic to match prompt example output for quiz_logic.py
-    if sep == ":":
-         return f"{icon} {p_name}{sep} {plural_pts(p_score)}"
-    return f"{icon} {p_name} {sep} {plural_pts(p_score)}"
+    if player_score > 0:
+        if player_score >= 1000: icon = "🌟" # Легенда
+        elif player_score >= 500: icon = "🏆" # Чемпион
+        elif player_score >= 100: icon = "👑" # Лапочка
+        elif player_score >= 50: icon = "🔥" # Огонь
+        elif player_score >= 10: icon = "👍" # Новичок с очками
+        else: icon = "🙂" # Мало очков
+    elif player_score < 0:
+        icon = "💀" # Отрицательный рейтинг
+    else: # player_score == 0
+        icon = "😐" # Нейтрально
 
+    # Используем f-string, чтобы корректно вставить separator
+    if separator == ":": # Обычно для сессионного рейтинга
+        return f"{icon} {player_name}{separator} {pluralize_points(player_score)}"
+    else: # Для общего рейтинга
+        return f"{icon} {player_name} {separator} {pluralize_points(player_score)}"
 
 async def rating_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.effective_chat: return
-    cid_str = str(update.effective_chat.id) # Renamed
-    reply_txt = "" # Renamed
+    if not update.message or not update.effective_chat:
+        logger.warning("rating_command: message or effective_chat is None.")
+        return
+    chat_id_str = str(update.effective_chat.id)
+    reply_text_to_send = ""
 
-    if cid_str not in state.usr_scores or not state.usr_scores[cid_str]:
-        reply_txt = "В этом чате еще нет статистики игроков."
+    if chat_id_str not in state.user_scores or not state.user_scores[chat_id_str]:
+        reply_text_to_send = "В этом чате еще нет статистики игроков."
     else:
-        sorted_sc_list = sorted( # Renamed
-            state.usr_scores[cid_str].items(),
+        # Сортируем по убыванию очков, затем по имени (для стабильности при равных очках)
+        sorted_scores_list = sorted(
+            state.user_scores[chat_id_str].items(),
             key=lambda item: (-item[1].get("score", 0), item[1].get("name", "").lower())
         )
-        if not sorted_sc_list:
-            reply_txt = "Пока нет игроков с очками в этом чате."
+
+        if not sorted_scores_list:
+            reply_text_to_send = "Пока нет игроков с набранными очками в этом чате."
         else:
-            top_parts = ["📊 Топ-10 игроков в этом чате (/rating):\n"] # Renamed
-            for i, (uid, data) in enumerate(sorted_sc_list[:10]): # Renamed user_id to uid
-                p_name = data.get('name', f'Игрок {uid}') # Renamed
-                p_score = data.get('score', 0) # Renamed
-                rank_pfx = f"{i+1}." # Renamed
-                if p_score > 0: # Check score before assigning medal
-                    if i == 0: rank_pfx = "🥇"
-                    elif i == 1: rank_pfx = "🥈"
-                    elif i == 2: rank_pfx = "🥉"
-                top_parts.append(f"{rank_pfx} {get_player_display(p_name, p_score)}")
-            reply_txt = "\n".join(top_parts)
-    await update.message.reply_text(reply_txt)
+            top_players_text_parts = ["📊 Топ-10 игроков в этом чате (/rating):\n"]
+            for i, (user_id, data) in enumerate(sorted_scores_list[:10]):
+                player_name = data.get('name', f'Игрок {user_id}')
+                player_score = data.get('score', 0)
+                rank_prefix = f"{i+1}."
+                # Медальки для первых трех мест с положительным счетом
+                if player_score > 0:
+                    if i == 0: rank_prefix = "🥇"
+                    elif i == 1: rank_prefix = "🥈"
+                    elif i == 2: rank_prefix = "🥉"
+                
+                top_players_text_parts.append(f"{rank_prefix} {get_player_display(player_name, player_score)}")
+            reply_text_to_send = "\n".join(top_players_text_parts)
+
+    logger.debug(f"Attempting to send chat rating to {chat_id_str}. Text: '{reply_text_to_send[:100]}...'")
+    await update.message.reply_text(reply_text_to_send)
 
 async def global_top_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.effective_chat: return
-    # cid_str = str(update.effective_chat.id) # Not used
-    reply_txt = ""
+    if not update.message or not update.effective_chat: # effective_chat нужен для chat_id в логах
+         logger.warning("global_top_command: message or effective_chat is None.")
+         return
+    
+    chat_id_str = str(update.effective_chat.id) # Для логгирования, откуда пришла команда
+    reply_text_to_send = ""
 
-    if not state.usr_scores:
-        reply_txt = "Пока нет данных о рейтингах игроков."
+    if not state.user_scores:
+        reply_text_to_send = "Пока нет данных о рейтингах игроков ни в одном чате."
     else:
-        agg_g_scores: Dict[str, Dict[str, Any]] = {} # Renamed
-        for users_in_chat in state.usr_scores.values(): # Renamed
-            for uid, data in users_in_chat.items(): # Renamed user_id to uid
-                usr_name = data.get("name", f"Игрок {uid}") # Renamed
-                chat_score = data.get("score", 0) # Renamed
+        aggregated_global_scores: Dict[str, Dict[str, Any]] = {} # {user_id: {"name": str, "total_score": int}}
+        for users_in_chat_data in state.user_scores.values(): # Итерируемся по значениям (словарям юзеров в чате)
+            for user_id, data in users_in_chat_data.items():
+                user_name = data.get("name", f"Игрок {user_id}")
+                user_chat_score = data.get("score", 0)
 
-                if uid not in agg_g_scores:
-                    agg_g_scores[uid] = {"name": usr_name, "total_score": 0}
+                if user_id not in aggregated_global_scores:
+                    aggregated_global_scores[user_id] = {"name": user_name, "total_score": 0}
                 
-                # Use the longest or non-generic name encountered for the user
-                current_agg_name = agg_g_scores[uid]["name"]
-                if len(usr_name) > len(current_agg_name) or \
-                   (current_agg_name.startswith("Игрок ") and not usr_name.startswith("Игрок ")):
-                     agg_g_scores[uid]["name"] = usr_name
-                
-                agg_g_scores[uid]["total_score"] += chat_score
+                aggregated_global_scores[user_id]["total_score"] += user_chat_score
+                # Обновляем имя на самое "полное" или последнее встреченное, если текущее короче
+                if len(user_name) > len(aggregated_global_scores[user_id]["name"]):
+                     aggregated_global_scores[user_id]["name"] = user_name
+                # Или если имя было "Игрок X", а стало нормальным
+                elif aggregated_global_scores[user_id]["name"].startswith("Игрок ") and not user_name.startswith("Игрок "):
+                     aggregated_global_scores[user_id]["name"] = user_name
 
 
-        if not agg_g_scores:
-            reply_txt = "Нет игроков для глобального рейтинга."
+        if not aggregated_global_scores:
+            reply_text_to_send = "Нет игроков для отображения в глобальном рейтинге."
         else:
-            sorted_g_scores = sorted( # Renamed
-                agg_g_scores.items(),
+            # Сортируем по убыванию общего счета, затем по имени
+            sorted_global_scores = sorted(
+                aggregated_global_scores.items(),
                 key=lambda item: (-item[1]["total_score"], item[1]["name"].lower())
             )
-            g_top_parts = ["🌍 Глобальный Топ-10 игроков (/globaltop):\n"] # Renamed
-            for i, (uid, data) in enumerate(sorted_g_scores[:10]):
-                p_name = data["name"]
-                total_score = data["total_score"] # Renamed
-                rank_pfx = f"{i+1}."
-                if total_score > 0: # Check score before assigning medal
-                    if i == 0: rank_pfx = "🥇"
-                    elif i == 1: rank_pfx = "🥈"
-                    elif i == 2: rank_pfx = "🥉"
-                g_top_parts.append(f"{rank_pfx} {get_player_display(p_name, total_score)}")
-            reply_txt = "\n".join(g_top_parts)
-    await update.message.reply_text(reply_txt)
+
+            global_top_text_parts = ["🌍 Глобальный Топ-10 игроков (/globaltop):\n"]
+            for i, (user_id, data) in enumerate(sorted_global_scores[:10]):
+                player_name = data["name"]
+                player_total_score = data["total_score"]
+                rank_prefix = f"{i+1}."
+                if player_total_score > 0:
+                    if i == 0: rank_prefix = "🥇"
+                    elif i == 1: rank_prefix = "🥈"
+                    elif i == 2: rank_prefix = "🥉"
+                
+                global_top_text_parts.append(f"{rank_prefix} {get_player_display(player_name, player_total_score)}")
+            reply_text_to_send = "\n".join(global_top_text_parts)
+            
+    logger.debug(f"Attempting to send global rating (invoked in {chat_id_str}). Text: '{reply_text_to_send[:100]}...'")
+    await update.message.reply_text(reply_text_to_send)

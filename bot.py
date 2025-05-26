@@ -1,146 +1,208 @@
 # bot.py
-import asyncio
-from datetime import datetime
 
-from telegram.ext import (Application, CommandHandler, PollAnswerHandler, CallbackQueryHandler,
-                          MessageHandler, filters, Defaults)
-from telegram.constants import ParseMode
-import pytz # Для работы с часовыми поясами
+# ├── bot.py                 # Основная точка входа, запуск бота, регистрация обработчиков
+# ├── config.py              # Константы, токен, настройка логгера
+# ├── state.py               # Глобальные переменные состояния (quiz_data, user_scores, и т.д.)
+# ├── data_manager.py        # Функции для загрузки/сохранения вопросов и данных пользователей
+# ├── quiz_logic.py          # Логика викторины (случайные вопросы, подготовка опроса, управление сессиями /quiz10)
+# ├── utils.py               # Вспомогательные функции (например, pluralize_points)
+# ├── handlers/
+# │   ├── __init__.py
+# │   ├── common_handlers.py   # Для /start, /categories
+# │   ├── quiz_single_handler.py # Для /quiz
+# │   ├── quiz_session_handlers.py # Для /quiz10, /quiz10notify, /stopquiz и связанной логики
+# │   ├── rating_handlers.py   # Для /rating, /globaltop
+# │   └── daily_quiz_handlers.py # Для ежедневной викторины
+# ├── poll_answer_handler.py # Обработчик ответов на опросы
+# └── .env                   # Для BOT_TOKEN
+# └── questions.json         # Наш файл с вопросами
+# └── users.json             # Данные пользователей
+# └── daily_quiz_subscriptions.json # Данные о подписках на ежедневную викторину
 
-from config import TOKEN, logger
-import state
-from data_manager import load_quiz_data, load_user_scores, save_user_scores, \
-                         load_daily_quiz_subscriptions, save_daily_quiz_subscriptions
-from quiz_logic import handle_poll_answer
-from handlers.quiz_session_handlers import (quiz_command, quiz10_command, stop_quiz_command,
-                                            show_quiz_categories_command, handle_quiz10_category_selection,
-                                            quiz10_notify_command)
-from handlers.rating_handlers import top_command, my_stats_command, clear_stats_command
-from handlers.admin_handlers import reload_questions_command, get_log_command, get_users_command, \
-                                    get_daily_subs_command, admin_help_command, broadcast_command
+import datetime
+import pytz 
+
+from telegram.ext import (Application, ApplicationBuilder, CommandHandler, PollAnswerHandler,
+                          CallbackQueryHandler, ContextTypes, JobQueue)
+from telegram import Update 
+
+from config import (TOKEN, logger,
+                    CALLBACK_DATA_PREFIX_QUIZ10_CATEGORY_SHORT,
+                    CALLBACK_DATA_QUIZ10_RANDOM_CATEGORY,
+                    CALLBACK_DATA_PREFIX_DAILY_QUIZ_CATEGORY_SHORT, # New import
+                    CALLBACK_DATA_DAILY_QUIZ_RANDOM_CATEGORY) # New import
+import state 
+from data_manager import load_questions, load_user_data, load_daily_quiz_subscriptions
+
+from handlers.common_handlers import start_command, categories_command
+from handlers.quiz_single_handler import quiz_command
+from handlers.quiz_session_handlers import (quiz10_command, handle_quiz10_category_selection,
+                                            quiz10notify_command, stop_quiz_command)
+from handlers.rating_handlers import rating_command, global_top_command
 from handlers.daily_quiz_handlers import (subscribe_daily_quiz_command, unsubscribe_daily_quiz_command,
                                           set_daily_quiz_time_command, set_daily_quiz_categories_command,
-                                          show_daily_quiz_settings_command, handle_daily_quiz_category_selection,
-                                          _schedule_or_reschedule_daily_quiz_for_chat) # Импорт для инициализации
+                                          show_daily_quiz_settings_command, _schedule_or_reschedule_daily_quiz_for_chat,
+                                          handle_daily_quiz_category_selection) # New import
 
-async def post_init(application: Application):
-    """Выполняется после инициализации Application и его компонентов (например, job_queue)."""
-    logger.info("post_init: Загрузка подписок на ежедневные викторины...")
-    load_daily_quiz_subscriptions()
-    if state.daily_quiz_subscriptions:
-        logger.info(f"Загружено {len(state.daily_quiz_subscriptions)} подписок.")
-        # Перепланируем все сохраненные ежедневные викторины
-        for chat_id_str in state.daily_quiz_subscriptions.keys():
-            # Не используем await здесь, т.к. _schedule_or_reschedule ожидает Application, а не его корутину
-            # Он сам по себе асинхронный внутри, если нужно.
-            # И _schedule_or_reschedule_daily_quiz_for_chat уже async
+from poll_answer_handler import handle_poll_answer
+
+async def error_handler_callback(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.error("Произошла ошибка при обработке обновления:", exc_info=context.error)
+
+async def schedule_all_daily_quizzes_on_startup(application: Application):
+    if not state.daily_quiz_subscriptions:
+        logger.info("Нет чатов, подписанных на ежедневную викторину. Планирование не требуется.")
+        return
+
+    logger.info(f"Планирование ежедневных викторин для {len(state.daily_quiz_subscriptions)} подписанных чатов...")
+    scheduled_count = 0
+    for chat_id_str in state.daily_quiz_subscriptions.keys():
+        try:
             await _schedule_or_reschedule_daily_quiz_for_chat(application, chat_id_str)
-            # Добавил await, так как функция сама по себе async
-    else:
-        logger.info("Подписки на ежедневные викторины не найдены или пусты.")
+            scheduled_count += 1
+        except Exception as e:
+            logger.error(f"Ошибка при планировании ежедневной викторины для чата {chat_id_str} при запуске: {e}", exc_info=True)
+    logger.info(f"Завершено планирование ежедневных викторин при запуске. Запланировано для {scheduled_count} чатов.")
+# --- Основная функция для запуска бота ---
+async def main_async(): # Переименовано в main_async для использования await
+    if not TOKEN:
+        print("Токен BOT_TOKEN не найден! Пожалуйста, проверьте ваш .env файл и переменную BOT_TOKEN.")
+        return
 
-    # Установка команд бота
-    commands = [
-        ("quiz", "🎲 Случайный вопрос"),
-        ("quiz10", "🔟 Викторина из 10 вопросов (можно указать категорию)"),
-        ("stopquiz", "⛔ Остановить текущую/отменить запланированную викторину (/quiz10, /quiz10notify, ежедневную)"),
-        ("top", "🏆 Показать топ-10 игроков чата"),
-        ("mystats", "📊 Моя статистика в этом чате"),
-        ("quiz10notify", "🗓️ Запланировать /quiz10 с уведомлением ([мин_до_старта] [время_на_ответ] [категория])"),
+    logger.info("Загрузка вопросов...")
+    load_questions()
+    logger.info("Загрузка данных пользователей...")
+    load_user_data()
+    logger.info("Загрузка подписок на ежедневную викторину...")
+    load_daily_quiz_subscriptions()
 
-        ("subdaily", "📅 Подписаться на ежедневную викторину (админ)"),
-        ("unsubdaily", "✖️ Отписаться от ежедневной викторины (админ)"),
-        ("setdailyquiztime", "⏰ Установить время ежедневной викторины (ЧЧ:ММ МСК, админ)"),
-        ("setdailyquizcategories", "🏷️ Установить категории для ежедневной викторины (админ)"),
-        ("showdailyquizsettings", "⚙️ Показать настройки ежедневной викторины"),
+    application = ApplicationBuilder().token(TOKEN).build()
+    job_queue: JobQueue | None = application.job_queue # JobQueue инициализируется через build()
 
-        ("adminhelp", "🛠️ Справка по админ-командам (для владельца бота)"),
-        # ("reloadquestions", "🔄 Перезагрузить вопросы (владелец бота)"), # Скрыл, есть в adminhelp
-        # ("getlog", "📄 Получить лог-файл (владелец бота)"), # Скрыл, есть в adminhelp
-        # ("getusers", "👥 Получить файл пользователей (владелец бота)"), # Скрыл, есть в adminhelp
-        # ("getdailysubs", "📋 Получить файл подписок на ежедневные (владелец бота)"), # Скрыл, есть в adminhelp
-        # ("clearstats", "🗑️ Очистить статистику чата (админ)"), # Скрыл, есть в adminhelp
-        # ("broadcast", "📢 Рассылка сообщения (владелец бота)") # Скрыл, есть в adminhelp
-    ]
-    await application.bot.set_my_commands(commands)
-    logger.info("Команды бота установлены.")
+    if not job_queue: # Эта проверка скорее для спокойствия, build() должен его создать
+        logger.critical("JobQueue не инициализирован после ApplicationBuilder().build(). Задачи не будут работать.")
+        return
 
+    # Регистрация общих команд
+    application.add_handler(CommandHandler("help", start_command)) # CHANGED: start -> help
+    application.add_handler(CommandHandler("categories", categories_command))
 
-async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Логирует ошибки, вызванные обновлениями."""
-    logger.error(msg="Исключение при обработке обновления:", exc_info=context.error)
-    # Можно добавить отправку сообщения пользователю или разработчику при критических ошибках
-
-
-def main() -> None:
-    """Запускает бота."""
-    logger.info("Запуск бота...")
-
-    # Загрузка данных при старте
-    load_quiz_data()
-    load_user_scores()
-    # load_daily_quiz_subscriptions() # Перенесено в post_init
-
-    # Установка настроек по умолчанию для всех обработчиков (например, parse_mode)
-    defaults = Defaults(parse_mode=ParseMode.HTML, tzinfo=pytz.timezone('Europe/Moscow'))
-
-    application = Application.builder().token(TOKEN).defaults(defaults).post_init(post_init).build()
-
-    # --- Регистрация обработчиков ---
-
-    # Команды викторин и сессий
+    # Регистрация команды для одиночного квиза
     application.add_handler(CommandHandler("quiz", quiz_command))
-    application.add_handler(CommandHandler("quiz10", quiz10_command)) # Для прямого вызова с аргументами
+
+    # Регистрация команд для сессий квиза
+    application.add_handler(CommandHandler("quiz10", quiz10_command))
+    application.add_handler(CommandHandler("quiz10notify", quiz10notify_command))
     application.add_handler(CommandHandler("stopquiz", stop_quiz_command))
-    application.add_handler(CommandHandler("quizcategories", show_quiz_categories_command)) # Альяс для show_quiz_categories_command
-    application.add_handler(CommandHandler("qcat", show_quiz_categories_command)) # Короткий альяс
-    
-    # Callback для выбора категории /quiz10
-    application.add_handler(CallbackQueryHandler(handle_quiz10_category_selection, pattern=f"^{CALLBACK_DATA_PREFIX_QUIZ10_CATEGORY_SHORT}|^({CALLBACK_DATA_QUIZ10_RANDOM_CATEGORY})$"))
 
-    # Команда для уведомления /quiz10notify
-    application.add_handler(CommandHandler("quiz10notify", quiz10_notify_command))
+    # Регистрация команд для рейтинга
+    application.add_handler(CommandHandler("rating", rating_command))
+    application.add_handler(CommandHandler("globaltop", global_top_command))
 
-    # Обработчик ответов на опросы (для всех викторин)
+    # Регистрация команд для ежедневной викторины
+    application.add_handler(CommandHandler("subdaily", subscribe_daily_quiz_command)) # CHANGED: subscribedailyquiz -> subdaily
+    application.add_handler(CommandHandler("unsubdaily", unsubscribe_daily_quiz_command)) # CHANGED: unsubscribedailyquiz -> unsubdaily
+    application.add_handler(CommandHandler("setdailyquiztime", set_daily_quiz_time_command))
+    application.add_handler(CommandHandler("setdailyquizcategories", set_daily_quiz_categories_command))
+    application.add_handler(CommandHandler("showdailyquizsettings", show_daily_quiz_settings_command))
+
+    # Обработчик для кнопок выбора категории /quiz10
+    application.add_handler(CallbackQueryHandler(handle_quiz10_category_selection,
+                                                 pattern=f"^{CALLBACK_DATA_PREFIX_QUIZ10_CATEGORY_SHORT}|^({CALLBACK_DATA_QUIZ10_RANDOM_CATEGORY})$"))
+
     application.add_handler(PollAnswerHandler(handle_poll_answer))
+    application.add_error_handler(error_handler)
 
-    # Команды рейтинга
-    application.add_handler(CommandHandler("top", top_command))
-    application.add_handler(CommandHandler("mystats", my_stats_command))
+    # Планирование всех ежедневных викторин при запуске
+    await schedule_all_daily_quizzes_on_startup(application) # Используем await
 
-    # Команды ежедневной викторины
+    logger.info("Бот успешно настроен и запускается...")
+    # Используем run_polling с await, если это асинхронная функция в вашей версии PTB
+    # Для PTB v20+ run_polling() обычно блокирующий.
+    # Чтобы сделать main асинхронной, мы можем запустить application.initialize(), application.start(),
+    # а затем application.updater.start_polling() или просто application.run_polling() если он не блокирует.
+    # Однако, обычно run_polling() является последним вызовом.
+    # В PTB 20+, run_polling() is blocking, and main() cannot be async like this without
+    # an event loop manager like asyncio.run(main_async()).
+    # Assuming the entry point will handle asyncio.run() if this main function is async.
+    # For simplicity with the provided structure, let's keep main() synchronous and schedule_all_daily_quizzes_on_startup
+    # will be awaited if necessary within an async context or called synchronously if possible.
+
+    # A more robust way for post-initialization tasks in PTB 20+
+    async def post_init_hook(app: Application):
+        await schedule_all_daily_quizzes_on_startup(app)
+        logger.info("Post-initialization hook executed: daily quizzes scheduled.")
+
+    application.post_init = post_init_hook
+
+    # Старый способ:
+    # if job_queue:
+    #     target_time_msk = moscow_time(DAILY_QUIZ_DEFAULT_HOUR_MSK, DAILY_QUIZ_DEFAULT_MINUTE_MSK) # Это было для мастер-джобы
+    #     # Этот блок больше не нужен, так как нет мастер-джобы
+    # else:
+    #     logger.warning("JobQueue не доступен, ежедневная викторина не будет запланирована.")
+
+    logger.info("Бот успешно настроен и запускается...")
+    application.run_polling() # Это блокирующий вызов
+    logger.info("Бот остановлен.")
+
+def main(): # Оставляем main синхронным
+    # Запуск асинхронной main_async, если бы она была полностью асинхронной
+    # import asyncio
+    # asyncio.run(main_async())
+    # Но так как run_polling блокирующий, и post_init теперь используется,
+    # логика из main_async переносится сюда, а post_init будет вызван PTB.
+    
+    if not TOKEN:
+        print("Токен BOT_TOKEN не найден! Пожалуйста, проверьте ваш .env файл и переменную BOT_TOKEN.")
+        return
+
+    logger.info("Загрузка вопросов...")
+    load_questions()
+    logger.info("Загрузка данных пользователей...")
+    load_user_data()
+    logger.info("Загрузка подписок на ежедневную викторину...")
+    load_daily_quiz_subscriptions()
+
+    application = ApplicationBuilder().token(TOKEN).build()
+
+    # Регистрация обработчиков команд
+    application.add_handler(CommandHandler("help", start_command))
+    application.add_handler(CommandHandler("categories", categories_command))
+    application.add_handler(CommandHandler("quiz", quiz_command))
+    application.add_handler(CommandHandler("quiz10", quiz10_command))
+    application.add_handler(CommandHandler("quiz10notify", quiz10notify_command))
+    application.add_handler(CommandHandler("stopquiz", stop_quiz_command))
+    application.add_handler(CommandHandler("rating", rating_command))
+    application.add_handler(CommandHandler("globaltop", global_top_command))
     application.add_handler(CommandHandler("subdaily", subscribe_daily_quiz_command))
     application.add_handler(CommandHandler("unsubdaily", unsubscribe_daily_quiz_command))
     application.add_handler(CommandHandler("setdailyquiztime", set_daily_quiz_time_command))
     application.add_handler(CommandHandler("setdailyquizcategories", set_daily_quiz_categories_command))
     application.add_handler(CommandHandler("showdailyquizsettings", show_daily_quiz_settings_command))
-    # Callback для выбора категории ежедневной викторины
-    application.add_handler(CallbackQueryHandler(handle_daily_quiz_category_selection, pattern=f"^{CALLBACK_DATA_PREFIX_DAILY_QUIZ_CATEGORY_SHORT}|^({CALLBACK_DATA_DAILY_QUIZ_RANDOM_CATEGORY})$"))
+
+    # Регистрация обработчика для кнопок выбора категории /quiz10
+    application.add_handler(CallbackQueryHandler(handle_quiz10_category_selection,
+                                                 pattern=f"^{CALLBACK_DATA_PREFIX_QUIZ10_CATEGORY_SHORT}|^({CALLBACK_DATA_QUIZ10_RANDOM_CATEGORY})$"))
+    
+    # Регистрация обработчика для кнопок выбора категории ежедневной викторины
+    application.add_handler(CallbackQueryHandler(handle_daily_quiz_category_selection,
+                                                 pattern=f"^{CALLBACK_DATA_PREFIX_DAILY_QUIZ_CATEGORY_SHORT}|^({CALLBACK_DATA_DAILY_QUIZ_RANDOM_CATEGORY})$|^(dq_info_too_many_cats)$"))
 
 
-    # Админ-команды
-    application.add_handler(CommandHandler("adminhelp", admin_help_command))
-    application.add_handler(CommandHandler("reloadquestions", reload_questions_command))
-    application.add_handler(CommandHandler("getlog", get_log_command))
-    application.add_handler(CommandHandler("getusers", get_users_command))
-    application.add_handler(CommandHandler("getdailysubs", get_daily_subs_command))
-    application.add_handler(CommandHandler("clearstats", clear_stats_command))
-    application.add_handler(CommandHandler("broadcast", broadcast_command))
+    application.add_handler(PollAnswerHandler(handle_poll_answer))
+    application.add_error_handler(error_handler_callback)
 
-    # Обработчик ошибок
-    application.add_error_handler(error_handler)
+    async def post_init_hook(app: Application):
+        logger.info("Выполняется post_init хук для планирования ежедневных викторин...")
+        await schedule_all_daily_quizzes_on_startup(app)
+        logger.info("Post-initialization хук выполнен: ежедневные викторины запланированы.")
 
-    # Запуск бота
-    logger.info("Бот начинает опрос...")
-    application.run_polling()
+    application.post_init = post_init_hook
 
-    # Сохранение данных при штатном завершении (Ctrl+C)
-    # Этот блок может не всегда выполняться, если процесс убит иначе
-    logger.info("Бот останавливается. Сохранение данных...")
-    save_user_scores()
-    save_daily_quiz_subscriptions()
-    logger.info("Данные сохранены. Выход.")
-
+    logger.info("Бот успешно настроен и запускается...")
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    logger.info("Бот остановлен.")
 
 if __name__ == '__main__':
     main()

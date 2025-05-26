@@ -171,18 +171,23 @@ async def _handle_quiz10_session_poll_answer(
             if not is_last_q:
                 logger.info(
                     f"Досрочный ответ на НЕ последний poll {answered_poll_id} (вопрос {question_session_idx + 1}) "
-                    f"в сессии {session_chat_id_from_poll}. Следующий вопрос будет отправлен. Пояснение - по таймауту текущего."
+                    f"в сессии {session_chat_id_from_poll}. Следующий вопрос будет отправлен НЕМЕДЛЕННО. "
+                    f"Текущий poll {answered_poll_id} останется открытым до своего таймаута, пояснение по нему будет тогда же."
                 )
                 # Помечаем, что этот poll был обработан досрочно,
                 # чтобы handle_current_poll_end не запускал следующий вопрос повторно
                 poll_info_from_state["processed_by_early_answer"] = True
 
-                if job := active_session.get("next_question_job"):
-                    try: job.schedule_removal()
-                    except Exception: pass
-                    active_session["next_question_job"] = None
-                    logger.debug(f"Таймаут-job для poll {answered_poll_id} помечен на удаление из-за досрочного ответа.")
-                
+                # MODIFICATION: Remove this block.
+                # The timeout job for the answered_poll_id (which is active_session.get("next_question_job") at this point)
+                # MUST run to handle the solution display and poll cleanup at its original timeout.
+                #
+                # if job := active_session.get("next_question_job"):
+                #     try: job.schedule_removal()
+                #     except Exception: pass
+                #     active_session["next_question_job"] = None
+                #     logger.debug(f"Таймаут-job для poll {answered_poll_id} помечен на удаление из-за досрочного ответа.") # This log is now incorrect
+
                 # НЕ удаляем poll_info_from_state из state.current_poll здесь.
                 # НЕ вызываем send_solution_if_available здесь.
                 # handle_current_poll_end позаботится о пояснении и удалении poll_info.
@@ -190,18 +195,19 @@ async def _handle_quiz10_session_poll_answer(
             else: # This is the last question
                 logger.info(
                     f"Досрочный ответ на ПОСЛЕДНИЙ poll {answered_poll_id} (вопрос {question_session_idx + 1}) "
-                    f"в сессии {session_chat_id_from_poll}. Пояснение и результаты будут по таймауту."
+                    f"в сессии {session_chat_id_from_poll}. Этот poll {answered_poll_id} останется открытым до своего таймаута. "
+                    f"Пояснение и результаты будут по таймауту этого вопроса."
                 )
                 # Также помечаем, чтобы handle_current_poll_end знал (хотя для последнего это менее критично)
                 poll_info_from_state["processed_by_early_answer"] = True
                 # Таймаут-job (handle_current_poll_end) сам обработает пояснение и вызовет show_quiz_session_results.
+                # Do not cancel the job for this last poll.
     else:
         logger.debug(
             f"Ответ на poll {answered_poll_id} в сессии {session_chat_id_from_poll} получен, "
             f"но текущий активный poll сессии уже {active_session.get('current_poll_id')}. "
             "Досрочный переход не инициирован этим ответом."
         )
-
 
 async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.poll_answer:
@@ -224,7 +230,7 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
     question_session_idx = poll_info_from_state.get("question_session_index", -1)
 
     global_user_data = await _ensure_user_initialized(chat_id_str, user)
-    
+
     is_answer_correct = (len(poll_answer.option_ids) == 1 and
                          poll_answer.option_ids[0] == poll_info_from_state["correct_index"])
 

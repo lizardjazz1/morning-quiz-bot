@@ -95,17 +95,21 @@ async def send_solution_if_available(
     except Exception as e:
         logger.error(f"Ошибка при отправке (нового) пояснения для вопроса {log_q_ref} в чате {chat_id_str}: {e}", exc_info=True)
 
-
 async def send_next_question_in_session(context: ContextTypes.DEFAULT_TYPE, chat_id_str: str):
     session = state.current_quiz_session.get(chat_id_str)
     if not session:
         logger.warning(f"send_next_question_in_session: Сессия для чата {chat_id_str} не найдена.")
         return
 
-    if job := session.get("next_question_job"):
-        try: job.schedule_removal()
-        except Exception: pass
-        session["next_question_job"] = None
+    # MODIFICATION: Remove this block.
+    # The job in session["next_question_job"] is the timeout handler for the *previous* poll.
+    # It must run to completion to handle its solution and other end-of-poll logic.
+    # A new job will be created for the new poll being sent now.
+    #
+    # if job := session.get("next_question_job"):
+    #     try: job.schedule_removal()
+    #     except Exception: pass
+    #     session["next_question_job"] = None
 
     current_q_idx = session["current_index"]
     actual_num_q = session["actual_num_questions"]
@@ -139,7 +143,7 @@ async def send_next_question_in_session(context: ContextTypes.DEFAULT_TYPE, chat
             type=Poll.QUIZ, correct_option_id=poll_correct_option_id,
             open_period=poll_open_period, is_anonymous=False
         )
-        session["current_poll_id"] = sent_poll_msg.poll.id
+        session["current_poll_id"] = sent_poll_msg.poll.id # This is the ID of the NEWLY sent poll
         session["current_index"] += 1
 
         current_poll_entry = {
@@ -164,18 +168,18 @@ async def send_next_question_in_session(context: ContextTypes.DEFAULT_TYPE, chat
             except Exception as e_sol_pl:
                 logger.error(f"Не удалось отправить заглушку '💡' для poll {sent_poll_msg.poll.id} в чате {chat_id_str}: {e_sol_pl}")
 
-
         job_delay_seconds = poll_open_period + JOB_GRACE_PERIOD
         job_name = f"poll_end_timeout_chat_{chat_id_str}_poll_{sent_poll_msg.poll.id}"
         if context.job_queue:
             existing_jobs = context.job_queue.get_jobs_by_name(job_name)
-            for old_job in existing_jobs: old_job.schedule_removal()
+            for old_job in existing_jobs: old_job.schedule_removal() # Keep this: specific to the NEW poll being scheduled
 
             current_poll_end_job = context.job_queue.run_once(
                 handle_current_poll_end, timedelta(seconds=job_delay_seconds),
                 data={"chat_id_str": chat_id_str, "ended_poll_id": sent_poll_msg.poll.id},
                 name=job_name
             )
+            # This job is the timeout handler for the NEWLY sent poll.
             session["next_question_job"] = current_poll_end_job
     except Exception as e:
         logger.error(f"Ошибка при отправке вопроса сессии ({current_q_idx + 1}) в чате {chat_id_str}: {e}", exc_info=True)
@@ -233,7 +237,7 @@ async def handle_current_poll_end(context: ContextTypes.DEFAULT_TYPE):
         else:
             logger.info(
                 f"Таймаут для poll {ended_poll_id} (вопрос сессии {q_idx_from_poll_info + 1}), "
-                f"но следующий вопрос уже был отправлен из-за досрочного ответа."
+                f"но следующий вопрос уже был отправлен из-за досрочного ответа. Решение для poll {ended_poll_id} отправлено."
             )
 
 async def handle_single_quiz_poll_end(context: ContextTypes.DEFAULT_TYPE):
@@ -272,12 +276,15 @@ async def show_quiz_session_results(context: ContextTypes.DEFAULT_TYPE, chat_id_
         state.current_quiz_session.pop(chat_id_str, None)
         return
 
-    # Отменяем job следующего вопроса, если он еще есть
+    # Отменяем job следующего вопроса, если он еще есть (это job для ПОСЛЕДНЕГО отправленного poll'а)
+    # Этот job должен был бы завершиться естественным образом, но /stopquiz может вызвать show_quiz_session_results досрочно.
     if job := session.get("next_question_job"):
         try:
             job.schedule_removal()
             session["next_question_job"] = None # Обнуляем ссылку в сессии
+            logger.debug(f"Job {job.name} (таймаут последнего вопроса) удален при показе результатов сессии {chat_id_str}.")
         except Exception: pass
+
 
     num_q_in_session = session.get("actual_num_questions", NUMBER_OF_QUESTIONS_IN_SESSION)
     results_header = "🏁 Викторина завершена! 🏁\n\nРезультаты сессии:\n" if not error_occurred else "Викторина прервана.\n\nПромежуточные результаты сессии:\n"
@@ -316,7 +323,7 @@ async def show_quiz_session_results(context: ContextTypes.DEFAULT_TYPE, chat_id_
         logger.error(f"Ошибка при отправке результатов сессии в чат {chat_id_str}: {e}", exc_info=True)
 
     # Очистка current_poll от последнего опроса этой сессии, если он там еще есть и принадлежит этой сессии
-    # (на случай если poll не был удален в handle_current_poll_end по какой-то причине)
+    # (на случай если poll не был удален в handle_current_poll_end по какой-то причине, e.g. /stopquiz)
     current_poll_id_of_session = session.get("current_poll_id")
     if current_poll_id_of_session:
         poll_info_to_remove = state.current_poll.get(current_poll_id_of_session)
@@ -328,3 +335,4 @@ async def show_quiz_session_results(context: ContextTypes.DEFAULT_TYPE, chat_id_
 
     state.current_quiz_session.pop(chat_id_str, None) # Удаляем сессию из активных
     logger.info(f"Сессия /quiz10 для чата {chat_id_str} очищена (show_quiz_session_results).")
+

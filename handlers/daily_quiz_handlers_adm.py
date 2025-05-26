@@ -124,10 +124,9 @@ def _get_questions_for_daily_quiz(
 async def subscribe_daily_quiz_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.effective_chat or not update.effective_user: return
     chat_id_str = str(update.effective_chat.id)
-    
-    # if not await _is_user_admin(update, context): # MODIFIED: Admin check removed
-    #     await update.message.reply_text("Только администраторы могут подписать чат на ежедневную викторину.") # MODIFIED: Admin check removed
-    #     return # MODIFIED: Admin check removed
+    if not await _is_user_admin(update, context):
+        await update.message.reply_text("Только администраторы могут подписать чат на ежедневную викторину.")
+        return
 
     if chat_id_str in state.daily_quiz_subscriptions:
         sub_details = state.daily_quiz_subscriptions[chat_id_str]
@@ -143,24 +142,23 @@ async def subscribe_daily_quiz_command(update: Update, context: ContextTypes.DEF
         await _schedule_or_reschedule_daily_quiz_for_chat(context.application, chat_id_str)
         reply_text = (f"✅ Чат подписан на ежедневную викторину\\!\nВремя: *{DAILY_QUIZ_DEFAULT_HOUR_MSK:02d}:{DAILY_QUIZ_DEFAULT_MINUTE_MSK:02d} МСК* \\(по умолч\\.\\)\\.\n"
                       f"Категории: *{DAILY_QUIZ_CATEGORIES_TO_PICK} случайных* \\(по умолч\\.\\)\\.\n"
-                      f"Используйте `/setdailyquiztime` и `/setdailyquizcategories` для настройки \\(доступно администраторам\\)\\.")
-        logger.info(f"Чат {chat_id_str} подписан на ежедневную викторину пользователем {update.effective_user.id}.")
+                      f"Используйте `/setdailyquiztime` и `/setdailyquizcategories` для настройки\\.")
+        logger.info(f"Чат {chat_id_str} подписан на ежедневную викторину.")
     await update.message.reply_text(reply_text, parse_mode=ParseMode.MARKDOWN_V2)
 
 async def unsubscribe_daily_quiz_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.effective_chat or not update.effective_user: return
     chat_id_str = str(update.effective_chat.id)
-
-    # if not await _is_user_admin(update, context): # MODIFIED: Admin check removed
-    #     await update.message.reply_text("Только администраторы могут отписать чат.") # MODIFIED: Admin check removed
-    #     return # MODIFIED: Admin check removed
+    if not await _is_user_admin(update, context):
+        await update.message.reply_text("Только администраторы могут отписать чат.")
+        return
 
     if chat_id_str in state.daily_quiz_subscriptions:
         state.daily_quiz_subscriptions.pop(chat_id_str, None)
         save_daily_quiz_subscriptions()
         await _schedule_or_reschedule_daily_quiz_for_chat(context.application, chat_id_str) # This will remove the job
         await update.message.reply_text("Чат отписан от ежедневной викторины.")
-        logger.info(f"Чат {chat_id_str} отписан от ежедневной викторины пользователем {update.effective_user.id}.")
+        logger.info(f"Чат {chat_id_str} отписан от ежедневной викторины.")
     else:
         await update.message.reply_text("Чат не был подписан.")
 
@@ -366,20 +364,20 @@ async def handle_daily_quiz_category_selection(update: Update, context: ContextT
         message_text_after_selection = "Для ежедневной викторины будут использоваться *случайные категории*\\."
     elif query.data and query.data.startswith(CALLBACK_DATA_PREFIX_DAILY_QUIZ_CATEGORY_SHORT):
         short_id = query.data[len(CALLBACK_DATA_PREFIX_DAILY_QUIZ_CATEGORY_SHORT):]
-        if category_map_for_callback:
+        if category_map_for_callback: 
             selected_category_name = category_map_for_callback.get(short_id)
             if selected_category_name:
-                new_categories_selection = [selected_category_name]
+                new_categories_selection = [selected_category_name] 
                 message_text_after_selection = f"Для ежедневной викторины выбрана категория: *{escape_markdown_v2(selected_category_name)}*\\."
             else:
                 message_text_after_selection = "Ошибка при выборе категории (ID не найден). Настройки не изменены."
-        else:
+        else: 
              message_text_after_selection = "Ошибка: время выбора категории истекло (карта категорий не найдена). Попробуйте снова /setdailyquizcategories."
     else:
         message_text_after_selection = "Произошла неизвестная ошибка выбора. Настройки не изменены."
 
     if chat_id_str in state.daily_quiz_subscriptions:
-        if "Ошибка" not in message_text_after_selection and "истекло" not in message_text_after_selection:
+        if "Ошибка" not in message_text_after_selection and "истекло" not in message_text_after_selection: 
             state.daily_quiz_subscriptions[chat_id_str]["categories"] = new_categories_selection
             save_daily_quiz_subscriptions()
             logger.info(f"Категории для ежедневной викторины в чате {chat_id_str} изменены на {new_categories_selection or 'случайные'} через меню.")
@@ -387,7 +385,7 @@ async def handle_daily_quiz_category_selection(update: Update, context: ContextT
         message_text_after_selection = "Ошибка: чат не подписан на ежедневную викторину. Настройки не сохранены."
 
     try: await query.edit_message_text(text=message_text_after_selection, reply_markup=None, parse_mode=ParseMode.MARKDOWN_V2)
-    except Exception: pass
+    except Exception: pass 
 
 async def show_daily_quiz_settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.effective_chat: return
@@ -413,14 +411,14 @@ async def show_daily_quiz_settings_command(update: Update, context: ContextTypes
         # but escaping it is a good safety measure.
         # The parentheses ( and ) are part of the f-string and must be escaped.
         categories_str = f"Случайные \\(*{escape_markdown_v2(pluralized_cat_string)}*\\)"
-
+        
     escaped_time_str = escape_markdown_v2(time_str)
 
     reply_text = (f"⚙️ Настройки ежедневной викторины:\n"
                   f"\\- Время: *{escaped_time_str}*\n"
                   f"\\- Категории: {categories_str}\n"
-                  f"\\- Вопросов: {DAILY_QUIZ_QUESTIONS_COUNT}\n"
-                  f"Используйте `/setdailyquiztime` и `/setdailyquizcategories` для изменения \\(доступно администраторам\\)\\.")
+                  f"\\- Вопросов: {DAILY_QUIZ_QUESTIONS_COUNT}\n" 
+                  f"Используйте `/setdailyquiztime` и `/setdailyquizcategories` для изменения\\.")
     await update.message.reply_text(reply_text, parse_mode=ParseMode.MARKDOWN_V2)
 
 # --- Логика запланированных задач (Jobs) ---
@@ -461,7 +459,7 @@ async def _send_one_daily_question_job(context: ContextTypes.DEFAULT_TYPE):
                         if i == 0: rank_prefix = "🥇"
                         elif i == 1: rank_prefix = "🥈"
                         elif i == 2: rank_prefix = "🥉"
-                    display_name = get_player_display(player_name_original, player_score)
+                    display_name = get_player_display(player_name_original, player_score) 
                     final_text_parts.append(f"{rank_prefix} {display_name}")
             else:
                 final_text_parts.append("\n\nВ этом чате пока нет игроков с очками в рейтинге.")
@@ -479,7 +477,7 @@ async def _send_one_daily_question_job(context: ContextTypes.DEFAULT_TYPE):
     if original_cat := q_details.get("original_category"): full_poll_question_header += f" (Кат: {original_cat})"
     full_poll_question_header += f"\n\n{poll_question_text_for_api}"
 
-    MAX_POLL_QUESTION_LENGTH = 300
+    MAX_POLL_QUESTION_LENGTH = 300 
     if len(full_poll_question_header) > MAX_POLL_QUESTION_LENGTH:
         full_poll_question_header = full_poll_question_header[:(MAX_POLL_QUESTION_LENGTH - 3)] + "..."
         logger.warning(f"Текст вопроса ежедневной викторины для poll в {chat_id_str} усечен до {MAX_POLL_QUESTION_LENGTH} символов.")
@@ -516,7 +514,7 @@ async def _send_one_daily_question_job(context: ContextTypes.DEFAULT_TYPE):
     job_data_for_next = { "chat_id_str": chat_id_str, "current_question_index": next_q_idx, "questions_this_session": questions_this_session }
     next_job_base_name = f"daily_quiz_q_process_{next_q_idx}"
     next_job_name = f"{next_job_base_name}_chat_{chat_id_str}"
-
+    
     existing_jobs = job_queue.get_jobs_by_name(next_job_name)
     for old_job in existing_jobs:
         old_job.schedule_removal()
@@ -578,7 +576,7 @@ async def _trigger_daily_quiz_for_chat_job(context: ContextTypes.DEFAULT_TYPE):
         f"Один вопрос каждую {interval_str}. Каждый вопрос будет доступен {poll_open_str}."
     ]
     intro_text = "\n".join(intro_message_parts)
-
+    
     try:
         await context.bot.send_message(chat_id=chat_id_str, text=intro_text, parse_mode=ParseMode.HTML)
         logger.info(f"Ежедневная викторина инициирована для {chat_id_str} ({len(questions_for_quiz)} вопр. из: {picked_categories}).")
@@ -596,7 +594,7 @@ async def _trigger_daily_quiz_for_chat_job(context: ContextTypes.DEFAULT_TYPE):
         first_q_job_name = f"daily_quiz_q_process_0_chat_{chat_id_str}"
         state.active_daily_quizzes[chat_id_str]["job_name_next_q"] = first_q_job_name
         job_queue.run_once(
-            _send_one_daily_question_job, timedelta(seconds=5),
+            _send_one_daily_question_job, timedelta(seconds=5), 
             data={ "chat_id_str": chat_id_str, "current_question_index": 0, "questions_this_session": questions_for_quiz, },
             name=first_q_job_name
         )

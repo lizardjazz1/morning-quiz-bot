@@ -198,7 +198,7 @@ def load_daily_q_subs(): # Renamed from load_daily_quiz_subscriptions
         logger.error(f"Непредвиденная ошибка загрузки подписок: {e}", exc_info=True)
         state.daily_q_subs = {}
 
-def save_daily_q_subs(): # Renamed from save_daily_quiz_subscriptions
+def save_daily_q_subs(): # save_daily_quiz_subscriptions
     data_to_save = {}
     for cid, details in state.daily_q_subs.items():
         data_to_save[str(cid)] = {

@@ -199,13 +199,15 @@ async def handle_current_poll_end(context: ContextTypes.DEFAULT_TYPE):
             f"Job 'handle_current_poll_end' для poll {ended_poll_id} в чате {chat_id_str}: poll_info не найден. "
             f"Возможно, сессия была прервана или poll уже обработан иначе."
         )
-        if session: # Если poll_info нет, но сессия еще есть (нештатная ситуация)
+        # If poll_info is gone, but it was a quiz_session and the session is still active, it's an error.
+        # This check is mostly for quiz10, not daily quiz, as daily quiz doesn't remove its poll_info early.
+        if session and poll_info.get("quiz_session"):
             logger.error(f"Нештатная ситуация: poll_info для {ended_poll_id} отсутствует, но сессия {chat_id_str} активна. Завершение сессии.")
             await show_quiz_session_results(context, chat_id_str, error_occurred=True)
         return
     
     q_idx_from_poll_info = poll_info.get("question_session_index", -1)
-    logger.info(f"Job 'handle_current_poll_end' сработал для чата {chat_id_str}, poll_id {ended_poll_id} (вопрос сессии ~{q_idx_from_poll_info + 1}).")
+    logger.info(f"Job 'handle_current_poll_end' сработал для чата {chat_id_str}, poll_id {ended_poll_id} (вопрос сессии/ежедневной ~{q_idx_from_poll_info + 1}).")
 
     # Отправить решение для завершенного опроса
     await send_solution_if_available(
@@ -217,25 +219,30 @@ async def handle_current_poll_end(context: ContextTypes.DEFAULT_TYPE):
     
     is_last_q_from_poll_info = poll_info.get("is_last_question", False)
     processed_early = poll_info.get("processed_by_early_answer", False)
-
+    is_quiz10_session_poll = poll_info.get("quiz_session", False)
+    is_daily_quiz_poll = poll_info.get("daily_quiz", False) # NEW: Check if it's a daily quiz poll
+    
     state.current_poll.pop(ended_poll_id, None) # Удаляем инфо об опросе ПОСЛЕ использования
     logger.debug(f"Poll {ended_poll_id} удален из state.current_poll после обработки таймаута.")
 
-    if not session: # Если сессия была остановлена /stopquiz до этого момента
+    # NEW: If it's a daily quiz poll, we are done. The next question is handled by a separate job.
+    if is_daily_quiz_poll:
+        logger.info(f"Таймаут ежедневной викторины для poll {ended_poll_id} в чате {chat_id_str}. Решение отправлено. Следующий вопрос управляется отдельным Job'ом.")
+        return
+
+    if not session: # If a /quiz10 session was stopped by /stopquiz before this moment
         logger.info(f"Сессия {chat_id_str} уже не активна при обработке таймаута poll {ended_poll_id}. Результаты были (или будут) показаны stopquiz.")
         return
 
-    if is_last_q_from_poll_info:
+    # Existing /quiz10 session logic below this point
+    if is_last_q_from_poll_info and is_quiz10_session_poll:
         logger.info(f"Время для ПОСЛЕДНЕГО вопроса (индекс {q_idx_from_poll_info}, poll {ended_poll_id}) сессии {chat_id_str} истекло. Показ результатов.")
         await show_quiz_session_results(context, chat_id_str)
-    else: # НЕ последний вопрос
+    elif is_quiz10_session_poll: # НЕ последний вопрос /quiz10
         if not processed_early:
-            # Если ответ не был досрочным, то следующий вопрос еще не отправлен
             logger.info(f"Тайм-аут для НЕ последнего вопроса (индекс {q_idx_from_poll_info}, poll {ended_poll_id}) в сессии {chat_id_str}. Отправляем следующий.")
             await send_next_question_in_session(context, chat_id_str)
         else:
-            # Если был досрочный ответ, следующий вопрос уже в процессе/отправлен.
-            # Решение для ended_poll_id уже отправлено выше. Ничего больше делать не надо.
             logger.info(
                 f"Таймаут для poll {ended_poll_id} (вопрос сессии {q_idx_from_poll_info + 1}), "
                 f"но следующий вопрос уже был отправлен из-за досрочного ответа. Решение для poll {ended_poll_id} отправлено."

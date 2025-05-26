@@ -484,11 +484,40 @@ async def _send_one_daily_question_job(context: ContextTypes.DEFAULT_TYPE):
         state.current_poll[sent_poll_msg.poll.id] = {
             "chat_id": chat_id_str, "message_id": sent_poll_msg.message_id,
             "correct_index": poll_correct_option_id, "quiz_session": False,
-            "daily_quiz": True, "question_details": q_details,
+            "daily_quiz": True, # Keep this to mark as daily quiz
+            "question_details": q_details,
             "question_session_index": current_q_idx,
-            "open_timestamp": sent_poll_msg.date.timestamp()
+            "open_timestamp": sent_poll_msg.date.timestamp(),
+            "solution_placeholder_message_id": None # Initialize for placeholder ID
         }
         logger.info(f"Ежедневный вопрос {current_q_idx + 1}/{len(questions_this_session)} (Poll ID: {sent_poll_msg.poll.id}) отправлен в {chat_id_str}.")
+
+        # NEW: Send solution placeholder message if solution exists
+        if q_details.get("solution"):
+            try:
+                placeholder_msg = await context.bot.send_message(chat_id=chat_id_str, text="💡")
+                state.current_poll[sent_poll_msg.poll.id]["solution_placeholder_message_id"] = placeholder_msg.message_id
+                logger.info(f"Отправлена заглушка '💡' для ежедневной викторины poll {sent_poll_msg.poll.id} в чате {chat_id_str}.")
+            except Exception as e_sol_pl:
+                 logger.error(f"Не удалось отправить заглушку '💡' для ежедневной викторины poll {sent_poll_msg.poll.id} в чате {chat_id_str}: {e_sol_pl}")
+
+        # NEW: Schedule a job to handle this specific poll's expiration and reveal its solution
+        job_queue: JobQueue | None = context.application.job_queue
+        if job_queue:
+            poll_end_job_delay_seconds = DAILY_QUIZ_POLL_OPEN_PERIOD_SECONDS + JOB_GRACE_PERIOD
+            poll_end_job_name = f"daily_quiz_poll_end_{sent_poll_msg.poll.id}"
+            job_queue.run_once(
+                # Re-using handle_current_poll_end as it's generic enough to handle solution revealing
+                context.job_queue.run_once, # This needs to be imported or referenced correctly. Assuming it's handler.
+                handle_current_poll_end, # Function to call
+                timedelta(seconds=poll_end_job_delay_seconds),
+                data={"chat_id_str": chat_id_str, "ended_poll_id": sent_poll_msg.poll.id},
+                name=poll_end_job_name
+            )
+            logger.debug(f"Запланирован job '{poll_end_job_name}' для обработки таймаута ежедневной викторины poll {sent_poll_msg.poll.id}.")
+        else:
+            logger.error(f"JobQueue не доступен. Не удалось запланировать job для таймаута poll {sent_poll_msg.poll.id}.")
+
     except Exception as e:
         logger.error(f"Ошибка отправки ежедневного вопроса {current_q_idx + 1} в {chat_id_str}: {e}", exc_info=True)
         state.active_daily_quizzes.pop(chat_id_str, None)

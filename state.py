@@ -19,6 +19,20 @@ user_scores: Dict[str, Dict[str, Any]] = {}
 # Хранит информацию о текущих активных опросах (Poll).
 # Обновляется в command_handlers.py (/quiz) и quiz_logic.py (для /quiz10).
 # Используется в poll_answer_handler.py для проверки ответов.
+# Структура poll_details_dict может включать:
+#   "chat_id": str,
+#   "message_id": int,
+#   "correct_index": int,
+#   "quiz_session": bool,
+#   "daily_quiz": bool,
+#   "question_details": Dict[str, Any],
+#   "associated_quiz_session_chat_id": Optional[str],
+#   "next_q_triggered_by_answer": bool,
+#   "is_last_question": bool, (для /quiz10)
+#   "question_session_index": int, (для /quiz10 и daily)
+#   "solution_placeholder_message_id": Optional[int], # ID сообщения-заглушки "💡"
+#   "processed_by_early_answer": bool, # Флаг для /quiz10, если ответ был досрочным
+#   "open_timestamp": float (для daily_quiz)
 current_poll: Dict[str, Dict[str, Any]] = {}
 
 # current_quiz_session: {chat_id: session_details_dict}
@@ -39,4 +53,3 @@ daily_quiz_subscriptions: Set[str] = set()
 # active_daily_quizzes: {chat_id_str: {"current_question_index": int, "questions": list, "job_name_next_q": str | None}}
 # Хранит состояние активных ежедневных викторин
 active_daily_quizzes: Dict[str, Dict[str, Any]] = {}
-

@@ -7,7 +7,7 @@ from telegram.ext import ContextTypes
 from config import logger, DEFAULT_POLL_OPEN_PERIOD, JOB_GRACE_PERIOD
 import state
 from quiz_logic import (get_random_questions, prepare_poll_options,
-                        handle_single_quiz_poll_end) # send_solution_if_available будет вызван из handle_single_quiz_poll_end
+                        handle_single_quiz_poll_end)
 
 async def quiz_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.effective_chat:
@@ -16,7 +16,7 @@ async def quiz_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     chat_id = update.effective_chat.id
     chat_id_str = str(chat_id)
-    reply_text_to_send = "" # Для логгирования перед отправкой
+    reply_text_to_send = ""
 
     if state.current_quiz_session.get(chat_id_str):
         reply_text_to_send = "В этом чате уже идет игра /quiz10. Дождитесь ее окончания или используйте /stopquiz."
@@ -83,36 +83,50 @@ async def quiz_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "chat_id": chat_id_str,
             "message_id": sent_poll_msg.message_id,
             "correct_index": poll_correct_option_id,
-            "quiz_session": False, # Не /quiz10 сессия
-            "daily_quiz": False,   # Не ежедневный квиз
+            "quiz_session": False,
+            "daily_quiz": False,
             "question_details": single_question_details,
             "associated_quiz_session_chat_id": None,
-            "next_q_triggered_by_answer": False,
-            "solution_job": None # Будет установлен ниже, если есть решение
+            "next_q_triggered_by_answer": False, # Не используется для /quiz, но для консистентности
+            "solution_placeholder_message_id": None, # Инициализация
+            "processed_by_early_answer": False, # Не используется для /quiz
+            "solution_job": None # Будет solution_timeout_job
         }
         state.current_poll[sent_poll_msg.poll.id] = poll_state_entry
 
-        if single_question_details.get("solution") and context.job_queue:
+        # Отправка заглушки, если есть пояснение
+        if single_question_details.get("solution"):
+            try:
+                placeholder_msg = await context.bot.send_message(chat_id=chat_id_str, text="💡")
+                state.current_poll[sent_poll_msg.poll.id]["solution_placeholder_message_id"] = placeholder_msg.message_id
+                logger.info(f"Отправлена заглушка '💡' для /quiz poll {sent_poll_msg.poll.id} в чате {chat_id_str}.")
+            except Exception as e_sol_pl:
+                 logger.error(f"Не удалось отправить заглушку '💡' для /quiz poll {sent_poll_msg.poll.id} в чате {chat_id_str}: {e_sol_pl}")
+
+
+        # Job для обработки таймаута и отправки решения (если есть)
+        if context.job_queue: # Не только если есть решение, job нужен всегда для очистки state.current_poll
             job_delay_seconds = DEFAULT_POLL_OPEN_PERIOD + JOB_GRACE_PERIOD
-            job_name = f"single_quiz_solution_chat_{chat_id_str}_poll_{sent_poll_msg.poll.id}"
-            
-            # Удаляем старые джобы с таким же именем, если они есть
+            job_name = f"single_quiz_timeout_chat_{chat_id_str}_poll_{sent_poll_msg.poll.id}"
+
             existing_jobs = context.job_queue.get_jobs_by_name(job_name)
             for old_job in existing_jobs:
                 old_job.schedule_removal()
-                logger.debug(f"Removed old job '{old_job.name}' for single quiz solution.")
+                logger.debug(f"Removed old job '{old_job.name}' for single quiz timeout.")
 
-            solution_job = context.job_queue.run_once(
-                handle_single_quiz_poll_end, # Эта функция вызовет send_solution_if_available
+            timeout_job = context.job_queue.run_once(
+                handle_single_quiz_poll_end,
                 timedelta(seconds=job_delay_seconds),
                 data={"chat_id_str": chat_id_str, "poll_id": sent_poll_msg.poll.id},
                 name=job_name
             )
-            # Сохраняем ссылку на job в poll_state_entry
-            state.current_poll[sent_poll_msg.poll.id]["solution_job"] = solution_job
+            # Сохраняем ссылку на job в poll_state_entry (может быть полезно для отладки или отмены, хотя тут не используется)
+            state.current_poll[sent_poll_msg.poll.id]["solution_job"] = timeout_job # Переименовал для ясности
             logger.info(f"Запланирован job '{job_name}' для обработки таймаута poll {sent_poll_msg.poll.id} (одиночный квиз /quiz).")
+
     except Exception as e:
         logger.error(f"Ошибка при создании опроса для /quiz в чате {chat_id_str}: {e}", exc_info=True)
         error_reply_text = "Произошла ошибка при попытке создать вопрос."
         logger.debug(f"Attempting to send error message for /quiz to {chat_id_str}. Text: '{error_reply_text}'")
         await update.message.reply_text(error_reply_text)
+

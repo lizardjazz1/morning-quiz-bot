@@ -21,9 +21,8 @@ from config import (logger, DAILY_QUIZ_QUESTIONS_COUNT,
                     )
 import state
 from data_manager import save_daily_quiz_subscriptions
-from quiz_logic import prepare_poll_options
+from quiz_logic import prepare_poll_options, handle_current_poll_end
 from handlers.rating_handlers import get_player_display
-from handlers.poll_handlers import handle_current_poll_end # Assuming this is the correct location
 from utils import pluralize, escape_markdown_v2
 
 # --- Вспомогательные функции ---

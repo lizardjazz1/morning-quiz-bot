@@ -16,12 +16,14 @@ from config import (logger, DAILY_QUIZ_QUESTIONS_COUNT,
                     CALLBACK_DATA_PREFIX_DAILY_QUIZ_CATEGORY_SHORT,
                     CALLBACK_DATA_DAILY_QUIZ_RANDOM_CATEGORY,
                     DAILY_QUIZ_MENU_MAX_CATEGORIES_DISPLAY,
-                    CALLBACK_DATA_DAILY_QUIZ_INFO_TOO_MANY_CATS
+                    CALLBACK_DATA_DAILY_QUIZ_INFO_TOO_MANY_CATS,
+                    JOB_GRACE_PERIOD # Added import
                     )
 import state
 from data_manager import save_daily_quiz_subscriptions
 from quiz_logic import prepare_poll_options
 from handlers.rating_handlers import get_player_display
+from handlers.poll_handlers import handle_current_poll_end # Assuming this is the correct location
 from utils import pluralize, escape_markdown_v2
 
 # --- Вспомогательные функции ---
@@ -114,7 +116,7 @@ def _get_questions_for_daily_quiz(
 async def subscribe_daily_quiz_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.effective_chat or not update.effective_user: return
     chat_id_str = str(update.effective_chat.id)
-    
+
     # Admin check removed
 
     if chat_id_str in state.daily_quiz_subscriptions:
@@ -153,11 +155,6 @@ async def unsubscribe_daily_quiz_command(update: Update, context: ContextTypes.D
 async def set_daily_quiz_time_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.effective_chat or not update.effective_user: return
     chat_id_str = str(update.effective_chat.id)
-    
-    # Admin check removed
-    # if not await _is_user_admin(update, context):
-    #     await update.message.reply_text("Только администраторы могут изменять время.")
-    #     return
 
     if chat_id_str not in state.daily_quiz_subscriptions:
         await update.message.reply_text("Чат не подписан. Сначала /subdaily.")
@@ -183,11 +180,6 @@ async def set_daily_quiz_categories_command(update: Update, context: ContextType
     if not update.message or not update.effective_chat or not update.effective_user: return
     chat_id_str = str(update.effective_chat.id)
 
-    # Admin check removed
-    # if not await _is_user_admin(update, context):
-    #     await update.message.reply_text("Только администраторы могут изменять категории.")
-    #     return
-        
     if chat_id_str not in state.daily_quiz_subscriptions:
         await update.message.reply_text("Чат не подписан. Сначала /subdaily.")
         return
@@ -506,11 +498,10 @@ async def _send_one_daily_question_job(context: ContextTypes.DEFAULT_TYPE):
         if job_queue:
             poll_end_job_delay_seconds = DAILY_QUIZ_POLL_OPEN_PERIOD_SECONDS + JOB_GRACE_PERIOD
             poll_end_job_name = f"daily_quiz_poll_end_{sent_poll_msg.poll.id}"
+            # CORRECTED job scheduling:
             job_queue.run_once(
-                # Re-using handle_current_poll_end as it's generic enough to handle solution revealing
-                context.job_queue.run_once, # This needs to be imported or referenced correctly. Assuming it's handler.
-                handle_current_poll_end, # Function to call
-                timedelta(seconds=poll_end_job_delay_seconds),
+                handle_current_poll_end, # Callback function
+                timedelta(seconds=poll_end_job_delay_seconds), # When to run
                 data={"chat_id_str": chat_id_str, "ended_poll_id": sent_poll_msg.poll.id},
                 name=poll_end_job_name
             )
@@ -622,4 +613,3 @@ async def _trigger_daily_quiz_for_chat_job(context: ContextTypes.DEFAULT_TYPE):
     else:
         logger.error(f"JobQueue не доступен в _trigger_daily_quiz_for_chat_job для {chat_id_str}. Викторина не начнется.")
         state.active_daily_quizzes.pop(chat_id_str, None)
-

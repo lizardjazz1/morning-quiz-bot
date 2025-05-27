@@ -7,7 +7,8 @@ from telegram.ext import ContextTypes
 from telegram.error import BadRequest # Для обработки ошибок редактирования
 
 from config import (logger, NUMBER_OF_QUESTIONS_IN_SESSION,
-                    DEFAULT_POLL_OPEN_PERIOD, JOB_GRACE_PERIOD)
+                    DEFAULT_POLL_OPEN_PERIOD, JOB_GRACE_PERIOD,
+                    MAX_POLL_OPTION_LENGTH, MAX_POLL_QUESTION_LENGTH) # Added MAX_POLL_OPTION_LENGTH
 import state
 from utils import pluralize # MODIFIED: pluralize_points -> pluralize
 from handlers.rating_handlers import get_player_display # Используется в show_quiz_session_results
@@ -26,16 +27,62 @@ def get_random_questions_from_all(count: int) -> List[Dict[str, Any]]:
     return random.sample(all_q, min(count, len(all_q)))
 
 def prepare_poll_options(q_details: Dict[str, Any]) -> Tuple[str, List[str], int, List[str]]:
-    q_text, opts_orig = q_details["question"], q_details["options"]
-    correct_answer_text = opts_orig[q_details["correct_option_index"]]
-    opts_shuffled = list(opts_orig)
-    random.shuffle(opts_shuffled)
+    q_text: str = q_details["question"]
+    opts_orig: List[str] = q_details["options"]
+    correct_option_index_orig: int = q_details["correct_option_index"]
+
+    # 1. Get the original correct answer text
+    # This must be done BEFORE truncation, as the index refers to the original list.
+    # Validation in load_questions should ensure correct_option_index_orig is valid.
+    correct_answer_text_orig: str = opts_orig[correct_option_index_orig]
+
+    # 2. Truncate all options if they exceed MAX_POLL_OPTION_LENGTH
+    processed_options_temp: List[str] = []
+    for opt_text in opts_orig:
+        if len(opt_text) > MAX_POLL_OPTION_LENGTH:
+            # Telegram's limit is 1-100 characters for options.
+            # MAX_POLL_OPTION_LENGTH (e.g., 100) - 3 chars for "..." = max text part (e.g., 97)
+            truncated_text = opt_text[:MAX_POLL_OPTION_LENGTH - 3] + "..."
+            processed_options_temp.append(truncated_text)
+            
+            log_message_intro = f"Option for poll question '{q_text[:30]}...'"
+            if opt_text == correct_answer_text_orig:
+                 logger.warning(f"{log_message_intro} (which is CORRECT) was truncated: '{opt_text}' -> '{truncated_text}'")
+            # Log general truncation if significantly longer, to avoid spamming logs for minor overflows
+            elif len(opt_text) > MAX_POLL_OPTION_LENGTH + 5: # Arbitrary threshold for "significant"
+                 logger.info(f"{log_message_intro} was truncated: '{opt_text}' -> '{truncated_text}'")
+        else:
+            processed_options_temp.append(opt_text)
+
+    # 3. Identify the (potentially truncated) correct answer text for matching after shuffle.
+    # This uses the original index on the now-truncated list `processed_options_temp`.
+    correct_answer_text_for_matching_in_shuffled_list: str = processed_options_temp[correct_option_index_orig]
+
+    # 4. Shuffle the processed (truncated) options.
+    final_shuffled_truncated_options: List[str] = list(processed_options_temp) # Create a new list for shuffling
+    random.shuffle(final_shuffled_truncated_options)
+
+    # 5. Find the new correct index in the shuffled and truncated list.
     try:
-        new_correct_idx = opts_shuffled.index(correct_answer_text)
+        new_correct_idx = final_shuffled_truncated_options.index(correct_answer_text_for_matching_in_shuffled_list)
     except ValueError:
-        logger.error(f"Не удалось найти '{correct_answer_text}' в перемешанных опциях: {opts_shuffled}. Используем оригинальный индекс.")
-        return q_text, list(opts_orig), q_details["correct_option_index"], list(opts_orig)
-    return q_text, opts_shuffled, new_correct_idx, list(opts_orig)
+        logger.error(
+            f"Critical error in prepare_poll_options: Correct answer (potentially truncated) "
+            f"'{correct_answer_text_for_matching_in_shuffled_list}' not found in "
+            f"shuffled_and_truncated_options: {final_shuffled_truncated_options}. "
+            f"Original correct text: '{correct_answer_text_orig}'. Question: '{q_text[:50]}...'. "
+            f"Using 0 as fallback correct index. This indicates a data problem or a bug."
+        )
+        # Fallback to prevent crash, though the quiz poll will likely be wrong.
+        if not final_shuffled_truncated_options: # Should not happen with >=2 options validation
+             logger.critical("CRITICAL: final_shuffled_truncated_options is empty in prepare_poll_options!")
+             return q_text, [], 0, list(opts_orig) # Catastrophic fallback
+        new_correct_idx = 0 # Default to the first option if list is not empty but text not found
+
+    # The fourth element `list(opts_orig)` is returned to maintain consistency with the previous version.
+    # It represents the original, untruncated, unshuffled options.
+    # This could be useful if, for example, a solution text needs to refer to the original option text.
+    return q_text, final_shuffled_truncated_options, new_correct_idx, list(opts_orig)
 
 async def send_solution_if_available(
     context: ContextTypes.DEFAULT_TYPE,
@@ -66,7 +113,7 @@ async def send_solution_if_available(
         poll_info = state.current_poll.get(poll_id_for_placeholder_lookup)
         if poll_info:
             placeholder_message_id = poll_info.get("solution_placeholder_message_id")
-    
+
     if placeholder_message_id:
         logger.debug(f"Attempting to edit solution placeholder message {placeholder_message_id} in chat {chat_id_str} for question {log_q_ref}. Text: '{solution_message_full[:100]}...'")
         try:
@@ -120,12 +167,12 @@ async def send_next_question_in_session(context: ContextTypes.DEFAULT_TYPE, chat
         full_poll_question_header += f" (Кат: {original_cat})"
     full_poll_question_header += f"\n{poll_question_text_for_api}" # Текст вопроса после заголовка
 
-    MAX_POLL_QUESTION_LENGTH = 255 # Telegram API limit for poll question text
+    # MAX_POLL_QUESTION_LENGTH используется из config.py (должен быть 255 или 300 для quiz polls)
     if len(full_poll_question_header) > MAX_POLL_QUESTION_LENGTH:
         truncate_at = MAX_POLL_QUESTION_LENGTH - 3 # For "..."
         full_poll_question_header = full_poll_question_header[:truncate_at] + "..."
         logger.warning(f"Текст вопроса для poll в чате {chat_id_str} был усечен (вопрос сессии {current_q_idx + 1}).")
-    
+
     _, poll_options, poll_correct_option_id, _ = prepare_poll_options(q_details)
 
     logger.debug(f"Attempting to send /quiz10 question {current_q_idx + 1} to chat {chat_id_str}. Header: '{full_poll_question_header[:100]}...'")
@@ -176,7 +223,7 @@ async def send_next_question_in_session(context: ContextTypes.DEFAULT_TYPE, chat
                 name=job_name
             )
             # Сохраняем ссылку на job в сессии (для таймаута *этого* отправленного вопроса)
-            session["next_question_job"] = current_poll_end_job 
+            session["next_question_job"] = current_poll_end_job
     except Exception as e:
         logger.error(f"Ошибка при отправке вопроса сессии ({current_q_idx + 1}) в чате {chat_id_str}: {e}", exc_info=True)
         # Если ошибка, завершаем сессию с текущими результатами
@@ -201,27 +248,30 @@ async def handle_current_poll_end(context: ContextTypes.DEFAULT_TYPE):
         )
         # If poll_info is gone, but it was a quiz_session and the session is still active, it's an error.
         # This check is mostly for quiz10, not daily quiz, as daily quiz doesn't remove its poll_info early.
-        if session and poll_info.get("quiz_session"):
-            logger.error(f"Нештатная ситуация: poll_info для {ended_poll_id} отсутствует, но сессия {chat_id_str} активна. Завершение сессии.")
-            await show_quiz_session_results(context, chat_id_str, error_occurred=True)
+        # Check if `poll_info` was supposed to be a quiz session one (which could be an error if session is active)
+        # However, `poll_info` itself is None here, so we can't check `poll_info.get("quiz_session")`
+        # Instead, if session is active, and we expected poll_info for this session, it's an issue.
+        # But this job is tied to a specific ended_poll_id, not directly to the session's *current* poll_id necessarily.
+        # The original logic for this part seems okay: if poll_info is gone, there's not much to do for *this poll*.
+        # The session might continue or end based on other logic.
         return
-    
+
     q_idx_from_poll_info = poll_info.get("question_session_index", -1)
     logger.info(f"Job 'handle_current_poll_end' сработал для чата {chat_id_str}, poll_id {ended_poll_id} (вопрос сессии/ежедневной ~{q_idx_from_poll_info + 1}).")
 
     # Отправить решение для завершенного опроса
     await send_solution_if_available(
-        context, chat_id_str, 
-        poll_info["question_details"], 
-        q_idx_from_poll_info, 
+        context, chat_id_str,
+        poll_info["question_details"],
+        q_idx_from_poll_info,
         poll_id_for_placeholder_lookup=ended_poll_id
     )
-    
+
     is_last_q_from_poll_info = poll_info.get("is_last_question", False)
     processed_early = poll_info.get("processed_by_early_answer", False)
     is_quiz10_session_poll = poll_info.get("quiz_session", False)
     is_daily_quiz_poll = poll_info.get("daily_quiz", False) # NEW: Check if it's a daily quiz poll
-    
+
     state.current_poll.pop(ended_poll_id, None) # Удаляем инфо об опросе ПОСЛЕ использования
     logger.debug(f"Poll {ended_poll_id} удален из state.current_poll после обработки таймаута.")
 
@@ -267,7 +317,7 @@ async def handle_single_quiz_poll_end(context: ContextTypes.DEFAULT_TYPE):
         if not poll_info.get("quiz_session", False) and not poll_info.get("daily_quiz", False) and question_details: # Убедимся, что это не сессионный/дейли
             await send_solution_if_available(
                 context, chat_id_str,
-                question_details, 
+                question_details,
                 # q_index_for_log не релевантен для одиночного, можно опустить или -1
                 poll_id_for_placeholder_lookup=poll_id
             )
@@ -275,7 +325,6 @@ async def handle_single_quiz_poll_end(context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"Одиночный квиз (poll {poll_id}) обработан и удален из state.current_poll после таймаута.")
     else:
         logger.warning(f"handle_single_quiz_poll_end: Информация для poll_id {poll_id} (чат {chat_id_str}) не найдена. Пояснение не отправлено.")
-
 
 # --- Отображение результатов сессии /quiz10 ---
 async def show_quiz_session_results(context: ContextTypes.DEFAULT_TYPE, chat_id_str: str, error_occurred: bool = False):
@@ -285,7 +334,7 @@ async def show_quiz_session_results(context: ContextTypes.DEFAULT_TYPE, chat_id_
     if not session:
         logger.warning(f"show_quiz_session_results: Сессия для чата {chat_id_str} не найдена (возможно, уже завершена).")
         # Убедимся, что она точно удалена, если кто-то вызвал show_quiz_session_results для уже несуществующей сессии
-        state.current_quiz_session.pop(chat_id_str, None) 
+        state.current_quiz_session.pop(chat_id_str, None)
         return
 
     # Отменяем job следующего вопроса, если он еще есть (это job для ПОСЛЕДНЕГО отправленного poll'а)
@@ -327,7 +376,7 @@ async def show_quiz_session_results(context: ContextTypes.DEFAULT_TYPE, chat_id_
                              f"    Общий счёт в чате: {global_score_display}\n")
         if len(sorted_session_participants) > 3: # Небольшое сообщение для остальных
              results_body += "\nОтличная игра, остальные участники!"
-    
+
     full_results_text = results_header + results_body
     logger.debug(f"Attempting to send /quiz10 session results to chat {chat_id_str}. Text: '{full_results_text[:100]}...'")
     try:

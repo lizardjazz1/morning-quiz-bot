@@ -17,6 +17,8 @@ USERS_FILE = 'users.json'
 DEFAULT_POLL_OPEN_PERIOD = 25  # Секунд на ответ для обычных /quiz и /quiz10
 NUMBER_OF_QUESTIONS_IN_SESSION = 10 # Для /quiz10
 JOB_GRACE_PERIOD = 2 # Секунды запаса для задач JobQueue после закрытия опроса (увеличено для надежности)
+MAX_POLL_QUESTION_LENGTH = 300 # Предполагается, что это уже есть
+MAX_POLL_OPTION_LENGTH = 100   # Для вариантов ответа
 
 # Константы для Callback Data (для кнопок выбора категории /quiz10)
 CALLBACK_DATA_PREFIX_QUIZ10_CATEGORY_SHORT = "q10s_"

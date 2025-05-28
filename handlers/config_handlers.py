@@ -641,13 +641,13 @@ class ConfigHandlers:
 
         if query:
             await query.answer()
-            try: await query.edit_message_text(final_message, reply_markup=None)
+            try: await query.edit_message_text(final_message, reply_markup=None, parse_mode=None)
             except BadRequest:
-                try: await query.message.reply_text(final_message)
+                try: await query.message.reply_text(final_message, parse_mode=None)
                 except Exception as e_reply: logger.error(f"Ошибка отправки отмены: {e_reply}")
             except Exception as e_edit: logger.error(f"Ошибка редактирования при отмене: {e_edit}")
         elif update.message:
-            await update.message.reply_text(final_message)
+            await update.message.reply_text(final_message, parse_mode=None)
             target_msg_id = context.chat_data.get(CTX_ADMIN_CFG_MSG_ID)
             chat_id = context.chat_data.get(CTX_ADMIN_CFG_CHAT_ID)
             if target_msg_id and chat_id:

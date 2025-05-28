@@ -2983,3 +2983,1291 @@ AttributeError: 'ScoreManager' object has no attribute 'get_top_users'
 2025-05-29 01:07:18,822 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
 2025-05-29 01:07:18,822 - httpcore.http11 - DEBUG - send_request_body.complete
 2025-05-29 01:07:18,822 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:09:55,815 - __main__ - INFO - Обработчики сигналов SIGTERM/SIGINT не устанавливаются в Windows. Используйте Ctrl+C для KeyboardInterrupt.
+2025-05-29 01:09:55,816 - __main__ - INFO - Запуск бота...
+2025-05-29 01:09:55,816 - __main__ - INFO - Уровень логирования установлен на: DEBUG
+2025-05-29 01:09:55,816 - __main__ - INFO - Первичная загрузка данных...
+2025-05-29 01:09:55,816 - data_manager - INFO - Загрузка всех данных...
+2025-05-29 01:09:55,823 - data_manager - INFO - Загружено 1042 вопросов из 22 категорий.
+2025-05-29 01:09:55,823 - data_manager - INFO - C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\data\users.json не найден или пуст.
+2025-05-29 01:09:55,824 - data_manager - INFO - Загрузка всех данных завершена.
+2025-05-29 01:09:55,824 - __main__ - INFO - Первичная загрузка данных завершена.
+2025-05-29 01:09:56,224 - modules.category_manager - INFO - CategoryManager инициализирован.
+2025-05-29 01:09:56,257 - __main__ - INFO - Все менеджеры и обработчики команд инициализированы.
+2025-05-29 01:09:56,260 - __main__ - INFO - Все обработчики PTB зарегистрированы.
+2025-05-29 01:09:56,260 - __main__ - INFO - Запуск бота (polling)...
+2025-05-29 01:09:56,264 - httpcore.connection - DEBUG - connect_tcp.started host='api.telegram.org' port=443 local_address=None timeout=5.0 socket_options=None
+2025-05-29 01:09:56,334 - httpcore.connection - DEBUG - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002638AC7DFD0>
+2025-05-29 01:09:56,334 - httpcore.connection - DEBUG - start_tls.started ssl_context=<ssl.SSLContext object at 0x000002638AC343B0> server_hostname='api.telegram.org' timeout=5.0
+2025-05-29 01:09:56,401 - httpcore.connection - DEBUG - start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002638AC47ED0>
+2025-05-29 01:09:56,402 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:09:56,402 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:09:56,402 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:09:56,402 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:09:56,402 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:09:56,459 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:09:56 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'255'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:09:56,460 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:09:56,460 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:09:56,460 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:09:56,460 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:09:56,461 - apscheduler.scheduler - INFO - Scheduler started
+2025-05-29 01:09:56,461 - telegram.ext.Application - INFO - Application started
+2025-05-29 01:09:56,462 - apscheduler.scheduler - DEBUG - Looking for jobs to run
+2025-05-29 01:09:56,462 - apscheduler.scheduler - DEBUG - No jobs; waiting until a job is added
+2025-05-29 01:09:56,462 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:09:56,462 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:09:56,462 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:09:56,463 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:09:56,463 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:09:56,519 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:09:56 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'68'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:09:56,519 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:09:56,520 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:09:56,520 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:09:56,520 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:09:56,521 - httpcore.connection - DEBUG - connect_tcp.started host='api.telegram.org' port=443 local_address=None timeout=5.0 socket_options=None
+2025-05-29 01:09:56,577 - httpcore.connection - DEBUG - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002638ACB65D0>
+2025-05-29 01:09:56,578 - httpcore.connection - DEBUG - start_tls.started ssl_context=<ssl.SSLContext object at 0x000002638AC34680> server_hostname='api.telegram.org' timeout=5.0
+2025-05-29 01:09:56,637 - httpcore.connection - DEBUG - start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002638AC84640>
+2025-05-29 01:09:56,637 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:09:56,638 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:09:56,638 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:09:56,638 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:09:56,638 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:10:03,656 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:10:03 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'370'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:10:03,657 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:10:03,657 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:10:03,657 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:10:03,657 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:10:03,658 - __main__ - ERROR - Исключение при обработке обновления:
+Traceback (most recent call last):
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\ext\_application.py", line 1298, in process_update
+    await coroutine
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 158, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\handlers\rating_handlers.py", line 61, in top_chat_command
+    await self.rating_command(update, context, global_rating=False)
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\handlers\rating_handlers.py", line 27, in rating_command
+    top_users = self.score_manager.get_top_users(
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ScoreManager' object has no attribute 'get_top_users'
+2025-05-29 01:10:03,661 - httpcore.connection - DEBUG - close.started
+2025-05-29 01:10:03,662 - httpcore.connection - DEBUG - close.complete
+2025-05-29 01:10:03,662 - httpcore.connection - DEBUG - connect_tcp.started host='api.telegram.org' port=443 local_address=None timeout=5.0 socket_options=None
+2025-05-29 01:10:03,662 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:10:03,663 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:10:03,663 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:10:03,663 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:10:03,663 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:10:03,721 - httpcore.connection - DEBUG - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002638AC86190>
+2025-05-29 01:10:03,722 - httpcore.connection - DEBUG - start_tls.started ssl_context=<ssl.SSLContext object at 0x000002638AC343B0> server_hostname='api.telegram.org' timeout=5.0
+2025-05-29 01:10:03,796 - httpcore.connection - DEBUG - start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002638AC6F9B0>
+2025-05-29 01:10:03,797 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:10:03,797 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:10:03,797 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:10:03,797 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:10:03,798 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:10:03,872 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:10:03 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'532'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:10:03,873 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:10:03,873 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:10:03,873 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:10:03,873 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:10:13,720 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:10:13 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:10:13,721 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:10:13,721 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:10:13,721 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:10:13,721 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:10:13,722 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:10:13,722 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:10:13,723 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:10:13,723 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:10:13,723 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:10:23,780 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:10:23 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:10:23,781 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:10:23,781 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:10:23,781 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:10:23,782 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:10:23,782 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:10:23,782 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:10:23,783 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:10:23,783 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:10:23,783 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:10:33,856 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:10:33 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:10:33,857 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:10:33,857 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:10:33,857 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:10:33,858 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:10:33,858 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:10:33,859 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:10:33,859 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:10:33,859 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:10:33,859 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:10:43,920 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:10:43 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:10:43,920 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:10:43,921 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:10:43,921 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:10:43,921 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:10:43,922 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:10:43,922 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:10:43,922 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:10:43,923 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:10:43,923 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:10:53,978 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:10:53 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:10:53,979 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:10:53,979 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:10:53,979 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:10:53,979 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:10:53,980 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:10:53,980 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:10:53,980 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:10:53,981 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:10:53,981 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:11:04,042 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:11:03 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:11:04,042 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:11:04,043 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:11:04,043 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:11:04,043 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:11:04,044 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:11:04,044 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:11:04,045 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:11:04,045 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:11:04,045 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:12:42,580 - __main__ - INFO - Обработчики сигналов SIGTERM/SIGINT не устанавливаются в Windows. Используйте Ctrl+C для KeyboardInterrupt.
+2025-05-29 01:12:42,580 - __main__ - INFO - Запуск бота...
+2025-05-29 01:12:42,581 - __main__ - INFO - Уровень логирования установлен на: DEBUG
+2025-05-29 01:12:42,581 - __main__ - INFO - Первичная загрузка данных...
+2025-05-29 01:12:42,581 - data_manager - INFO - Загрузка всех данных...
+2025-05-29 01:12:42,585 - data_manager - INFO - Загружено 1042 вопросов из 22 категорий.
+2025-05-29 01:12:42,586 - data_manager - INFO - C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\data\users.json не найден или пуст.
+2025-05-29 01:12:42,587 - data_manager - INFO - Загрузка всех данных завершена.
+2025-05-29 01:12:42,587 - __main__ - INFO - Первичная загрузка данных завершена.
+2025-05-29 01:12:43,086 - __main__ - WARNING - stop_event не был установлен при выходе из (KeyboardInterrupt/finally). Попытка установить.
+2025-05-29 01:12:43,087 - __main__ - INFO - Программа бота завершена.
+2025-05-29 01:13:04,777 - __main__ - INFO - Обработчики сигналов SIGTERM/SIGINT не устанавливаются в Windows. Используйте Ctrl+C для KeyboardInterrupt.
+2025-05-29 01:13:04,778 - __main__ - INFO - Запуск бота...
+2025-05-29 01:13:04,778 - __main__ - INFO - Уровень логирования установлен на: DEBUG
+2025-05-29 01:13:04,778 - __main__ - INFO - Первичная загрузка данных...
+2025-05-29 01:13:04,778 - data_manager - INFO - Загрузка всех данных...
+2025-05-29 01:13:04,783 - data_manager - INFO - Загружено 1042 вопросов из 22 категорий.
+2025-05-29 01:13:04,783 - data_manager - INFO - C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\data\users.json не найден или пуст.
+2025-05-29 01:13:04,783 - data_manager - INFO - Загрузка всех данных завершена.
+2025-05-29 01:13:04,783 - __main__ - INFO - Первичная загрузка данных завершена.
+2025-05-29 01:13:05,203 - __main__ - WARNING - stop_event не был установлен при выходе из (KeyboardInterrupt/finally). Попытка установить.
+2025-05-29 01:13:05,204 - __main__ - INFO - Программа бота завершена.
+2025-05-29 01:13:55,202 - __main__ - INFO - Обработчики сигналов SIGTERM/SIGINT не устанавливаются в Windows. Используйте Ctrl+C для KeyboardInterrupt.
+2025-05-29 01:13:55,203 - __main__ - INFO - Запуск бота...
+2025-05-29 01:13:55,203 - __main__ - INFO - Уровень логирования установлен на: DEBUG
+2025-05-29 01:13:55,204 - __main__ - INFO - Первичная загрузка данных...
+2025-05-29 01:13:55,204 - data_manager - INFO - Загрузка всех данных...
+2025-05-29 01:13:55,210 - data_manager - INFO - Загружено 1042 вопросов из 22 категорий.
+2025-05-29 01:13:55,210 - data_manager - INFO - C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\data\users.json не найден или пуст.
+2025-05-29 01:13:55,211 - data_manager - INFO - Загрузка всех данных завершена.
+2025-05-29 01:13:55,211 - __main__ - INFO - Первичная загрузка данных завершена.
+2025-05-29 01:13:55,587 - __main__ - WARNING - stop_event не был установлен при выходе из (KeyboardInterrupt/finally). Попытка установить.
+2025-05-29 01:13:55,588 - __main__ - INFO - Программа бота завершена.
+2025-05-29 01:14:34,774 - __main__ - INFO - Обработчики сигналов SIGTERM/SIGINT не устанавливаются в Windows. Используйте Ctrl+C для KeyboardInterrupt.
+2025-05-29 01:14:34,774 - __main__ - INFO - Запуск бота...
+2025-05-29 01:14:34,775 - __main__ - INFO - Уровень логирования установлен на: DEBUG
+2025-05-29 01:14:34,775 - __main__ - INFO - Первичная загрузка данных...
+2025-05-29 01:14:34,775 - data_manager - INFO - Загрузка всех данных...
+2025-05-29 01:14:34,782 - data_manager - INFO - Загружено 1042 вопросов из 22 категорий.
+2025-05-29 01:14:34,782 - data_manager - INFO - C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\data\users.json не найден или пуст.
+2025-05-29 01:14:34,783 - data_manager - INFO - Загрузка всех данных завершена.
+2025-05-29 01:14:34,783 - __main__ - INFO - Первичная загрузка данных завершена.
+2025-05-29 01:14:35,159 - __main__ - WARNING - stop_event не был установлен при выходе из (KeyboardInterrupt/finally). Попытка установить.
+2025-05-29 01:14:35,159 - __main__ - INFO - Программа бота завершена.
+2025-05-29 01:14:55,808 - __main__ - INFO - Обработчики сигналов SIGTERM/SIGINT не устанавливаются в Windows. Используйте Ctrl+C для KeyboardInterrupt.
+2025-05-29 01:14:55,808 - __main__ - INFO - Запуск бота...
+2025-05-29 01:14:55,809 - __main__ - INFO - Уровень логирования установлен на: DEBUG
+2025-05-29 01:14:55,809 - __main__ - INFO - Первичная загрузка данных...
+2025-05-29 01:14:55,809 - data_manager - INFO - Загрузка всех данных...
+2025-05-29 01:14:55,816 - data_manager - INFO - Загружено 1042 вопросов из 22 категорий.
+2025-05-29 01:14:55,816 - data_manager - INFO - C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\data\users.json не найден или пуст.
+2025-05-29 01:14:55,816 - data_manager - INFO - Загрузка всех данных завершена.
+2025-05-29 01:14:55,817 - __main__ - INFO - Первичная загрузка данных завершена.
+2025-05-29 01:14:56,191 - __main__ - WARNING - stop_event не был установлен при выходе из (KeyboardInterrupt/finally). Попытка установить.
+2025-05-29 01:14:56,192 - __main__ - INFO - Программа бота завершена.
+2025-05-29 01:15:21,145 - __main__ - INFO - Обработчики сигналов SIGTERM/SIGINT не устанавливаются в Windows. Используйте Ctrl+C для KeyboardInterrupt.
+2025-05-29 01:15:21,145 - __main__ - INFO - Запуск бота...
+2025-05-29 01:15:21,146 - __main__ - INFO - Уровень логирования установлен на: DEBUG
+2025-05-29 01:15:21,146 - __main__ - INFO - Первичная загрузка данных...
+2025-05-29 01:15:21,146 - data_manager - INFO - Загрузка всех данных...
+2025-05-29 01:15:21,150 - data_manager - INFO - Загружено 1042 вопросов из 22 категорий.
+2025-05-29 01:15:21,151 - data_manager - INFO - C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\data\users.json не найден или пуст.
+2025-05-29 01:15:21,151 - data_manager - INFO - Загрузка всех данных завершена.
+2025-05-29 01:15:21,151 - __main__ - INFO - Первичная загрузка данных завершена.
+2025-05-29 01:15:21,580 - __main__ - WARNING - stop_event не был установлен при выходе из (KeyboardInterrupt/finally). Попытка установить.
+2025-05-29 01:15:21,580 - __main__ - INFO - Программа бота завершена.
+2025-05-29 01:16:02,846 - __main__ - INFO - Обработчики сигналов SIGTERM/SIGINT не устанавливаются в Windows. Используйте Ctrl+C для KeyboardInterrupt.
+2025-05-29 01:16:02,846 - __main__ - INFO - Запуск бота...
+2025-05-29 01:16:02,847 - __main__ - INFO - Уровень логирования установлен на: DEBUG
+2025-05-29 01:16:02,847 - __main__ - INFO - Первичная загрузка данных...
+2025-05-29 01:16:02,847 - data_manager - INFO - Загрузка всех данных...
+2025-05-29 01:16:02,853 - data_manager - INFO - Загружено 1042 вопросов из 22 категорий.
+2025-05-29 01:16:02,853 - data_manager - INFO - C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\data\users.json не найден или пуст.
+2025-05-29 01:16:02,854 - data_manager - INFO - Загрузка всех данных завершена.
+2025-05-29 01:16:02,854 - __main__ - INFO - Первичная загрузка данных завершена.
+2025-05-29 01:16:03,260 - modules.category_manager - INFO - CategoryManager инициализирован.
+2025-05-29 01:16:03,294 - __main__ - INFO - Все менеджеры и обработчики команд инициализированы.
+2025-05-29 01:16:03,296 - __main__ - INFO - Все обработчики PTB зарегистрированы.
+2025-05-29 01:16:03,297 - __main__ - INFO - Запуск бота (polling)...
+2025-05-29 01:16:03,301 - httpcore.connection - DEBUG - connect_tcp.started host='api.telegram.org' port=443 local_address=None timeout=5.0 socket_options=None
+2025-05-29 01:16:03,369 - httpcore.connection - DEBUG - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x0000028A2493DFD0>
+2025-05-29 01:16:03,369 - httpcore.connection - DEBUG - start_tls.started ssl_context=<ssl.SSLContext object at 0x0000028A248F4290> server_hostname='api.telegram.org' timeout=5.0
+2025-05-29 01:16:03,431 - httpcore.connection - DEBUG - start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x0000028A24907250>
+2025-05-29 01:16:03,431 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:16:03,431 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:16:03,432 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:16:03,432 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:16:03,432 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:16:03,486 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:16:03 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'255'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:16:03,487 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:16:03,487 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:16:03,487 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:16:03,487 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:16:03,488 - apscheduler.scheduler - INFO - Scheduler started
+2025-05-29 01:16:03,488 - telegram.ext.Application - INFO - Application started
+2025-05-29 01:16:03,489 - apscheduler.scheduler - DEBUG - Looking for jobs to run
+2025-05-29 01:16:03,489 - apscheduler.scheduler - DEBUG - No jobs; waiting until a job is added
+2025-05-29 01:16:03,489 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:16:03,489 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:16:03,489 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:16:03,490 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:16:03,490 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:16:03,543 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:16:03 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'68'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:16:03,543 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:16:03,544 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:16:03,544 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:16:03,544 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:16:03,545 - httpcore.connection - DEBUG - connect_tcp.started host='api.telegram.org' port=443 local_address=None timeout=5.0 socket_options=None
+2025-05-29 01:16:03,599 - httpcore.connection - DEBUG - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x0000028A24976710>
+2025-05-29 01:16:03,600 - httpcore.connection - DEBUG - start_tls.started ssl_context=<ssl.SSLContext object at 0x0000028A248F4560> server_hostname='api.telegram.org' timeout=5.0
+2025-05-29 01:16:03,656 - httpcore.connection - DEBUG - start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x0000028A248ABA80>
+2025-05-29 01:16:03,656 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:16:03,657 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:16:03,657 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:16:03,657 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:16:03,657 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:18:16,255 - __main__ - INFO - Обработчики сигналов SIGTERM/SIGINT не устанавливаются в Windows. Используйте Ctrl+C для KeyboardInterrupt.
+2025-05-29 01:18:16,256 - __main__ - INFO - Запуск бота...
+2025-05-29 01:18:16,256 - __main__ - INFO - Уровень логирования установлен на: DEBUG
+2025-05-29 01:18:16,256 - __main__ - INFO - Первичная загрузка данных...
+2025-05-29 01:18:16,256 - data_manager - INFO - Загрузка всех данных...
+2025-05-29 01:18:16,263 - data_manager - INFO - Загружено 1042 вопросов из 22 категорий.
+2025-05-29 01:18:16,263 - data_manager - INFO - C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\data\users.json не найден или пуст.
+2025-05-29 01:18:16,263 - data_manager - INFO - Загрузка всех данных завершена.
+2025-05-29 01:18:16,263 - __main__ - INFO - Первичная загрузка данных завершена.
+2025-05-29 01:18:16,667 - modules.category_manager - INFO - CategoryManager инициализирован.
+2025-05-29 01:18:16,698 - __main__ - INFO - Все менеджеры и обработчики команд инициализированы.
+2025-05-29 01:18:16,700 - __main__ - INFO - Все обработчики PTB зарегистрированы.
+2025-05-29 01:18:16,700 - __main__ - INFO - Запуск бота (polling)...
+2025-05-29 01:18:16,704 - httpcore.connection - DEBUG - connect_tcp.started host='api.telegram.org' port=443 local_address=None timeout=5.0 socket_options=None
+2025-05-29 01:18:16,766 - httpcore.connection - DEBUG - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000001938421DFD0>
+2025-05-29 01:18:16,767 - httpcore.connection - DEBUG - start_tls.started ssl_context=<ssl.SSLContext object at 0x00000193841D4290> server_hostname='api.telegram.org' timeout=5.0
+2025-05-29 01:18:16,828 - httpcore.connection - DEBUG - start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x00000193841E7250>
+2025-05-29 01:18:16,828 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:18:16,829 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:18:16,829 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:18:16,829 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:18:16,829 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:18:16,885 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:18:16 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'255'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:18:16,886 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:18:16,886 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:18:16,886 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:18:16,887 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:18:16,887 - apscheduler.scheduler - INFO - Scheduler started
+2025-05-29 01:18:16,887 - telegram.ext.Application - INFO - Application started
+2025-05-29 01:18:16,888 - apscheduler.scheduler - DEBUG - Looking for jobs to run
+2025-05-29 01:18:16,888 - apscheduler.scheduler - DEBUG - No jobs; waiting until a job is added
+2025-05-29 01:18:16,888 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:18:16,889 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:18:16,889 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:18:16,889 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:18:16,889 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:18:16,949 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:18:16 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'68'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:18:16,949 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:18:16,949 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:18:16,950 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:18:16,950 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:18:16,951 - httpcore.connection - DEBUG - connect_tcp.started host='api.telegram.org' port=443 local_address=None timeout=5.0 socket_options=None
+2025-05-29 01:18:17,006 - httpcore.connection - DEBUG - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x0000019384256710>
+2025-05-29 01:18:17,006 - httpcore.connection - DEBUG - start_tls.started ssl_context=<ssl.SSLContext object at 0x00000193841D4560> server_hostname='api.telegram.org' timeout=5.0
+2025-05-29 01:18:17,064 - httpcore.connection - DEBUG - start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000001938418BA80>
+2025-05-29 01:18:17,065 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:18:17,065 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:18:17,065 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:18:17,066 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:18:17,066 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:18:22,073 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:18:22 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'370'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:18:22,074 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:18:22,074 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:18:22,074 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:18:22,075 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:18:22,075 - __main__ - ERROR - Исключение при обработке обновления:
+Traceback (most recent call last):
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\ext\_application.py", line 1298, in process_update
+    await coroutine
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 158, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\handlers\rating_handlers.py", line 62, in top_chat_command
+    await self.rating_command(update, context, global_rating=False)
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\handlers\rating_handlers.py", line 27, in rating_command
+    top_users = self.score_manager.get_top_users(
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ScoreManager' object has no attribute 'get_top_users'
+2025-05-29 01:18:22,078 - httpcore.connection - DEBUG - close.started
+2025-05-29 01:18:22,078 - httpcore.connection - DEBUG - close.complete
+2025-05-29 01:18:22,078 - httpcore.connection - DEBUG - connect_tcp.started host='api.telegram.org' port=443 local_address=None timeout=5.0 socket_options=None
+2025-05-29 01:18:22,079 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:18:22,079 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:18:22,079 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:18:22,080 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:18:22,080 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:18:22,137 - httpcore.connection - DEBUG - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x0000019384229F30>
+2025-05-29 01:18:22,137 - httpcore.connection - DEBUG - start_tls.started ssl_context=<ssl.SSLContext object at 0x00000193841D4290> server_hostname='api.telegram.org' timeout=5.0
+2025-05-29 01:18:22,197 - httpcore.connection - DEBUG - start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x00000193842B8170>
+2025-05-29 01:18:22,197 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:18:22,197 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:18:22,197 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:18:22,198 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:18:22,198 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:18:22,305 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:18:22 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'532'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:18:22,305 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:18:22,306 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:18:22,306 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:18:22,306 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:18:32,136 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:18:32 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:18:32,137 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:18:32,137 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:18:32,137 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:18:32,137 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:18:32,138 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:18:32,138 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:18:32,138 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:18:32,138 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:18:32,139 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:18:42,195 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:18:42 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:18:42,195 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:18:42,196 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:18:42,196 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:18:42,196 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:18:42,197 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:18:42,197 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:18:42,197 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:18:42,197 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:18:42,197 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:18:52,253 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:18:52 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:18:52,254 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:18:52,254 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:18:52,254 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:18:52,255 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:18:52,255 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:18:52,255 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:18:52,256 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:18:52,256 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:18:52,256 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:20:57,961 - __main__ - INFO - Обработчики сигналов SIGTERM/SIGINT не устанавливаются в Windows. Используйте Ctrl+C для KeyboardInterrupt.
+2025-05-29 01:20:57,961 - __main__ - INFO - Запуск бота...
+2025-05-29 01:20:57,961 - __main__ - INFO - Уровень логирования установлен на: DEBUG
+2025-05-29 01:20:57,962 - __main__ - INFO - Первичная загрузка данных...
+2025-05-29 01:20:57,962 - data_manager - INFO - Загрузка всех данных...
+2025-05-29 01:20:57,966 - data_manager - INFO - Загружено 1042 вопросов из 22 категорий.
+2025-05-29 01:20:57,966 - data_manager - INFO - C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\data\users.json не найден или пуст.
+2025-05-29 01:20:57,967 - data_manager - INFO - Загрузка всех данных завершена.
+2025-05-29 01:20:57,967 - __main__ - INFO - Первичная загрузка данных завершена.
+2025-05-29 01:20:58,395 - __main__ - WARNING - stop_event не был установлен при выходе из (KeyboardInterrupt/finally). Попытка установить.
+2025-05-29 01:20:58,395 - __main__ - INFO - Программа бота завершена.
+2025-05-29 01:21:27,761 - __main__ - INFO - Обработчики сигналов SIGTERM/SIGINT не устанавливаются в Windows. Используйте Ctrl+C для KeyboardInterrupt.
+2025-05-29 01:21:27,762 - __main__ - INFO - Запуск бота...
+2025-05-29 01:21:27,762 - __main__ - INFO - Уровень логирования установлен на: DEBUG
+2025-05-29 01:21:27,762 - __main__ - INFO - Первичная загрузка данных...
+2025-05-29 01:21:27,762 - data_manager - INFO - Загрузка всех данных...
+2025-05-29 01:21:27,768 - data_manager - INFO - Загружено 1042 вопросов из 22 категорий.
+2025-05-29 01:21:27,769 - data_manager - INFO - C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\data\users.json не найден или пуст.
+2025-05-29 01:21:27,769 - data_manager - INFO - Загрузка всех данных завершена.
+2025-05-29 01:21:27,769 - __main__ - INFO - Первичная загрузка данных завершена.
+2025-05-29 01:21:28,170 - modules.category_manager - INFO - CategoryManager инициализирован.
+2025-05-29 01:21:28,202 - __main__ - INFO - Все менеджеры и обработчики команд инициализированы.
+2025-05-29 01:21:28,204 - __main__ - INFO - Все обработчики PTB зарегистрированы.
+2025-05-29 01:21:28,204 - __main__ - INFO - Запуск бота (polling)...
+2025-05-29 01:21:28,208 - httpcore.connection - DEBUG - connect_tcp.started host='api.telegram.org' port=443 local_address=None timeout=5.0 socket_options=None
+2025-05-29 01:21:28,283 - httpcore.connection - DEBUG - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002AC5EE3DFD0>
+2025-05-29 01:21:28,283 - httpcore.connection - DEBUG - start_tls.started ssl_context=<ssl.SSLContext object at 0x000002AC5EDF8200> server_hostname='api.telegram.org' timeout=5.0
+2025-05-29 01:21:28,344 - httpcore.connection - DEBUG - start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002AC5EE07250>
+2025-05-29 01:21:28,344 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:21:28,344 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:21:28,345 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:21:28,345 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:21:28,345 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:21:28,398 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:21:28 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'255'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:21:28,398 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:21:28,399 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:21:28,399 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:21:28,399 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:21:28,400 - apscheduler.scheduler - INFO - Scheduler started
+2025-05-29 01:21:28,400 - telegram.ext.Application - INFO - Application started
+2025-05-29 01:21:28,400 - apscheduler.scheduler - DEBUG - Looking for jobs to run
+2025-05-29 01:21:28,401 - apscheduler.scheduler - DEBUG - No jobs; waiting until a job is added
+2025-05-29 01:21:28,401 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:21:28,401 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:21:28,401 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:21:28,401 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:21:28,401 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:21:28,455 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:21:28 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'68'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:21:28,455 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:21:28,456 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:21:28,456 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:21:28,456 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:21:28,457 - httpcore.connection - DEBUG - connect_tcp.started host='api.telegram.org' port=443 local_address=None timeout=5.0 socket_options=None
+2025-05-29 01:21:28,515 - httpcore.connection - DEBUG - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002AC5EE76710>
+2025-05-29 01:21:28,516 - httpcore.connection - DEBUG - start_tls.started ssl_context=<ssl.SSLContext object at 0x000002AC5EDF84D0> server_hostname='api.telegram.org' timeout=5.0
+2025-05-29 01:21:28,575 - httpcore.connection - DEBUG - start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002AC5EDAFA80>
+2025-05-29 01:21:28,576 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:21:28,576 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:21:28,576 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:21:28,577 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:21:28,577 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:21:32,758 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:21:32 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'370'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:21:32,759 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:21:32,759 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:21:32,759 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:21:32,759 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:21:32,760 - __main__ - ERROR - Исключение при обработке обновления:
+Traceback (most recent call last):
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\ext\_application.py", line 1298, in process_update
+    await coroutine
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 158, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\handlers\rating_handlers.py", line 67, in top_chat_command
+    await self.rating_command(update, context, global_rating=False)
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\handlers\rating_handlers.py", line 34, in rating_command
+    top_n=self.app_config.rating_display_limit
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'AppConfig' object has no attribute 'rating_display_limit'
+2025-05-29 01:21:32,763 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:21:32,763 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:21:32,764 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:21:32,764 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:21:32,764 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:21:32,764 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:21:32,765 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:21:32,765 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:21:32,765 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:21:32,765 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:21:32,844 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:21:32 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'532'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:21:32,844 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:21:32,845 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:21:32,845 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:21:32,845 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:21:42,823 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:21:42 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:21:42,823 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:21:42,823 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:21:42,824 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:21:42,824 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:21:42,824 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:21:42,825 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:21:42,825 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:21:42,825 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:21:42,825 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:21:52,883 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:21:52 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:21:52,883 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:21:52,883 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:21:52,883 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:21:52,884 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:21:52,884 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:21:52,885 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:21:52,885 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:21:52,885 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:21:52,885 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:22:02,948 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:22:02 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:22:02,948 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:22:02,949 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:22:02,949 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:22:02,949 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:22:02,950 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:22:02,950 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:22:02,950 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:22:02,951 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:22:02,951 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:22:13,011 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:22:12 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:22:13,011 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:22:13,011 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:22:13,011 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:22:13,012 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:22:13,012 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:22:13,013 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:22:13,013 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:22:13,013 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:22:13,013 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:22:23,072 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:22:23 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:22:23,073 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:22:23,073 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:22:23,073 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:22:23,074 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:22:23,074 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:22:23,075 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:22:23,075 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:22:23,075 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:22:23,075 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:22:33,132 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:22:33 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:22:33,133 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:22:33,133 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:22:33,133 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:22:33,134 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:22:33,134 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:22:33,134 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:22:33,135 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:22:33,135 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:22:33,135 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:22:43,193 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:22:43 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:22:43,194 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:22:43,194 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:22:43,194 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:22:43,195 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:22:43,195 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:22:43,195 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:22:43,196 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:22:43,196 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:22:43,196 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:05,750 - __main__ - INFO - Обработчики сигналов SIGTERM/SIGINT не устанавливаются в Windows. Используйте Ctrl+C для KeyboardInterrupt.
+2025-05-29 01:23:05,750 - __main__ - INFO - Запуск бота...
+2025-05-29 01:23:05,751 - __main__ - INFO - Уровень логирования установлен на: DEBUG
+2025-05-29 01:23:05,751 - __main__ - INFO - Первичная загрузка данных...
+2025-05-29 01:23:05,751 - data_manager - INFO - Загрузка всех данных...
+2025-05-29 01:23:05,758 - data_manager - INFO - Загружено 1042 вопросов из 22 категорий.
+2025-05-29 01:23:05,758 - data_manager - INFO - C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\data\users.json не найден или пуст.
+2025-05-29 01:23:05,758 - data_manager - INFO - Загрузка всех данных завершена.
+2025-05-29 01:23:05,758 - __main__ - INFO - Первичная загрузка данных завершена.
+2025-05-29 01:23:06,163 - modules.category_manager - INFO - CategoryManager инициализирован.
+2025-05-29 01:23:06,195 - __main__ - INFO - Все менеджеры и обработчики команд инициализированы.
+2025-05-29 01:23:06,197 - __main__ - INFO - Все обработчики PTB зарегистрированы.
+2025-05-29 01:23:06,197 - __main__ - INFO - Запуск бота (polling)...
+2025-05-29 01:23:06,201 - httpcore.connection - DEBUG - connect_tcp.started host='api.telegram.org' port=443 local_address=None timeout=5.0 socket_options=None
+2025-05-29 01:23:06,256 - httpcore.connection - DEBUG - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x0000022D6DA2DFD0>
+2025-05-29 01:23:06,256 - httpcore.connection - DEBUG - start_tls.started ssl_context=<ssl.SSLContext object at 0x0000022D6D9E8200> server_hostname='api.telegram.org' timeout=5.0
+2025-05-29 01:23:06,313 - httpcore.connection - DEBUG - start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x0000022D6D9F7390>
+2025-05-29 01:23:06,314 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:06,314 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:23:06,314 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:23:06,315 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:23:06,315 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:06,364 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:23:06 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'255'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:23:06,365 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:23:06,365 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:23:06,365 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:23:06,365 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:23:06,366 - apscheduler.scheduler - INFO - Scheduler started
+2025-05-29 01:23:06,366 - telegram.ext.Application - INFO - Application started
+2025-05-29 01:23:06,367 - apscheduler.scheduler - DEBUG - Looking for jobs to run
+2025-05-29 01:23:06,367 - apscheduler.scheduler - DEBUG - No jobs; waiting until a job is added
+2025-05-29 01:23:06,367 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:06,367 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:23:06,368 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:23:06,368 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:23:06,368 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:06,417 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:23:06 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'68'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:23:06,417 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:23:06,418 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:23:06,418 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:23:06,418 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:23:06,419 - httpcore.connection - DEBUG - connect_tcp.started host='api.telegram.org' port=443 local_address=None timeout=5.0 socket_options=None
+2025-05-29 01:23:06,474 - httpcore.connection - DEBUG - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x0000022D6DA62850>
+2025-05-29 01:23:06,474 - httpcore.connection - DEBUG - start_tls.started ssl_context=<ssl.SSLContext object at 0x0000022D6D9E84D0> server_hostname='api.telegram.org' timeout=5.0
+2025-05-29 01:23:06,533 - httpcore.connection - DEBUG - start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x0000022D6DA34640>
+2025-05-29 01:23:06,534 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:06,534 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:23:06,534 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:23:06,534 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:23:06,534 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:11,002 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:23:10 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'370'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:23:11,003 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:23:11,003 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:23:11,003 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:23:11,004 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:23:11,005 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:11,005 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:23:11,005 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:23:11,006 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:23:11,006 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:11,006 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:11,006 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:23:11,006 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:23:11,007 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:23:11,007 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:11,089 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:23:11 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'459'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:23:11,090 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:23:11,090 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:23:11,090 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:23:11,090 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:23:20,018 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:23:19 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'377'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:23:20,019 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:23:20,019 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:23:20,019 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:23:20,019 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:23:20,020 - httpcore.connection - DEBUG - close.started
+2025-05-29 01:23:20,020 - httpcore.connection - DEBUG - close.complete
+2025-05-29 01:23:20,020 - httpcore.connection - DEBUG - connect_tcp.started host='api.telegram.org' port=443 local_address=None timeout=5.0 socket_options=None
+2025-05-29 01:23:20,021 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:20,021 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:23:20,021 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:23:20,022 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:23:20,022 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:20,080 - httpcore.connection - DEBUG - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x0000022D6DA37100>
+2025-05-29 01:23:20,080 - httpcore.connection - DEBUG - start_tls.started ssl_context=<ssl.SSLContext object at 0x0000022D6D9E8200> server_hostname='api.telegram.org' timeout=5.0
+2025-05-29 01:23:20,142 - httpcore.connection - DEBUG - start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x0000022D6DA94A70>
+2025-05-29 01:23:20,142 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:20,143 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:23:20,143 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:23:20,143 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:23:20,143 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:20,251 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:23:20 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'469'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:23:20,252 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:23:20,252 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:23:20,252 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:23:20,252 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:23:30,078 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:23:30 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:23:30,078 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:23:30,079 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:23:30,079 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:23:30,079 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:23:30,080 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:30,080 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:23:30,080 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:23:30,080 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:23:30,080 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:30,510 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:23:30 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'378'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:23:30,510 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:23:30,511 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:23:30,511 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:23:30,511 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:23:30,512 - httpcore.connection - DEBUG - close.started
+2025-05-29 01:23:30,512 - httpcore.connection - DEBUG - close.complete
+2025-05-29 01:23:30,512 - httpcore.connection - DEBUG - connect_tcp.started host='api.telegram.org' port=443 local_address=None timeout=5.0 socket_options=None
+2025-05-29 01:23:30,513 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:30,513 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:23:30,513 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:23:30,514 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:23:30,514 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:30,568 - httpcore.connection - DEBUG - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x0000022D6DA9DAE0>
+2025-05-29 01:23:30,568 - httpcore.connection - DEBUG - start_tls.started ssl_context=<ssl.SSLContext object at 0x0000022D6D9E8200> server_hostname='api.telegram.org' timeout=5.0
+2025-05-29 01:23:30,624 - httpcore.connection - DEBUG - start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x0000022D6DA9DBF0>
+2025-05-29 01:23:30,625 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:30,625 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:23:30,625 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:23:30,626 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:23:30,626 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:30,699 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:23:30 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'3169'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:23:30,700 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:23:30,700 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:23:30,700 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:23:30,700 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:23:35,895 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:23:35 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'373'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:23:35,896 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:23:35,896 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:23:35,896 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:23:35,896 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:23:35,897 - httpcore.connection - DEBUG - close.started
+2025-05-29 01:23:35,897 - httpcore.connection - DEBUG - close.complete
+2025-05-29 01:23:35,897 - httpcore.connection - DEBUG - connect_tcp.started host='api.telegram.org' port=443 local_address=None timeout=5.0 socket_options=None
+2025-05-29 01:23:35,898 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:35,898 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:23:35,898 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:23:35,899 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:23:35,899 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:35,955 - httpcore.connection - DEBUG - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x0000022D6DA57950>
+2025-05-29 01:23:35,955 - httpcore.connection - DEBUG - start_tls.started ssl_context=<ssl.SSLContext object at 0x0000022D6D9E8200> server_hostname='api.telegram.org' timeout=5.0
+2025-05-29 01:23:36,029 - httpcore.connection - DEBUG - start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x0000022D6DABC150>
+2025-05-29 01:23:36,029 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:36,029 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:23:36,029 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:23:36,030 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:23:36,030 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:36,084 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 400, b'Bad Request', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:23:36 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'150'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:23:36,085 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:23:36,085 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:23:36,085 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:23:36,085 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:23:36,086 - __main__ - ERROR - Исключение при обработке обновления:
+Traceback (most recent call last):
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\ext\_application.py", line 1298, in process_update
+    await coroutine
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\ext\_handlers\conversationhandler.py", line 842, in handle_update
+    new_state: object = await handler.handle_update(
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        update, application, handler_check_result, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 158, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\handlers\config_handlers.py", line 650, in cancel_config_conversation
+    await update.message.reply_text(final_message)
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\_message.py", line 1829, in reply_text
+    return await self.get_bot().send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<20 lines>...
+    )
+    ^
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\ext\_extbot.py", line 2988, in send_message
+    return await super().send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<21 lines>...
+    )
+    ^
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\_bot.py", line 1099, in send_message
+    return await self._send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<19 lines>...
+    )
+    ^
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\ext\_extbot.py", line 629, in _send_message
+    result = await super()._send_message(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<21 lines>...
+    )
+    ^
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\_bot.py", line 809, in _send_message
+    result = await self._post(
+             ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\_bot.py", line 697, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\ext\_extbot.py", line 369, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\_bot.py", line 726, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\request\_baserequest.py", line 197, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\request\_baserequest.py", line 353, in _request_wrapper
+    raise BadRequest(message)
+telegram.error.BadRequest: Can't parse entities: character '.' is reserved and must be escaped with the preceding '\'
+2025-05-29 01:23:36,094 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:36,095 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:23:36,095 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:23:36,095 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:23:36,095 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:36,170 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:23:36 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'532'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:23:36,171 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:23:36,171 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:23:36,171 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:23:36,172 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:23:45,956 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:23:45 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:23:45,957 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:23:45,957 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:23:45,957 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:23:45,957 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:23:45,958 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:45,958 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:23:45,959 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:23:45,959 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:23:45,959 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:48,587 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:23:48 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'373'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:23:48,587 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:23:48,588 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:23:48,588 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:23:48,588 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:23:48,589 - httpcore.connection - DEBUG - close.started
+2025-05-29 01:23:48,589 - httpcore.connection - DEBUG - close.complete
+2025-05-29 01:23:48,589 - httpcore.connection - DEBUG - connect_tcp.started host='api.telegram.org' port=443 local_address=None timeout=5.0 socket_options=None
+2025-05-29 01:23:48,590 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:48,590 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:23:48,590 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:23:48,590 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:23:48,591 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:48,648 - httpcore.connection - DEBUG - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x0000022D6DAA05F0>
+2025-05-29 01:23:48,649 - httpcore.connection - DEBUG - start_tls.started ssl_context=<ssl.SSLContext object at 0x0000022D6D9E8200> server_hostname='api.telegram.org' timeout=5.0
+2025-05-29 01:23:48,709 - httpcore.connection - DEBUG - start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x0000022D6DAA32F0>
+2025-05-29 01:23:48,709 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:48,709 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:23:48,709 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:23:48,710 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:23:48,710 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:48,768 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 400, b'Bad Request', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:23:48 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'150'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:23:48,768 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:23:48,769 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:23:48,769 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:23:48,769 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:23:48,769 - __main__ - ERROR - Исключение при обработке обновления:
+Traceback (most recent call last):
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\ext\_application.py", line 1298, in process_update
+    await coroutine
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\ext\_handlers\conversationhandler.py", line 842, in handle_update
+    new_state: object = await handler.handle_update(
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        update, application, handler_check_result, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 158, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\handlers\config_handlers.py", line 650, in cancel_config_conversation
+    await update.message.reply_text(final_message)
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\_message.py", line 1829, in reply_text
+    return await self.get_bot().send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<20 lines>...
+    )
+    ^
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\ext\_extbot.py", line 2988, in send_message
+    return await super().send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<21 lines>...
+    )
+    ^
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\_bot.py", line 1099, in send_message
+    return await self._send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<19 lines>...
+    )
+    ^
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\ext\_extbot.py", line 629, in _send_message
+    result = await super()._send_message(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<21 lines>...
+    )
+    ^
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\_bot.py", line 809, in _send_message
+    result = await self._post(
+             ^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\_bot.py", line 697, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\ext\_extbot.py", line 369, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\_bot.py", line 726, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+    ...<6 lines>...
+    )
+    ^
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\request\_baserequest.py", line 197, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<7 lines>...
+    )
+    ^
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\request\_baserequest.py", line 353, in _request_wrapper
+    raise BadRequest(message)
+telegram.error.BadRequest: Can't parse entities: character '.' is reserved and must be escaped with the preceding '\'
+2025-05-29 01:23:48,774 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:48,774 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:23:48,774 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:23:48,774 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:23:48,774 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:48,890 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:23:48 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'532'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:23:48,891 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:23:48,891 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:23:48,891 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:23:48,891 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:23:58,644 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:23:58 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:23:58,644 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:23:58,645 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:23:58,645 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:23:58,645 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:23:58,646 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:23:58,646 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:23:58,646 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:23:58,646 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:23:58,646 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:24:08,703 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:24:08 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:24:08,704 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:24:08,704 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:24:08,704 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:24:08,704 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:24:08,705 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:24:08,705 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:24:08,705 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:24:08,706 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:24:08,706 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:24:18,761 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:24:18 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:24:18,761 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:24:18,762 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:24:18,762 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:24:18,762 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:24:18,763 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:24:18,763 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:24:18,764 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:24:18,764 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:24:18,764 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:24:28,817 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:24:28 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:24:28,818 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:24:28,818 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:24:28,818 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:24:28,819 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:24:28,819 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:24:28,820 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:24:28,820 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:24:28,820 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:24:28,820 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:24:38,874 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:24:38 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:24:38,874 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:24:38,875 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:24:38,875 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:24:38,875 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:24:38,876 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:24:38,876 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:24:38,876 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:24:38,876 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:24:38,876 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:25:01,566 - __main__ - INFO - Обработчики сигналов SIGTERM/SIGINT не устанавливаются в Windows. Используйте Ctrl+C для KeyboardInterrupt.
+2025-05-29 01:25:01,566 - __main__ - INFO - Запуск бота...
+2025-05-29 01:25:01,567 - __main__ - INFO - Уровень логирования установлен на: DEBUG
+2025-05-29 01:25:01,567 - __main__ - INFO - Первичная загрузка данных...
+2025-05-29 01:25:01,567 - data_manager - INFO - Загрузка всех данных...
+2025-05-29 01:25:01,573 - data_manager - INFO - Загружено 1042 вопросов из 22 категорий.
+2025-05-29 01:25:01,574 - data_manager - INFO - C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\data\users.json не найден или пуст.
+2025-05-29 01:25:01,574 - data_manager - INFO - Загрузка всех данных завершена.
+2025-05-29 01:25:01,574 - __main__ - INFO - Первичная загрузка данных завершена.
+2025-05-29 01:25:01,975 - modules.category_manager - INFO - CategoryManager инициализирован.
+2025-05-29 01:25:02,006 - __main__ - INFO - Все менеджеры и обработчики команд инициализированы.
+2025-05-29 01:25:02,008 - __main__ - INFO - Все обработчики PTB зарегистрированы.
+2025-05-29 01:25:02,009 - __main__ - INFO - Запуск бота (polling)...
+2025-05-29 01:25:02,013 - httpcore.connection - DEBUG - connect_tcp.started host='api.telegram.org' port=443 local_address=None timeout=5.0 socket_options=None
+2025-05-29 01:25:02,077 - httpcore.connection - DEBUG - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x0000026002C2DE80>
+2025-05-29 01:25:02,077 - httpcore.connection - DEBUG - start_tls.started ssl_context=<ssl.SSLContext object at 0x0000026002BE80E0> server_hostname='api.telegram.org' timeout=5.0
+2025-05-29 01:25:02,135 - httpcore.connection - DEBUG - start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x0000026002BF7250>
+2025-05-29 01:25:02,136 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:25:02,136 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:25:02,136 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:25:02,137 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:25:02,137 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:25:02,186 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:25:02 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'255'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:25:02,186 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:25:02,186 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:25:02,187 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:25:02,187 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:25:02,187 - apscheduler.scheduler - INFO - Scheduler started
+2025-05-29 01:25:02,188 - telegram.ext.Application - INFO - Application started
+2025-05-29 01:25:02,188 - apscheduler.scheduler - DEBUG - Looking for jobs to run
+2025-05-29 01:25:02,188 - apscheduler.scheduler - DEBUG - No jobs; waiting until a job is added
+2025-05-29 01:25:02,188 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:25:02,189 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:25:02,189 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:25:02,189 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:25:02,189 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:25:02,239 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:25:02 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'68'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:25:02,239 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:25:02,240 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:25:02,240 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:25:02,240 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:25:02,241 - httpcore.connection - DEBUG - connect_tcp.started host='api.telegram.org' port=443 local_address=None timeout=5.0 socket_options=None
+2025-05-29 01:25:02,294 - httpcore.connection - DEBUG - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x0000026002C62710>
+2025-05-29 01:25:02,294 - httpcore.connection - DEBUG - start_tls.started ssl_context=<ssl.SSLContext object at 0x0000026002BE83B0> server_hostname='api.telegram.org' timeout=5.0
+2025-05-29 01:25:02,350 - httpcore.connection - DEBUG - start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x0000026002C34050>
+2025-05-29 01:25:02,350 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:25:02,351 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:25:02,351 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:25:02,351 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:25:02,351 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:25:05,196 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:25:05 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'373'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:25:05,197 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:25:05,197 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:25:05,197 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:25:05,197 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:25:05,198 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:25:05,199 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:25:05,199 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:25:05,199 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:25:05,199 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:25:05,200 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:25:05,200 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:25:05,200 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:25:05,200 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:25:05,200 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:25:05,268 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:25:05 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'357'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:25:05,269 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:25:05,269 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:25:05,270 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:25:05,270 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:25:05,270 - handlers.config_handlers - INFO - Диалог настройки отменен для чата 621817842.
+2025-05-29 01:25:14,609 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:25:14 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'374'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:25:14,610 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:25:14,610 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:25:14,610 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:25:14,610 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:25:14,611 - __main__ - ERROR - Исключение при обработке обновления:
+Traceback (most recent call last):
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\ext\_application.py", line 1298, in process_update
+    await coroutine
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 158, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\handlers\rating_handlers.py", line 81, in my_stats_command
+    user_global_stats = self.score_manager.get_global_user_stats(str(user.id))
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ScoreManager' object has no attribute 'get_global_user_stats'
+2025-05-29 01:25:14,613 - httpcore.connection - DEBUG - close.started
+2025-05-29 01:25:14,613 - httpcore.connection - DEBUG - close.complete
+2025-05-29 01:25:14,614 - httpcore.connection - DEBUG - connect_tcp.started host='api.telegram.org' port=443 local_address=None timeout=5.0 socket_options=None
+2025-05-29 01:25:14,614 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:25:14,615 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:25:14,615 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:25:14,615 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:25:14,615 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:25:14,669 - httpcore.connection - DEBUG - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x0000026002C37950>
+2025-05-29 01:25:14,669 - httpcore.connection - DEBUG - start_tls.started ssl_context=<ssl.SSLContext object at 0x0000026002BE80E0> server_hostname='api.telegram.org' timeout=5.0
+2025-05-29 01:25:14,734 - httpcore.connection - DEBUG - start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x0000026002C94950>
+2025-05-29 01:25:14,734 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:25:14,735 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:25:14,735 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:25:14,735 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:25:14,735 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:25:14,817 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:25:14 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'532'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:25:14,817 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:25:14,818 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:25:14,818 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:25:14,818 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:25:33,517 - __main__ - INFO - Обработчики сигналов SIGTERM/SIGINT не устанавливаются в Windows. Используйте Ctrl+C для KeyboardInterrupt.
+2025-05-29 01:25:33,517 - __main__ - INFO - Запуск бота...
+2025-05-29 01:25:33,517 - __main__ - INFO - Уровень логирования установлен на: DEBUG
+2025-05-29 01:25:33,517 - __main__ - INFO - Первичная загрузка данных...
+2025-05-29 01:25:33,518 - data_manager - INFO - Загрузка всех данных...
+2025-05-29 01:25:33,524 - data_manager - INFO - Загружено 1042 вопросов из 22 категорий.
+2025-05-29 01:25:33,524 - data_manager - INFO - C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\data\users.json не найден или пуст.
+2025-05-29 01:25:33,524 - data_manager - INFO - Загрузка всех данных завершена.
+2025-05-29 01:25:33,524 - __main__ - INFO - Первичная загрузка данных завершена.
+2025-05-29 01:25:33,927 - modules.category_manager - INFO - CategoryManager инициализирован.
+2025-05-29 01:25:33,958 - __main__ - INFO - Все менеджеры и обработчики команд инициализированы.
+2025-05-29 01:25:33,960 - __main__ - INFO - Все обработчики PTB зарегистрированы.
+2025-05-29 01:25:33,960 - __main__ - INFO - Запуск бота (polling)...
+2025-05-29 01:25:33,964 - httpcore.connection - DEBUG - connect_tcp.started host='api.telegram.org' port=443 local_address=None timeout=5.0 socket_options=None
+2025-05-29 01:25:34,028 - httpcore.connection - DEBUG - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x0000023DE164DFD0>
+2025-05-29 01:25:34,029 - httpcore.connection - DEBUG - start_tls.started ssl_context=<ssl.SSLContext object at 0x0000023DE1608200> server_hostname='api.telegram.org' timeout=5.0
+2025-05-29 01:25:34,093 - httpcore.connection - DEBUG - start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x0000023DE1617250>
+2025-05-29 01:25:34,094 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:25:34,094 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:25:34,094 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:25:34,094 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:25:34,094 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:25:34,153 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:25:34 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'255'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:25:34,154 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:25:34,154 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:25:34,154 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:25:34,154 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:25:34,155 - apscheduler.scheduler - INFO - Scheduler started
+2025-05-29 01:25:34,155 - telegram.ext.Application - INFO - Application started
+2025-05-29 01:25:34,156 - apscheduler.scheduler - DEBUG - Looking for jobs to run
+2025-05-29 01:25:34,156 - apscheduler.scheduler - DEBUG - No jobs; waiting until a job is added
+2025-05-29 01:25:34,156 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:25:34,156 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:25:34,156 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:25:34,157 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:25:34,157 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:25:34,215 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:25:34 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'68'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:25:34,216 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:25:34,216 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:25:34,216 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:25:34,216 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:25:34,217 - httpcore.connection - DEBUG - connect_tcp.started host='api.telegram.org' port=443 local_address=None timeout=5.0 socket_options=None
+2025-05-29 01:25:34,274 - httpcore.connection - DEBUG - connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x0000023DE1686710>
+2025-05-29 01:25:34,274 - httpcore.connection - DEBUG - start_tls.started ssl_context=<ssl.SSLContext object at 0x0000023DE16084D0> server_hostname='api.telegram.org' timeout=5.0
+2025-05-29 01:25:34,333 - httpcore.connection - DEBUG - start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x0000023DE15BFA80>
+2025-05-29 01:25:34,333 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:25:34,333 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:25:34,334 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:25:34,334 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:25:34,334 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:25:34,389 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:25:34 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'374'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:25:34,390 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:25:34,390 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:25:34,390 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:25:34,390 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:25:34,391 - __main__ - ERROR - Исключение при обработке обновления:
+Traceback (most recent call last):
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\ext\_application.py", line 1298, in process_update
+    await coroutine
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 158, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\handlers\rating_handlers.py", line 81, in my_stats_command
+    user_global_stats = self.score_manager.get_global_user_stats(str(user.id))
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ScoreManager' object has no attribute 'get_global_user_stats'
+2025-05-29 01:25:34,394 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:25:34,394 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:25:34,395 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:25:34,395 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:25:34,395 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:25:34,395 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:25:34,395 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:25:34,396 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:25:34,396 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:25:34,396 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:25:34,482 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:25:34 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'532'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:25:34,483 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:25:34,483 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:25:34,483 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:25:34,483 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:25:38,313 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:25:38 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'374'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:25:38,313 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:25:38,314 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:25:38,314 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:25:38,314 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:25:38,314 - __main__ - ERROR - Исключение при обработке обновления:
+Traceback (most recent call last):
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\ext\_application.py", line 1298, in process_update
+    await coroutine
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\venv\Lib\site-packages\telegram\ext\_handlers\basehandler.py", line 158, in handle_update
+    return await self.callback(update, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Lizard\Documents\PlatformIO\Projects\morning-quiz-bot-beta\handlers\rating_handlers.py", line 81, in my_stats_command
+    user_global_stats = self.score_manager.get_global_user_stats(str(user.id))
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'ScoreManager' object has no attribute 'get_global_user_stats'
+2025-05-29 01:25:38,316 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:25:38,317 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:25:38,317 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:25:38,317 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:25:38,317 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:25:38,317 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:25:38,318 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:25:38,318 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:25:38,318 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:25:38,318 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:25:38,428 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:25:38 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'532'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:25:38,428 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:25:38,429 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:25:38,429 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:25:38,429 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:25:48,373 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:25:48 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:25:48,373 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:25:48,374 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:25:48,374 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:25:48,374 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:25:48,375 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:25:48,375 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:25:48,375 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:25:48,376 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:25:48,376 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:25:58,431 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:25:58 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:25:58,432 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:25:58,432 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:25:58,433 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:25:58,433 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:25:58,433 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:25:58,434 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:25:58,434 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:25:58,434 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:25:58,434 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:26:08,491 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:26:08 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:26:08,492 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:26:08,492 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:26:08,492 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:26:08,492 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:26:08,493 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:26:08,493 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:26:08,493 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:26:08,494 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:26:08,494 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:26:18,551 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:26:18 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:26:18,551 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:26:18,551 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:26:18,552 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:26:18,552 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:26:18,552 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:26:18,553 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:26:18,553 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:26:18,553 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:26:18,553 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:26:28,608 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:26:28 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:26:28,609 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:26:28,609 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:26:28,609 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:26:28,609 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:26:28,610 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:26:28,610 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:26:28,610 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:26:28,610 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:26:28,611 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:26:38,670 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:26:38 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:26:38,671 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:26:38,671 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:26:38,671 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:26:38,672 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:26:38,672 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:26:38,673 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:26:38,673 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:26:38,673 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:26:38,673 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:26:48,728 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:26:48 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:26:48,728 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:26:48,728 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:26:48,729 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:26:48,729 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:26:48,730 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:26:48,730 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:26:48,730 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:26:48,730 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:26:48,730 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:26:58,786 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:26:58 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:26:58,787 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:26:58,787 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:26:58,787 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:26:58,787 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:26:58,788 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:26:58,788 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:26:58,788 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:26:58,789 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:26:58,789 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:27:08,844 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:27:08 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:27:08,845 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:27:08,845 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:27:08,845 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:27:08,845 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:27:08,846 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:27:08,846 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:27:08,846 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:27:08,846 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:27:08,846 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:27:18,901 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:27:18 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:27:18,902 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:27:18,902 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:27:18,902 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:27:18,902 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:27:18,903 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:27:18,903 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:27:18,903 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:27:18,904 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:27:18,904 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>
+2025-05-29 01:27:28,961 - httpcore.http11 - DEBUG - receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Server', b'nginx/1.18.0'), (b'Date', b'Wed, 28 May 2025 22:27:28 GMT'), (b'Content-Type', b'application/json'), (b'Content-Length', b'23'), (b'Connection', b'keep-alive'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'Access-Control-Allow-Origin', b'*'), (b'Access-Control-Allow-Methods', b'GET, POST, OPTIONS'), (b'Access-Control-Expose-Headers', b'Content-Length,Content-Type,Date,Server,Connection')])
+2025-05-29 01:27:28,961 - httpcore.http11 - DEBUG - receive_response_body.started request=<Request [b'POST']>
+2025-05-29 01:27:28,961 - httpcore.http11 - DEBUG - receive_response_body.complete
+2025-05-29 01:27:28,962 - httpcore.http11 - DEBUG - response_closed.started
+2025-05-29 01:27:28,962 - httpcore.http11 - DEBUG - response_closed.complete
+2025-05-29 01:27:28,962 - httpcore.http11 - DEBUG - send_request_headers.started request=<Request [b'POST']>
+2025-05-29 01:27:28,963 - httpcore.http11 - DEBUG - send_request_headers.complete
+2025-05-29 01:27:28,963 - httpcore.http11 - DEBUG - send_request_body.started request=<Request [b'POST']>
+2025-05-29 01:27:28,963 - httpcore.http11 - DEBUG - send_request_body.complete
+2025-05-29 01:27:28,963 - httpcore.http11 - DEBUG - receive_response_headers.started request=<Request [b'POST']>

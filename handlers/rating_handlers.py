@@ -24,25 +24,31 @@ class RatingHandlers:
 
         chat_id = update.effective_chat.id if not global_rating else None # None for global rating
 
-        top_users = self.score_manager.get_top_users(
-            limit=self.app_config.rating_display_limit,
-            chat_id=chat_id
-        )
+        if global_rating:
+            top_users = self.score_manager.get_global_rating(
+                top_n=self.app_config.rating_display_limit
+            )
+        else:
+            top_users = self.score_manager.get_chat_rating(
+                chat_id=chat_id,
+                top_n=self.app_config.rating_display_limit
+            )
 
         reply_text: str
         if not top_users:
             if global_rating:
-                reply_text = "Пока нет данных для глобального рейтинга\\." # ИСПРАВЛЕНО
+                reply_text = "Пока нет данных для глобального рейтинга\\."
             else:
-                reply_text = "Пока нет данных для рейтинга в этом чате\\." # ИСПРАВЛЕНО
+                reply_text = "Пока нет данных для рейтинга в этом чате\\."
             try:
                 await update.message.reply_text(reply_text, parse_mode=ParseMode.MARKDOWN_V2)
             except Exception as e:
                 logger.error(f"Ошибка при отправке 'нет рейтинга': {e}. Текст: {reply_text}")
-                await update.message.reply_text("Не удалось отобразить рейтинг.", parse_mode=None) # Fallback
+                await update.message.reply_text("Не удалось отобразить рейтинг.", parse_mode=None)
             return
 
         title = "🏆 Топ игроков в этом чате:" if not global_rating else "🌍 Глобальный топ игроков:"
+        title = escape_markdown_v2(title)
         
         # Предполагаем, что self.score_manager.format_scores УЖЕ возвращает MarkdownV2-совместимую строку
         reply_text = self.score_manager.format_scores(
@@ -71,8 +77,8 @@ class RatingHandlers:
         chat_id = update.effective_chat.id
         user_first_name_escaped = escape_markdown_v2(user.first_name)
 
-        user_chat_stats = self.score_manager.get_user_stats(user.id, chat_id)
-        user_global_stats = self.score_manager.get_user_stats(user.id, chat_id=None)
+        user_chat_stats = self.score_manager.get_user_stats_in_chat(chat_id, str(user.id))
+        user_global_stats = self.score_manager.get_global_user_stats(str(user.id))
 
         reply_parts = [f"📊 *Ваша статистика, {user_first_name_escaped}*\n"]
 

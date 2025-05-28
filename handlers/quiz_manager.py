@@ -145,7 +145,7 @@ class QuizManager:
                 msg = await context.bot.send_message(chat_id, " ".join(announce_text_parts), parse_mode=ParseMode.MARKDOWN_V2)
                 announce_msg_id = msg.message_id
                 quiz_state.announce_message_id = announce_msg_id
-                quiz_state.message_ids_to_delete.add(announce_msg_id) # Добавляем ID анонса для последующего удаления
+                quiz_state.message_ids_to_delete.add(announce_msg_id)
             except Exception as e_announce:
                 logger.error(f"Ошибка отправки анонса викторины в чат {chat_id}: {e_announce}")
             
@@ -172,7 +172,8 @@ class QuizManager:
                  msg = await context.bot.send_message(chat_id, " ".join(announce_text_parts), parse_mode=ParseMode.MARKDOWN_V2)
                  quiz_state.announce_message_id = msg.message_id
                  quiz_state.message_ids_to_delete.add(msg.message_id)
-             except Exception as e_announce_now: logger.error(f"Ошибка немедленного анонса: {e_announce_now}")
+             except Exception as e_announce_now:
+                 logger.error(f"Ошибка немедленного анонса: {e_announce_now}")
 
         # Запуск отправки первого вопроса
         await self._send_next_question(context, chat_id)
@@ -533,24 +534,22 @@ class QuizManager:
         cfg = context.chat_data.get('quiz_cfg_progress')
         if not cfg:
             logger.error("Данные 'quiz_cfg_progress' не найдены в chat_data для _send_quiz_cfg_message.")
-            # Попытаться ответить пользователю, если это колбэк
             if isinstance(update_or_query, CallbackQuery):
                 await update_or_query.answer("Ошибка конфигурации. Пожалуйста, начните заново.", show_alert=True)
             return
 
         num_q_display = cfg['num_questions']
         cat_display_text = 'Случайные' if cfg['category_name'] == 'random' else cfg['category_name']
-        cat_button_text = cat_display_text[:15] + "..." if len(cat_display_text) > 18 else cat_display_text # Для кнопки
+        cat_button_text = cat_display_text[:15] + "..." if len(cat_display_text) > 18 else cat_display_text
 
         announce_text = 'Вкл' if cfg['announce'] else 'Выкл'
-        delay_text = f" (задержка {cfg['announce_delay_seconds']} сек)" if cfg['announce'] else ""
+        delay_text = f" \\(задержка {cfg['announce_delay_seconds']} сек\\)" if cfg['announce'] else ""
 
-        # Используем \\ для экранирования специальных символов MarkdownV2
         text = (f"⚙️ *Настройка викторины*\n\n"
                 f"🔢 Количество вопросов: `{num_q_display}`\n"
                 f"📚 Категория: `{escape_markdown_v2(cat_display_text)}`\n"
-                f"📢 Анонс: `{announce_text}`{escape_markdown_v2(delay_text)}\n\n"
-                f"Выберите параметр или запустите\\.") # ИСПРАВЛЕНО: \\.
+                f"📢 Анонс: `{announce_text}`{delay_text}\n\n"
+                f"Выберите параметр или запустите\\.")
 
         kb_layout = [
             [InlineKeyboardButton(f"Вопросы: {num_q_display}", callback_data=CB_QCFG_NUM_MENU),

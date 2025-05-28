@@ -67,6 +67,8 @@ class AppConfig:
         self.max_poll_question_length: int = self.global_settings.get("max_poll_question_length", 280)
         self.max_poll_option_length: int = self.global_settings.get("max_poll_option_length", 90)
 
+        self.rating_display_limit: int = self.global_settings.get("rating_display_limit", 10)
+
         self.parsed_motivational_messages: Dict[int, str] = self._parse_motivational_messages(
             self.global_settings.get("motivational_messages", {})
         )

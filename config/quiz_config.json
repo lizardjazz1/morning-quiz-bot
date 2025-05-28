@@ -1,14 +1,19 @@
 {
   "default_chat_settings": {
-    "quiz_type_on_start": "normal",
-    "num_questions_session": 10,
-    "allowed_categories": null,
-    "excluded_categories": [],
+    "default_quiz_type": "session",
+    "default_num_questions": 10,
+    "default_open_period_seconds": 30,
+    "default_announce_quiz": false,
+    "default_announce_delay_seconds": 30,
+    "enabled_categories": null,
+    "disabled_categories": [],
     "daily_quiz": {
       "enabled": false,
       "hour_msk": 7,
       "minute_msk": 0,
-      "categories": null,
+      "categories_mode": "random",
+      "num_random_categories": 3,
+      "specific_categories": [],
       "num_questions": 10,
       "interval_seconds": 60,
       "poll_open_seconds": 600
@@ -16,37 +21,53 @@
   },
   "quiz_types_config": {
     "single": {
-      "mode": "single",
+      "type": "single",
+      "mode": "single_question",
       "default_num_questions": 1,
-      "default_open_period_seconds": 25
+      "default_open_period_seconds": 30,
+      "announce": false,
+      "announce_delay_seconds": 0
     },
     "session": {
+      "type": "session",
       "mode": "serial_immediate",
       "default_num_questions": 10,
-      "default_open_period_seconds": 25
+      "default_open_period_seconds": 30,
+      "announce": false,
+      "announce_delay_seconds": 30
     },
     "daily": {
+      "type": "daily",
       "mode": "serial_interval",
       "default_num_questions": 10,
       "default_open_period_seconds": 600,
-      "default_interval_seconds": 60
+      "default_interval_seconds": 60,
+      "announce": true,
+      "announce_delay_seconds": 0,
+      "default_categories_mode": "random",
+      "default_num_random_categories": 3,
+      "default_specific_categories": []
     }
   },
   "global_settings": {
-    "default_poll_open_period_seconds": 25,
-    "default_questions_in_session": 10,
+    "commands": {
+      "start": "start",
+      "help": "help",
+      "quiz": "quiz",
+      "categories": "categories",
+      "top": "top",
+      "global_top": "globaltop",
+      "mystats": "mystats",
+      "stop_quiz": "stopquiz",
+      "cancel": "cancel",
+      "admin_settings": "adminsettings",
+      "view_chat_config": "viewchatconfig"
+    },
+    "max_questions_per_session": 50,
+    "max_interactive_categories_to_show": 10,
     "job_grace_period_seconds": 3,
-    "max_poll_question_length": 300,
-    "max_poll_option_length": 100,
-    "quiz10_notify_delay_minutes": 2,
-    "daily_quiz_default_hour_msk": 7,
-    "daily_quiz_default_minute_msk": 0,
-    "daily_quiz_questions_count_default": 10,
-    "daily_quiz_categories_to_pick_random": 3,
-    "daily_quiz_max_custom_categories": 3,
-    "daily_quiz_poll_open_period_seconds_default": 600,
-    "daily_quiz_question_interval_seconds_default": 60,
-    "daily_quiz_menu_max_categories_display": 20,
+    "max_poll_question_length": 280,
+    "max_poll_option_length": 90,
     "motivational_messages": {
         "-1000": "💀 Да ты блин издеваешься, такое не возможно вообще! Попробуй не вытворять больше!",
         "-500": "😵 Ну и нуб, прям с порога падает... Поправься уже!",

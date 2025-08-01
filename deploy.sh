@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Morning Quiz Bot - Deployment Script for Ubuntu
+# Morning Quiz Bot - Улучшенный скрипт развертывания
 # Этот скрипт автоматически развертывает бота на Ubuntu сервере
 
 set -e  # Остановка при ошибке
@@ -51,35 +51,61 @@ install_dependencies() {
     print_success "Зависимости установлены"
 }
 
-# Создание пользователя для бота
-create_bot_user() {
-    print_info "Создание пользователя для бота..."
-    
-    if id "quizbot" &>/dev/null; then
-        print_warning "Пользователь quizbot уже существует"
-    else
-        useradd -m -s /bin/bash quizbot
-        print_success "Пользователь quizbot создан"
-    fi
+# Запрос пути установки
+get_install_path() {
+    echo ""
+    print_info "Где вы хотите установить бота?"
+    echo "1. В домашней папке текущего пользователя (~/morning-quiz-bot)"
+    echo "2. В корневой папке (/opt/morning-quiz-bot)"
+    echo "3. Указать свой путь"
+    echo ""
+    read -p "Выберите вариант (1-3): " choice
+
+    case $choice in
+        1)
+            INSTALL_PATH="$HOME/morning-quiz-bot"
+            BOT_USER="$USER"
+            ;;
+        2)
+            INSTALL_PATH="/opt/morning-quiz-bot"
+            BOT_USER="root"
+            ;;
+        3)
+            read -p "Введите полный путь для установки: " INSTALL_PATH
+            read -p "Введите имя пользователя для запуска бота (или оставьте пустым для текущего): " BOT_USER
+            if [ -z "$BOT_USER" ]; then
+                BOT_USER="$USER"
+            fi
+            ;;
+        *)
+            print_error "Неверный выбор. Используется домашняя папка."
+            INSTALL_PATH="$HOME/morning-quiz-bot"
+            BOT_USER="$USER"
+            ;;
+    esac
+
+    print_info "Бот будет установлен в: $INSTALL_PATH"
+    print_info "Пользователь для запуска: $BOT_USER"
 }
 
 # Клонирование репозитория
 clone_repository() {
     print_info "Клонирование репозитория..."
     
-    BOT_DIR="/home/quizbot/morning-quiz-bot-beta"
+    # Создание директории
+    mkdir -p "$(dirname "$INSTALL_PATH")"
     
-    if [ -d "$BOT_DIR" ]; then
+    if [ -d "$INSTALL_PATH" ]; then
         print_warning "Директория уже существует, обновляем..."
-        cd "$BOT_DIR"
+        cd "$INSTALL_PATH"
         git pull origin main
     else
-        cd /home/quizbot
-        git clone https://github.com/your-username/morning-quiz-bot-beta.git
+        cd "$(dirname "$INSTALL_PATH")"
+        git clone https://github.com/lizardjazz1/morning-quiz-bot.git "$(basename "$INSTALL_PATH")"
     fi
     
     # Установка прав доступа
-    chown -R quizbot:quizbot "$BOT_DIR"
+    chown -R "$BOT_USER:$BOT_USER" "$INSTALL_PATH"
     print_success "Репозиторий готов"
 }
 
@@ -87,14 +113,21 @@ clone_repository() {
 setup_venv() {
     print_info "Настройка виртуального окружения..."
     
-    BOT_DIR="/home/quizbot/morning-quiz-bot-beta"
-    cd "$BOT_DIR"
+    cd "$INSTALL_PATH"
     
     # Создание виртуального окружения
-    sudo -u quizbot python3 -m venv venv
+    if [ "$BOT_USER" = "root" ]; then
+        python3 -m venv venv
+    else
+        sudo -u "$BOT_USER" python3 -m venv venv
+    fi
     
     # Активация и установка зависимостей
-    sudo -u quizbot bash -c "source venv/bin/activate && pip install -r requirements.txt"
+    if [ "$BOT_USER" = "root" ]; then
+        source venv/bin/activate && pip install -r requirements.txt
+    else
+        sudo -u "$BOT_USER" bash -c "source venv/bin/activate && pip install -r requirements.txt"
+    fi
     
     print_success "Виртуальное окружение настроено"
 }
@@ -103,8 +136,7 @@ setup_venv() {
 create_env_file() {
     print_info "Создание файла .env..."
     
-    BOT_DIR="/home/quizbot/morning-quiz-bot-beta"
-    ENV_FILE="$BOT_DIR/.env"
+    ENV_FILE="$INSTALL_PATH/.env"
     
     if [ ! -f "$ENV_FILE" ]; then
         cat > "$ENV_FILE" << EOF
@@ -112,7 +144,7 @@ create_env_file() {
 BOT_TOKEN=your_telegram_bot_token_here
 LOG_LEVEL=INFO
 EOF
-        chown quizbot:quizbot "$ENV_FILE"
+        chown "$BOT_USER:$BOT_USER" "$ENV_FILE"
         print_warning "Файл .env создан. Не забудьте указать BOT_TOKEN!"
     else
         print_warning "Файл .env уже существует"
@@ -132,11 +164,11 @@ After=network.target
 
 [Service]
 Type=simple
-User=quizbot
-Group=quizbot
-WorkingDirectory=/home/quizbot/morning-quiz-bot-beta
-Environment=PATH=/home/quizbot/morning-quiz-bot-beta/venv/bin
-ExecStart=/home/quizbot/morning-quiz-bot-beta/venv/bin/python bot.py
+User=$BOT_USER
+Group=$BOT_USER
+WorkingDirectory=$INSTALL_PATH
+Environment=PATH=$INSTALL_PATH/venv/bin
+ExecStart=$INSTALL_PATH/venv/bin/python bot.py
 Restart=always
 RestartSec=10
 StandardOutput=journal
@@ -155,22 +187,9 @@ EOF
     print_success "Systemd сервис создан"
 }
 
-# Настройка логирования
-setup_logging() {
-    print_info "Настройка логирования..."
-    
-    LOG_DIR="/var/log/quiz-bot"
-    mkdir -p "$LOG_DIR"
-    chown quizbot:quizbot "$LOG_DIR"
-    
-    print_success "Логирование настроено"
-}
-
 # Создание скриптов управления
 create_management_scripts() {
     print_info "Создание скриптов управления..."
-    
-    BOT_DIR="/home/quizbot/morning-quiz-bot-beta"
     
     # Скрипт перезапуска
     cat > /usr/local/bin/quiz-bot-restart << EOF
@@ -194,9 +213,9 @@ EOF
     # Скрипт обновления
     cat > /usr/local/bin/quiz-bot-update << EOF
 #!/bin/bash
-cd /home/quizbot/morning-quiz-bot-beta
-sudo -u quizbot git pull origin main
-sudo -u quizbot bash -c "source venv/bin/activate && pip install -r requirements.txt"
+cd $INSTALL_PATH
+sudo -u $BOT_USER git pull origin main
+sudo -u $BOT_USER bash -c "source venv/bin/activate && pip install -r requirements.txt"
 sudo systemctl restart quiz-bot
 echo "Quiz Bot обновлен и перезапущен"
 EOF
@@ -205,36 +224,6 @@ EOF
     chmod +x /usr/local/bin/quiz-bot-*
     
     print_success "Скрипты управления созданы"
-}
-
-# Создание файла конфигурации nginx (опционально)
-create_nginx_config() {
-    print_info "Создание конфигурации nginx (опционально)..."
-    
-    NGINX_CONF="/etc/nginx/sites-available/quiz-bot"
-    
-    cat > "$NGINX_CONF" << EOF
-server {
-    listen 80;
-    server_name your-domain.com;
-    
-    location / {
-        return 200 "Morning Quiz Bot is running!";
-        add_header Content-Type text/plain;
-    }
-    
-    location /status {
-        proxy_pass http://localhost:8080;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-    }
-}
-EOF
-    
-    # Создание символической ссылки
-    ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/
-    
-    print_warning "Конфигурация nginx создана. Не забудьте настроить домен и перезапустить nginx"
 }
 
 # Финальная настройка
@@ -259,6 +248,9 @@ print_instructions() {
     echo ""
     print_success "=== РАЗВЕРТЫВАНИЕ ЗАВЕРШЕНО ==="
     echo ""
+    echo "📁 Установка: $INSTALL_PATH"
+    echo "👤 Пользователь: $BOT_USER"
+    echo ""
     echo "Полезные команды:"
     echo "  quiz-bot-status    - проверить статус бота"
     echo "  quiz-bot-logs      - просмотреть логи"
@@ -266,28 +258,31 @@ print_instructions() {
     echo "  quiz-bot-update    - обновить бота"
     echo ""
     echo "Не забудьте:"
-    echo "  1. Указать BOT_TOKEN в файле /home/quizbot/morning-quiz-bot-beta/.env"
+    echo "  1. Указать BOT_TOKEN в файле $INSTALL_PATH/.env"
     echo "  2. Перезапустить бота: sudo systemctl restart quiz-bot"
     echo "  3. Проверить логи: sudo journalctl -u quiz-bot -f"
+    echo ""
+    echo "Для ручного запуска:"
+    echo "  cd $INSTALL_PATH"
+    echo "  source venv/bin/activate"
+    echo "  python bot.py"
     echo ""
 }
 
 # Главная функция
 main() {
-    echo "=== Morning Quiz Bot - Deployment Script ==="
+    echo "=== Morning Quiz Bot - Улучшенный скрипт развертывания ==="
     echo ""
     
     check_sudo
     update_system
     install_dependencies
-    create_bot_user
+    get_install_path
     clone_repository
     setup_venv
     create_env_file
     create_systemd_service
-    setup_logging
     create_management_scripts
-    create_nginx_config
     final_setup
     print_instructions
 }

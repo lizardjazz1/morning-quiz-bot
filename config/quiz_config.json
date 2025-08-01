@@ -1,0 +1,112 @@
+{
+    "default_chat_settings": {
+        "default_quiz_type": "session",
+        "default_num_questions": 10,
+        "default_open_period_seconds": 30,
+        "default_announce_quiz": false,
+        "default_announce_delay_seconds": 30,
+        "enabled_categories": null,
+        "disabled_categories": [],
+        "daily_quiz": {
+            "enabled": false,
+            "times_msk": [
+                {
+                    "hour": 7,
+                    "minute": 0
+                }
+            ],
+            "categories_mode": "random",
+            "num_random_categories": 3,
+            "specific_categories": [],
+            "num_questions": 10,
+            "interval_seconds": 60,
+            "poll_open_seconds": 600
+        },
+        "auto_delete_bot_messages": true
+    },
+    "quiz_types_config": {
+        "single": {
+            "type": "single",
+            "mode": "single_question",
+            "default_num_questions": 1,
+            "default_open_period_seconds": 30,
+            "announce": false,
+            "announce_delay_seconds": 0
+        },
+        "session": {
+            "type": "session",
+            "mode": "serial_immediate",
+            "default_num_questions": 10,
+            "default_open_period_seconds": 30,
+            "announce": false,
+            "announce_delay_seconds": 30
+        },
+        "daily": {
+            "type": "daily",
+            "mode": "serial_interval",
+            "default_num_questions": 10,
+            "default_open_period_seconds": 600,
+            "default_interval_seconds": 60,
+            "announce": true,
+            "announce_delay_seconds": 0,
+            "default_categories_mode": "random",
+            "default_num_random_categories": 3,
+            "default_specific_categories": [],
+            "default_times_msk": [
+                {
+                    "hour": 7,
+                    "minute": 0
+                }
+            ],
+            "enabled": false
+        }
+    },
+    "global_settings": {
+        "commands": {
+            "start": "start",
+            "help": "help",
+            "quiz": "quiz",
+            "categories": "categories",
+            "top": "top",
+            "global_top": "globaltop",
+            "mystats": "mystats",
+            "stop_quiz": "stopquiz",
+            "cancel": "cancel",
+            "admin_settings": "adminsettings",
+            "view_chat_config": "viewchatconfig",
+            "config": "config",
+            "adddailyquiz": "adddailyquiz",
+            "removedailyquiz": "removedailyquiz",
+            "listdailyquizzes": "listdailyquizzes",
+            "reloadcfg": "reloadcfg"
+        },
+        "max_questions_per_session": 50,
+        "max_interactive_categories_to_show": 10,
+        "job_grace_period_seconds": 3,
+        "max_poll_question_length": 280,
+        "max_poll_option_length": 90,
+        "explanation_max_length": 200,
+        "motivational_messages": {
+            "-1000": "💀 Да ты блин издеваешься, такое не возможно вообще! Попробуй не вытворять больше!",
+            "-500": "😵 Ну и нуб, прям с порога падает... Поправься уже!",
+            "-200": "🤦‍♂️ Опять промах? Кажется, тебе пора на тренировку.",
+            "-50": "🙃 Ну ничего, даже у профессионалов бывают плохие дни... правда?",
+            "10": "🎉 Поздравляю с первыми 10 очками! Так держать!",
+            "25": "🌟 25 очков! Ты уже опытный игрок!",
+            "50": "🔥 50 очков! Ты просто огонь! 🔥",
+            "100": "👑 100 очков! Моя ты лапочка, умненькость - это про тебя!",
+            "200": "🚀 200 очков! Ты взлетаешь к вершинам знаний!",
+            "300": "💎 300 очков! Ты настоящий алмаз в нашем сообществе!",
+            "500": "🏆 500 очков! Настоящий чемпион!",
+            "750": "🌈 750 очков! Дал дал ушёл!",
+            "1000": "✨ 1000 очков! Ты легенда!",
+            "1500": "🔥 1500 очков! Огонь неистощимой энергии!",
+            "2000": "🚀 2000 очков! Сверхзвездный уровень!",
+            "3000": "👑 3000 очков! Царь и бог знаний!",
+            "5000": "💥 5000 очков! Э-э-это ты создатель вселенной?!",
+            "-5": "{user_name}, не везет... У тебя {user_score} очков. Не сдавайся!"
+        },
+        "rating_display_limit": 10,
+        "max_daily_quiz_times_per_chat": 5
+    }
+}

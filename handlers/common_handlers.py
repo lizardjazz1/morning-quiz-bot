@@ -1,89 +1,146 @@
-# handlers/common_handlers.py
+#handlers/common_handlers.py
+import logging
+from typing import List, Optional
+
 from telegram import Update
-from telegram.ext import ContextTypes
-from telegram.constants import ParseMode # Для MarkdownV2
-# Consider adding: from telegram.helpers import escape_markdown
+from telegram.ext import ContextTypes, CommandHandler, ConversationHandler # ИСПРАВЛЕНО: Добавлен ConversationHandler
+from telegram.constants import ParseMode
 
-from config import logger, QUIZ10_NOTIFY_DELAY_MINUTES, DAILY_QUIZ_DEFAULT_HOUR_MSK, DAILY_QUIZ_DEFAULT_MINUTE_MSK
-import state
-from data_manager import save_user_data
+from app_config import AppConfig
+from state import BotState
+from utils import escape_markdown_v2
+from modules.category_manager import CategoryManager
 
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE): # This function is now for /help
-    if not update.message or not update.effective_chat or not update.effective_user:
-        logger.warning("start_command (help): message, chat or user is None.")
-        return
+logger = logging.getLogger(__name__)
 
-    user = update.effective_user
-    chat_id_str = str(update.effective_chat.id)
-    user_id_str = str(user.id)
+class CommonHandlers:
+    def __init__(self, app_config: AppConfig, category_manager: CategoryManager, bot_state: BotState):
+        self.app_config = app_config
+        self.category_manager = category_manager
+        self.bot_state = bot_state # bot_state сохраняется, но не используется методами этого класса
 
-    # Инициализация пользователя, если его нет
-    state.user_scores.setdefault(chat_id_str, {}).setdefault(user_id_str, {"name": user.full_name, "score": 0, "answered_polls": set(), "milestones_achieved": set()})
-    # Обновление имени пользователя (может измениться)
-    state.user_scores[chat_id_str][user_id_str]["name"] = user.full_name
-    # Гарантируем, что answered_polls и milestones_achieved являются множествами
-    if not isinstance(state.user_scores[chat_id_str][user_id_str].get("answered_polls"), set):
-        state.user_scores[chat_id_str][user_id_str]["answered_polls"] = set(state.user_scores[chat_id_str][user_id_str].get("answered_polls", []))
-    if not isinstance(state.user_scores[chat_id_str][user_id_str].get("milestones_achieved"), set):
-        state.user_scores[chat_id_str][user_id_str]["milestones_achieved"] = set(state.user_scores[chat_id_str][user_id_str].get("milestones_achieved", []))
+    async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        if not update.effective_user or not update.message:
+            return
 
-    save_user_data()
+        user = update.effective_user
+        welcome_text = (
+            f"Привет, {escape_markdown_v2(user.first_name)}\\! Я бот для проведения викторин\\.\n\n"
+            f"Доступные команды:\n"
+            f"/{self.app_config.commands.quiz} \\- {escape_markdown_v2('начать викторину')}\n"
+            f"/{self.app_config.commands.top} \\- {escape_markdown_v2('посмотреть рейтинг чата')}\n"
+            f"/{self.app_config.commands.categories} \\- {escape_markdown_v2('посмотреть доступные категории')}\n"
+            f"/{self.app_config.commands.help} \\- {escape_markdown_v2('показать эту справку')}"
+        )
+        try:
+            await update.message.reply_text(welcome_text, parse_mode=ParseMode.MARKDOWN_V2)
+        except Exception as e:
+            logger.error(f"Ошибка при отправке start_command: {e}")
 
-    # Используем MarkdownV2 для форматирования команд
-    # CHANGED: Updated command names in help text
-    start_message_text = (
-        f"Привет, {user.first_name}\\! Я бот для викторин\\.\n\n"
-        "Доступные команды:\n"
-        "/help \\- Показать это сообщение\\.\n"
-        "/quiz [категория] \\- 1 случайный вопрос \\(можно без категории\\)\\.\n"
-        "/quiz10 \\- Сессия из 10 вопросов с выбором категории\\.\n"
-        f"/quiz10notify [категория] \\- Анонс /quiz10 через {QUIZ10_NOTIFY_DELAY_MINUTES} мин\\.\n"
-        "/categories \\- Список всех доступных категорий\\.\n"
-        "/rating \\- Топ\\-10 игроков в этом чате\\.\n"
-        "/globaltop \\- Топ\\-10 игроков по всем чатам\\.\n"
-        "/stopquiz \\- Остановить текущую или запланированную /quiz10\\.\n\n"
-        "*Ежедневная викторина*:\n"
-        "/subdaily \\- Подписаться/показать статус подписки\\.\n" # CHANGED
-        "/unsubdaily \\- Отписаться от ежедневной викторины\\.\n" # CHANGED
-        "/setdailyquiztime HH:MM \\- Установить время рассылки \\(МСК\\)\\.\n"
-        "/setdailyquizcategories [кат1] [кат2] \\.\\.\\. \\- Выбрать до 3 категорий \\(без аргументов \\- случайные\\)\\.\n"
-        "/showdailyquizsettings \\- Показать текущие настройки ежедневной викторины\\."
-    )
-    logger.debug(f"Attempting to send help message to {chat_id_str}. Text: '{start_message_text[:100]}...'")
-    await update.message.reply_text(start_message_text, parse_mode=ParseMode.MARKDOWN_V2)
 
-async def categories_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message or not update.effective_chat:
-        return
+    async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        if not update.message:
+            return
 
-    chat_id_str = str(update.effective_chat.id)
-    text_to_send = ""
+        help_full_text = (
+            f"*{escape_markdown_v2('Справка по командам:')}*\n\n"
+            f"*{escape_markdown_v2('📝 Викторина')}*\n"
+            f"/{self.app_config.commands.quiz} \\- {escape_markdown_v2('начать викторину (можно с параметрами)')}\n"
+            f"{escape_markdown_v2('Примеры:')}\n"
+            f"`/{self.app_config.commands.quiz} 5` \\- {escape_markdown_v2('викторина из 5 вопросов')}\n"
+            f"`/{self.app_config.commands.quiz} {escape_markdown_v2('Название Категории')}` \\- {escape_markdown_v2('викторина по категории')}\n"
+            f"`/{self.app_config.commands.quiz} 10 {escape_markdown_v2('Название Категории')}` \\- {escape_markdown_v2('комбинированный вариант')}\n"
+            f"`/{self.app_config.commands.quiz} announce` \\- {escape_markdown_v2('викторина с анонсом')}\n"
+            f"/{self.app_config.commands.stop_quiz} \\- {escape_markdown_v2('остановить текущую викторину (админ/инициатор)')}\n\n"
 
-    if not state.quiz_data:
-        text_to_send = "Категории вопросов еще не загружены. Попробуйте позже."
-    else:
-        category_names = []
-        # MarkdownV2 special characters: _ * [ ] ( ) ~ ` > # + - = | { } . !
-        markdown_v2_special_chars = "_*[]()~`>#+-=|{}.!"
+            f"*{escape_markdown_v2('📚 Категории')}*\n"
+            f"/{self.app_config.commands.categories} \\- {escape_markdown_v2('показать список всех категорий вопросов')}\n\n"
 
-        for name, questions_list in state.quiz_data.items():
-            if isinstance(questions_list, list) and questions_list:
-                # Экранируем специальные символы для MarkdownV2, если они могут быть в именах категорий
-                # FIXED: Corrected the escaping logic
-                escaped_name = name
-                for char_to_escape in markdown_v2_special_chars:
-                    escaped_name = escaped_name.replace(char_to_escape, f"\\{char_to_escape}")
-                
-                # The f-string for category item construction
-                category_item_text = f"\\- *{escaped_name}* \\(вопросов: {len(questions_list)}\\)"
-                category_names.append(category_item_text)
+            f"*{escape_markdown_v2('📊 Рейтинг и Статистика')}*\n"
+            f"/{self.app_config.commands.top} \\- {escape_markdown_v2('показать рейтинг текущего чата')}\n"
+            f"/{self.app_config.commands.global_top} \\- {escape_markdown_v2('показать глобальный рейтинг')}\n"
+            f"/{self.app_config.commands.mystats} \\- {escape_markdown_v2('показать вашу личную статистику')}\n\n"
 
-        if category_names:
-            text_to_send = "Доступные категории:\n" + "\n".join(sorted(category_names)) # Сортируем для порядка
-        else:
-            text_to_send = "На данный момент нет доступных категорий с вопросами."
+            f"*{escape_markdown_v2('⚙️ Настройки (для администраторов чата)')}*\n"
+            f"/{getattr(self.app_config.commands, 'admin_settings', 'adminsettings')} \\- {escape_markdown_v2('открыть меню настроек чата')}\n"
+            f"/{getattr(self.app_config.commands, 'view_chat_config', 'viewchatconfig')} \\- {escape_markdown_v2('посмотреть текущие настройки чата')}\n\n"
 
-    logger.debug(f"Attempting to send categories list to {chat_id_str}. Text: '{text_to_send[:100]}...'")
-    # Use MarkdownV2 only if there are categories to format, otherwise send plain text.
-    await update.message.reply_text(text_to_send, parse_mode=ParseMode.MARKDOWN_V2 if category_names else None)
 
+            f"*{escape_markdown_v2('❓ Общие')}*\n"
+            f"/{self.app_config.commands.help} \\- {escape_markdown_v2('показать эту справку')}\n"
+            f"/{self.app_config.commands.start} \\- {escape_markdown_v2('начать работу с ботом')}\n"
+            f"/{self.app_config.commands.cancel} \\- {escape_markdown_v2('отмена текущего диалога (например, настройки)')}"
+        )
+        try:
+            await update.message.reply_text(help_full_text, parse_mode=ParseMode.MARKDOWN_V2)
+        except Exception as e:
+            logger.error(f"Ошибка при отправке help_command: {e}")
+
+    async def categories_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        if not update.message: return
+        # Получаем список категорий (только имена)
+        categories_data = self.category_manager.get_all_category_names(with_question_counts=True)
+
+        if not categories_data:
+            try:
+                await update.message.reply_text(escape_markdown_v2("Категории вопросов еще не загружены или отсутствуют."), parse_mode=ParseMode.MARKDOWN_V2)
+            except Exception as e:
+                 logger.error(f"Ошибка при отправке categories_command (нет категорий): {e}")
+            return
+
+        response_lines = [f"*{escape_markdown_v2('📚 Доступные категории вопросов (кол-во вопросов):')}*"]
+        for cat_info in sorted(categories_data, key=lambda x: x.get('name', '').lower()):
+            cat_name_escaped = escape_markdown_v2(cat_info.get('name', 'N/A'))
+            q_count = cat_info.get('count', 0)
+            response_lines.append(f"{escape_markdown_v2('-')} `{cat_name_escaped}` {escape_markdown_v2(f'({q_count})')}")
+
+        full_message = "\n".join(response_lines)
+
+        try:
+            if len(full_message) > 4096:
+                logger.warning("Список категорий слишком длинный, будет отправлен частями.")
+                part_buffer = response_lines[0] + "\n"
+                for line_idx, line_content in enumerate(response_lines[1:], 1):
+                    if len(part_buffer) + len(line_content) + 1 > 4000:
+                        await update.message.reply_text(part_buffer.strip(), parse_mode=ParseMode.MARKDOWN_V2)
+                        part_buffer = line_content
+                    else:
+                        part_buffer += "\n" + line_content
+                if part_buffer.strip():
+                    await update.message.reply_text(part_buffer.strip(), parse_mode=ParseMode.MARKDOWN_V2)
+            else:
+                await update.message.reply_text(full_message, parse_mode=ParseMode.MARKDOWN_V2)
+        except Exception as e:
+            logger.error(f"Ошибка при отправке списка категорий: {e}\nТекст сообщения (начало): {full_message[:500]}")
+            try:
+                await update.message.reply_text(
+                    escape_markdown_v2("Произошла ошибка при отображении списка категорий."),
+                    parse_mode=ParseMode.MARKDOWN_V2
+                )
+            except Exception as e_fallback:
+                 logger.error(f"Ошибка при отправке fallback-сообщения для categories_command: {e_fallback}")
+
+
+    async def cancel_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> Optional[int]:
+        if not update.message or not update.effective_user or not update.effective_chat:
+             return ConversationHandler.END # type: ignore [attr-defined]
+
+        user_id = update.effective_user.id
+        chat_id = update.effective_chat.id
+        cancel_message = escape_markdown_v2("Команда отмены получена. Если вы были в диалоге, он должен завершиться.")
+        try:
+            await update.message.reply_text(cancel_message, parse_mode=ParseMode.MARKDOWN_V2)
+        except Exception as e:
+            logger.error(f"Ошибка при отправке cancel_command сообщения: {e}")
+
+        logger.info(f"Пользователь {user_id} в чате {chat_id} вызвал /{self.app_config.commands.cancel}.")
+        return ConversationHandler.END # type: ignore [attr-defined]
+
+    def get_handlers(self) -> List[CommandHandler]:
+        handlers_list = [
+            CommandHandler(self.app_config.commands.start, self.start_command),
+            CommandHandler(self.app_config.commands.help, self.help_command),
+            CommandHandler(self.app_config.commands.categories, self.categories_command),
+            CommandHandler(self.app_config.commands.cancel, self.cancel_command),
+        ]
+        return handlers_list

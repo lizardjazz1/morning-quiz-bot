@@ -1,82 +1,111 @@
-# state.py
-from typing import List, Dict, Any, Set, Optional
+#state.py
+import logging
+import copy
+from typing import Dict, Any, Set, Optional, List, TYPE_CHECKING
+from collections import defaultdict
+from datetime import datetime
 
-# --- Глобальные переменные состояния ---
-# Эти словари хранят данные во время работы бота.
-# Они импортируются и используются другими модулями для доступа и изменения состояния.
+from utils import get_current_utc_time # utils.py должен быть доступен
 
-# quiz_data: {category_name: [question_dict, ...]}
-# Загружается из questions.json модулем data_manager.py
-# Используется в quiz_logic.py для получения вопросов, command_handlers.py для /categories
-quiz_data: Dict[str, List[Dict[str, Any]]] = {}
+if TYPE_CHECKING:
+    from app_config import AppConfig
+    from telegram.ext import Application
 
-# user_scores: {chat_id: {user_id: {"name": str, "score": int, "answered_polls": set, "milestones_achieved": set}}}
-# Загружается из users.json и сохраняется модулем data_manager.py
-# Обновляется в command_handlers.py (/start) и poll_answer_handler.py
-user_scores: Dict[str, Dict[str, Any]] = {}
+logger = logging.getLogger(__name__)
 
-# current_poll: {poll_id: poll_details_dict}
-# Хранит информацию о текущих активных опросах (Poll).
-# Обновляется в command_handlers.py (/quiz) и quiz_logic.py (для /quiz10).
-# Используется в poll_answer_handler.py для проверки ответов.
-current_poll: Dict[str, Dict[str, Any]] = {}
+class QuizState:
+    def __init__(self,
+                 chat_id: int,
+                 quiz_type: str,
+                 quiz_mode: str,
+                 questions: List[Dict[str, Any]],
+                 num_questions_to_ask: int,
+                 open_period_seconds: int,
+                 created_by_user_id: Optional[int] = None,
+                 original_command_message_id: Optional[int] = None,
+                 announce_message_id: Optional[int] = None,
+                 interval_seconds: Optional[int] = None,
+                 quiz_start_time: Optional[datetime] = None
+                 ):
 
-# current_quiz_session: {chat_id: session_details_dict}
-# Хранит информацию об активных сессиях /quiz10.
-# Управляется в command_handlers.py (/quiz10, /stopquiz) и quiz_logic.py.
-# Используется в poll_answer_handler.py.
-current_quiz_session: Dict[str, Dict[str, Any]] = {}
+        self.chat_id: int = chat_id
+        self.quiz_type: str = quiz_type
+        self.quiz_mode: str = quiz_mode # 'single_question', 'serial_immediate', 'serial_interval'
+        self.questions: List[Dict[str, Any]] = questions
+        self.num_questions_to_ask: int = num_questions_to_ask
+        self.open_period_seconds: int = open_period_seconds
 
-# pending_scheduled_quizzes: {chat_id: {"job_name": str, "category_name": str or None, "scheduled_time": datetime, "starter_user_id": str}}
-# Хранит информацию о квизах /quiz10notify, которые были анонсированы и ожидают запуска.
-pending_scheduled_quizzes: Dict[str, Dict[str, Any]] = {}
+        self.created_by_user_id: Optional[int] = created_by_user_id
+        self.original_command_message_id: Optional[int] = original_command_message_id
+        self.announce_message_id: Optional[int] = announce_message_id
+        self.interval_seconds: Optional[int] = interval_seconds
+        self.quiz_start_time: datetime = quiz_start_time if quiz_start_time else get_current_utc_time()
 
-# daily_quiz_subscriptions: {chat_id_str: {"hour": int, "minute": int, "categories": Optional[List[str]]}}
-# Хранит ID чатов, подписанных на ежедневную викторину, и их настройки.
-# Загружается и сохраняется модулем data_manager.py
-daily_quiz_subscriptions: Dict[str, Dict[str, Any]] = {}
+        self.current_question_index: int = 0
+        self.scores: Dict[str, Dict[str, Any]] = {}
 
-# active_daily_quizzes: {chat_id_str: {"current_question_index": int, "questions": list, "job_name_next_q": str | None}}
-# Хранит состояние активных ежедневных викторин
-active_daily_quizzes: Dict[str, Dict[str, Any]] = {}
-# state.py
-from typing import List, Dict, Any, Set, Optional
+        self.active_poll_ids_in_session: Set[str] = set()
+        self.latest_poll_id_sent: Optional[str] = None
+        self.progression_triggered_for_poll: Dict[str, bool] = {}
+        
+        self.message_ids_to_delete: Set[int] = set()
+        self.is_stopping: bool = False
+        
+        # ИЗМЕНЕНО: эти поля больше не нужны в QuizState, т.к. управляются для каждого опроса индивидуально
+        # self.current_poll_id: Optional[str] = None 
+        # self.current_poll_message_id: Optional[int] = None
+        # self.question_start_time: Optional[datetime] = None
+        # self.current_poll_end_job_name: Optional[str] = None
+        self.next_question_job_name: Optional[str] = None # Для отложенной отправки следующего вопроса в режиме serial_interval после раннего ответа
+        self.poll_and_solution_message_ids: List[Dict[str, Optional[int]]] = []
 
-# --- Глобальные переменные состояния ---
-# Эти словари хранят данные во время работы бота.
-# Они импортируются и используются другими модулями для доступа и изменения состояния.
+    def get_current_question_data(self) -> Optional[Dict[str, Any]]:
+        if 0 <= self.current_question_index < len(self.questions):
+            return self.questions[self.current_question_index]
+        return None
 
-# quiz_data: {category_name: [question_dict, ...]}
-# Загружается из questions.json модулем data_manager.py
-# Используется в quiz_logic.py для получения вопросов, command_handlers.py для /categories
-quiz_data: Dict[str, List[Dict[str, Any]]] = {}
+class BotState:
+    def __init__(self, app_config: 'AppConfig'):
+        self.app_config: 'AppConfig' = app_config
+        self.application: Optional['Application'] = None
 
-# user_scores: {chat_id: {user_id: {"name": str, "score": int, "answered_polls": set, "milestones_achieved": set}}}
-# Загружается из users.json и сохраняется модулем data_manager.py
-# Обновляется в command_handlers.py (/start) и poll_answer_handler.py
-user_scores: Dict[str, Dict[str, Any]] = {}
+        self.active_quizzes: Dict[int, QuizState] = {}
+        self.current_polls: Dict[str, Dict[str, Any]] = {} # poll_id -> poll_data (включая chat_id, message_id, question_details, job_poll_end_name)
 
-# current_poll: {poll_id: poll_details_dict}
-# Хранит информацию о текущих активных опросах (Poll).
-# Обновляется в command_handlers.py (/quiz) и quiz_logic.py (для /quiz10).
-# Используется в poll_answer_handler.py для проверки ответов.
-current_poll: Dict[str, Dict[str, Any]] = {}
+        self.quiz_data: Dict[str, List[Dict[str, Any]]] = {}
+        self.user_scores: Dict[str, Any] = {}
+        self.chat_settings: Dict[int, Dict[str, Any]] = {}
 
-# current_quiz_session: {chat_id: session_details_dict}
-# Хранит информацию об активных сессиях /quiz10.
-# Управляется в command_handlers.py (/quiz10, /stopquiz) и quiz_logic.py.
-# Используется в poll_answer_handler.py.
-current_quiz_session: Dict[str, Dict[str, Any]] = {}
+        self.global_command_cooldowns: Dict[str, Dict[int, datetime]] = defaultdict(dict)
+        self.generic_messages_to_delete: Dict[int, Set[int]] = defaultdict(set)
 
-# pending_scheduled_quizzes: {chat_id: {"job_name": str, "category_name": str or None, "scheduled_time": datetime, "starter_user_id": str}}
-# Хранит информацию о квизах /quiz10notify, которые были анонсированы и ожидают запуска.
-pending_scheduled_quizzes: Dict[str, Dict[str, Any]] = {}
+    def get_active_quiz(self, chat_id: int) -> Optional[QuizState]:
+        return self.active_quizzes.get(chat_id)
 
-# daily_quiz_subscriptions: {chat_id_str: {"hour": int, "minute": int, "categories": Optional[List[str]]}}
-# Хранит ID чатов, подписанных на ежедневную викторину, и их настройки.
-# Загружается и сохраняется модулем data_manager.py
-daily_quiz_subscriptions: Dict[str, Dict[str, Any]] = {}
+    def add_active_quiz(self, chat_id: int, quiz_state: QuizState) -> None:
+        self.active_quizzes[chat_id] = quiz_state
 
-# active_daily_quizzes: {chat_id_str: {"current_question_index": int, "questions": list, "job_name_next_q": str | None}}
-# Хранит состояние активных ежедневных викторин
-active_daily_quizzes: Dict[str, Dict[str, Any]] = {}
+    def remove_active_quiz(self, chat_id: int) -> Optional[QuizState]:
+        return self.active_quizzes.pop(chat_id, None)
+
+    def get_current_poll_data(self, poll_id: str) -> Optional[Dict[str, Any]]:
+        return self.current_polls.get(poll_id)
+
+    def add_current_poll(self, poll_id: str, poll_data: Dict[str, Any]) -> None:
+        self.current_polls[poll_id] = poll_data
+
+    def remove_current_poll(self, poll_id: str) -> Optional[Dict[str, Any]]:
+        return self.current_polls.pop(poll_id, None)
+
+    def get_chat_settings(self, chat_id: int) -> Dict[str, Any]:
+        if not hasattr(self, 'app_config') or self.app_config is None:
+            logger.critical("CRITICAL: BotState.app_config не инициализирован!")
+            return copy.deepcopy({})
+
+        if chat_id in self.chat_settings:
+            return copy.deepcopy(self.chat_settings[chat_id])
+        return copy.deepcopy(self.app_config.default_chat_settings)
+
+    def update_chat_settings(self, chat_id: int, new_settings: Dict[str, Any]) -> None:
+        self.chat_settings[chat_id] = new_settings
+

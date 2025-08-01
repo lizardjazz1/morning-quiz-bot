@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  quiz-bot:
+    build: .
+    container_name: morning-quiz-bot
+    restart: unless-stopped
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+      - ./logs:/var/log/quiz-bot
+    networks:
+      - quiz-bot-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Опциональный nginx для проксирования
+  nginx:
+    image: nginx:alpine
+    container_name: quiz-bot-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - quiz-bot
+    networks:
+      - quiz-bot-network
+
+networks:
+  quiz-bot-network:
+    driver: bridge
+
+volumes:
+  quiz-bot-data:
+    driver: local 

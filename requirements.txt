@@ -1,2 +1,5 @@
-python-telegram-bot[job-queue]==21.3
-python-dotenv
+python-telegram-bot[job-queue]==21.7
+python-dotenv==1.1.0
+pytz==2024.2
+# Встроенные библиотеки: os, sys, logging, asyncio, typing, json, pathlib, re, copy, html, collections, datetime
+# Совместимость: Python 3.8+, python-telegram-bot 21.7+ для поддержки Python 3.13

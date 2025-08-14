@@ -203,7 +203,7 @@ class ScoreManager:
 
             final_name_score_segment: str
             if is_session_score and num_questions_in_session is not None:
-                # Формат для сессии: "Имя: C/Y | <ACHIEVEMENT> T"
+                # Формат для сессии: "Имя: C/Y \| <ACHIEVEMENT> T"
                 correct_val = entry.get('correct_count', entry.get('correct', None))
                 if correct_val is None:
                     # Фоллбек: если нет явного количества правильных ответов, используем max(score, 0)
@@ -215,7 +215,7 @@ class ScoreManager:
                 right_total_val = entry.get('global_total_score')
                 ach_icon = entry.get('achievement_icon', '⭐')
                 if right_total_val is not None:
-                    final_name_score_segment = f"{escaped_user_name}: `{escape_markdown_v2(score_display_for_session)}` | {ach_icon} `{escape_markdown_v2(str(right_total_val))}`"
+                    final_name_score_segment = f"{escaped_user_name}: `{escape_markdown_v2(score_display_for_session)}` \| {ach_icon} `{escape_markdown_v2(str(right_total_val))}`"
                 else:
                     final_name_score_segment = f"{escaped_user_name}: `{escape_markdown_v2(score_display_for_session)}`"
             else:

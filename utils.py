@@ -37,6 +37,11 @@ def escape_markdown_v2(text: str) -> str:
     escape_chars = r'_*[]()~`>#+-=|{}.!'
     return "".join(f'\\{char}' if char in escape_chars else char for char in text)
 
+# Centralized alias to emphasize intent when preparing text for MarkdownV2
+# Use this in new code to standardize escaping across the project
+def safe_md(text: str) -> str:
+    return escape_markdown_v2(text)
+
 def pluralize(count: int, one: str, few: str, many: str) -> str:
     try:
         count = abs(int(count))

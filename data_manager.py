@@ -311,10 +311,44 @@ class DataManager:
             logger.debug(f"Настройки чатов сохранены ({len(data_to_save)} чатов).")
         except Exception as e: logger.error(f"Ошибка сохранения настроек чатов: {e}", exc_info=True)
 
+    def save_messages_to_delete(self) -> None:
+        """Сохраняет сообщения для удаления в файл"""
+        data_to_save = {str(chat_id): list(message_ids) for chat_id, message_ids in self.state.generic_messages_to_delete.items()}
+        try:
+            with open(self.paths_config.messages_to_delete_file, 'w', encoding='utf-8') as f:
+                json.dump(data_to_save, f, ensure_ascii=False, indent=4)
+            logger.debug(f"Сообщения для удаления сохранены ({len(data_to_save)} чатов).")
+        except Exception as e: logger.error(f"Ошибка сохранения сообщений для удаления: {e}", exc_info=True)
+
+    def load_messages_to_delete(self) -> None:
+        """Загружает сообщения для удаления из файла"""
+        try:
+            if not self.paths_config.messages_to_delete_file.exists():
+                logger.debug(f"Файл сообщений для удаления не найден: {self.paths_config.messages_to_delete_file}")
+                return
+            
+            with open(self.paths_config.messages_to_delete_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            # Преобразуем строковые ключи обратно в int и списки в множества
+            for chat_id_str, message_ids_list in data.items():
+                try:
+                    chat_id = int(chat_id_str)
+                    self.state.generic_messages_to_delete[chat_id] = set(message_ids_list)
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Ошибка преобразования данных для чата {chat_id_str}: {e}")
+            
+            total_messages = sum(len(message_ids) for message_ids in self.state.generic_messages_to_delete.values())
+            logger.info(f"Загружено {total_messages} сообщений для удаления из {len(self.state.generic_messages_to_delete)} чатов.")
+            
+        except Exception as e: 
+            logger.error(f"Ошибка загрузки сообщений для удаления: {e}", exc_info=True)
+
     def save_all_data(self) -> None:
         logger.info("Сохранение всех данных...")
         self.save_user_data()
         self.save_chat_settings()
+        self.save_messages_to_delete()
         logger.info("Сохранение всех данных завершено.")
 
     def load_all_data(self) -> None:
@@ -322,6 +356,7 @@ class DataManager:
         self.load_questions()
         self.load_user_data()
         self.load_chat_settings()
+        self.load_messages_to_delete()
         logger.debug("Загрузка всех данных завершена.")
 
     def update_chat_setting(self, chat_id: int, key_path: List[str], value: Any) -> None:

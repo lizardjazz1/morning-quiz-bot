@@ -58,7 +58,11 @@ class RatingHandlers:
         )
 
         try:
-            await update.message.reply_text(formatted_rating_text, parse_mode=ParseMode.MARKDOWN_V2)
+            sent_msg = await update.message.reply_text(formatted_rating_text, parse_mode=ParseMode.MARKDOWN_V2)
+            # Добавляем сообщение рейтинга в список для удаления
+            bot_state = context.bot_data.get('bot_state')
+            if bot_state:
+                bot_state.add_message_for_deletion(chat_id_for_query, sent_msg.message_id)
         except Exception as e:
             logger.error(f"Ошибка при отправке рейтинга (global={global_rating}): {e}\nТекст: {formatted_rating_text[:500]}")
             await update.message.reply_text(escape_markdown_v2("Не удалось отобразить рейтинг."), parse_mode=ParseMode.MARKDOWN_V2)
@@ -90,7 +94,7 @@ class RatingHandlers:
             chat_title_val = update.effective_chat.title if update.effective_chat.title else "этот чат"
             chat_title_escaped = escape_markdown_v2(chat_title_val)
 
-            reply_parts.append(f"\n🏆 *В чате ({chat_title_escaped}):*")
+            reply_parts.append(f"\n🏆 *В чате \\({chat_title_escaped}\\):*")
             reply_parts.append(f"{escape_markdown_v2('⭐ Общий рейтинг:')} `{escape_markdown_v2(str(score_chat))}`")
             reply_parts.append(f"{escape_markdown_v2('🙋 Отвечено на опросы:')} `{escape_markdown_v2(str(answered_chat))}`")
             reply_parts.append(f"{escape_markdown_v2('🎯 Средний балл за опрос:')} `{escape_markdown_v2(f'{avg_score_chat:.2f}')}`")
@@ -116,7 +120,11 @@ class RatingHandlers:
             final_reply_text = "\n".join(reply_parts)
 
         try:
-            await update.message.reply_text(final_reply_text, parse_mode=ParseMode.MARKDOWN_V2)
+            sent_msg = await update.message.reply_text(final_reply_text, parse_mode=ParseMode.MARKDOWN_V2)
+            # Добавляем сообщение статистики в список для удаления
+            bot_state = context.bot_data.get('bot_state')
+            if bot_state:
+                bot_state.add_message_for_deletion(chat_id, sent_msg.message_id)
         except Exception as e:
             logger.error(f"Ошибка при отправке my_stats: {e}. Текст (начало):\n{final_reply_text[:500]}")
             await update.message.reply_text(escape_markdown_v2("Не удалось отобразить вашу статистику."), parse_mode=ParseMode.MARKDOWN_V2)

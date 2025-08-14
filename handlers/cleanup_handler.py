@@ -1,5 +1,6 @@
 #handlers/cleanup_handler.py
 import logging
+import os
 from datetime import timedelta
 from telegram.ext import ContextTypes, JobQueue
 from telegram import Update
@@ -15,10 +16,17 @@ logger = logging.getLogger(__name__)
 async def cleanup_old_messages_job(context: ContextTypes.DEFAULT_TYPE):
     logger.info("Запуск задачи очистки старых сообщений...")
 
-    # Предполагаем, что экземпляр BotState хранится в context.bot_data['bot_state']
-    bot_state = context.bot_data.get('bot_state')
+    # Получаем BotState из data задачи или из context.bot_data
+    bot_state = None
+    if context.job and context.job.data and isinstance(context.job.data, dict):
+        bot_state = context.job.data.get('bot_state')
+    
     if not bot_state:
-        logger.error("BotState не найден в context.bot_data. Задача очистки не может быть выполнена.")
+        # Fallback: пытаемся получить из context.bot_data
+        bot_state = context.bot_data.get('bot_state')
+    
+    if not bot_state:
+        logger.error("BotState не найден в context.job.data или context.bot_data. Задача очистки не может быть выполнена.")
         return
 
     # Убедимся, что атрибут существует и является словарем
@@ -29,6 +37,9 @@ async def cleanup_old_messages_job(context: ContextTypes.DEFAULT_TYPE):
 
     # bot_state.generic_messages_to_delete: Dict[int, Set[int]]
     # где int - chat_id, Set[int] - message_ids
+
+    total_messages_to_process = sum(len(message_ids) for message_ids in bot_state.generic_messages_to_delete.values())
+    logger.info(f"📊 Всего сообщений для обработки: {total_messages_to_process} в {len(bot_state.generic_messages_to_delete)} чатах")
 
     chats_to_remove_entry_for = [] # Список ID чатов, для которых запись в словаре стала пустой
 
@@ -78,9 +89,19 @@ async def cleanup_old_messages_job(context: ContextTypes.DEFAULT_TYPE):
 
     logger.info("Задача очистки старых сообщений завершена.")
 
-def schedule_cleanup_job(job_queue: JobQueue) -> None:
+def schedule_cleanup_job(job_queue: JobQueue, bot_state=None) -> None:
     """Планирует периодическую задачу очистки сообщений."""
-    interval_hours = 6  # Интервал запуска задачи (например, каждые 6 часов)
+    
+    # Получаем режим работы из переменной окружения
+    mode = os.getenv("MODE", "production").lower()
+    
+    if mode == "testing":
+        interval_hours = 1/60  # 1 минута для тестирования
+        logger.info("🔧 Режим работы: TESTING (очистка каждую минуту)")
+    else:
+        interval_hours = 6  # 6 часов для продакшена
+        logger.info("🔧 Режим работы: PRODUCTION (очистка каждые 6 часов)")
+    
     first_run_delay_seconds = 60  # Задержка перед первым запуском после старта бота (в секундах)
 
     job_name = "periodic_message_cleanup" # Уникальное имя для задачи
@@ -92,13 +113,17 @@ def schedule_cleanup_job(job_queue: JobQueue) -> None:
             job.schedule_removal()
         logger.info(f"Удалена существующая задача очистки сообщений '{job_name}'.")
 
+    # Передаем bot_state в data задачи
+    job_data = {'bot_state': bot_state} if bot_state else {}
+
     job_queue.run_repeating(
         cleanup_old_messages_job,
         interval=timedelta(hours=interval_hours),
         first=timedelta(seconds=first_run_delay_seconds),
-        name=job_name
+        name=job_name,
+        data=job_data
     )
-    logger.info(f"Задача очистки сообщений '{job_name}' запланирована с интервалом {interval_hours} часов (первый запуск через {first_run_delay_seconds} сек).")
+    logger.info(f"Задача очистки сообщений '{job_name}' запланирована с интервалом {int(interval_hours * 60)} минут (первый запуск через {first_run_delay_seconds} сек).")
 
 # Функция cleanup_command была здесь, но она не интегрирована в классовую структуру обработчиков
 # и не зарегистрирована в bot.py. Для ее использования необходимо:

@@ -191,6 +191,8 @@ class QuizManager:
                     msg = await context.bot.send_message(chat_id, full_announce_text, parse_mode=ParseMode.MARKDOWN_V2)
                     current_quiz_state_instance.announce_message_id = msg.message_id
                     current_quiz_state_instance.message_ids_to_delete.add(msg.message_id)
+                    # Добавляем в глобальный список для периодической очистки
+                    self.state.add_message_for_deletion(chat_id, msg.message_id)
                 except Exception as e_announce:
                     logger.error(f"Ошибка отправки анонса (delay: {announce_delay_seconds > 0}) в чат {chat_id}: {e_announce}")
             else:
@@ -565,15 +567,39 @@ class QuizManager:
 
         if error_occurred and not quiz_state.scores:
             msg_text_to_send = f"Викторина завершена с ошибкой: {escaped_error_message}" if escaped_error_message else escape_markdown_v2("Викторина завершена из-за непредвиденной ошибки.")
-            try: await context.bot.send_message(chat_id, msg_text_to_send, parse_mode=ParseMode.MARKDOWN_V2)
+            try: 
+                error_msg = await context.bot.send_message(chat_id, msg_text_to_send, parse_mode=ParseMode.MARKDOWN_V2)
+                # Добавляем сообщение об ошибке в глобальный список для периодической очистки
+                self.state.add_message_for_deletion(chat_id, error_msg.message_id)
             except Exception as e_send_err: logger.error(f"Не удалось отправить сообщение об ошибке финализации: {e_send_err}")
         elif quiz_state.quiz_type != "single" or quiz_state.scores or (error_occurred and quiz_state.scores): 
             title_unescaped_for_formatter = "🏁 Викторина завершена!"
             if was_stopped: title_unescaped_for_formatter = "📝 Викторина остановлена. Результаты:"
             elif error_occurred: title_unescaped_for_formatter = f"⚠️ Викторина завершена с ошибкой{(': ' + error_message) if error_message else ''}. Результаты (если есть):"
 
-            scores_for_display: List[Dict[str, Any]] = [{"user_id": int(uid), "name": data["name"], "score": data["score"]} for uid, data in quiz_state.scores.items()]
-            scores_for_display.sort(key=lambda x: -x["score"])
+            # Собираем данные результатов сессии, включая глобальный счет и иконку ачивки
+            scores_for_display: List[Dict[str, Any]] = []
+            for uid, data in quiz_state.scores.items():
+                # Глобальная статистика пользователя (по всем чатам)
+                global_stats = self.score_manager.get_global_user_stats(uid)
+                global_total_score_val = global_stats.get('total_score', 0) if global_stats else 0
+                achievement_icon_val = self.score_manager.get_rating_icon(global_total_score_val)
+
+                try:
+                    user_id_int = int(uid)
+                except ValueError:
+                    user_id_int = 0
+
+                scores_for_display.append({
+                    "user_id": user_id_int,
+                    "name": data["name"],
+                    "score": data["score"],
+                    "correct_count": data.get("correct_count", 0),
+                    "global_total_score": global_total_score_val,
+                    "achievement_icon": achievement_icon_val,
+                })
+
+            scores_for_display.sort(key=lambda x: -x["score"]) 
 
             results_text_md = self.score_manager.format_scores(
                 scores_list=scores_for_display,
@@ -581,7 +607,10 @@ class QuizManager:
                 is_session_score=True,
                 num_questions_in_session=quiz_state.num_questions_to_ask
             )
-            try: await context.bot.send_message(chat_id, results_text_md, parse_mode=ParseMode.MARKDOWN_V2)
+            try: 
+                result_msg = await context.bot.send_message(chat_id, results_text_md, parse_mode=ParseMode.MARKDOWN_V2)
+                # Добавляем результаты в глобальный список для периодической очистки
+                self.state.add_message_for_deletion(chat_id, result_msg.message_id)
             except Exception as e_send_res: logger.error(f"Не удалось отправить результаты викторины: {e_send_res}")
 
         if quiz_state.message_ids_to_delete:

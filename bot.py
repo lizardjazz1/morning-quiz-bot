@@ -40,17 +40,18 @@ from handlers.common_handlers import CommonHandlers
 from handlers.cleanup_handler import schedule_cleanup_job
 
 # Настройка логирования
-LOG_LEVEL_DEFAULT_STR = os.getenv("LOG_LEVEL", "INFO").upper()
+# Сначала создаем временный уровень для инициализации
+TEMP_LOG_LEVEL_STR = os.getenv("LOG_LEVEL", "INFO").upper()
 LOG_LEVEL_MAP = {
     "DEBUG": logging.DEBUG, "INFO": logging.INFO,
     "WARNING": logging.WARNING, "ERROR": logging.ERROR,
     "CRITICAL": logging.CRITICAL
 }
-LOG_LEVEL_DEFAULT = LOG_LEVEL_MAP.get(LOG_LEVEL_DEFAULT_STR, logging.INFO)
+TEMP_LOG_LEVEL_DEFAULT = LOG_LEVEL_MAP.get(TEMP_LOG_LEVEL_STR, logging.INFO)
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=LOG_LEVEL_DEFAULT,
+    level=TEMP_LOG_LEVEL_DEFAULT,
     handlers=[
         logging.FileHandler("bot.log", encoding='utf-8'),
         logging.StreamHandler(sys.stdout)
@@ -67,6 +68,23 @@ logging.getLogger("apscheduler").setLevel(logging.INFO)
 
 logger = logging.getLogger(__name__)
 
+def update_logging_level(app_config):
+    """Обновляет уровень логирования на основе конфигурации приложения"""
+    new_level = LOG_LEVEL_MAP.get(app_config.log_level_str, logging.INFO)
+    
+    # Обновляем корневой логгер
+    logging.getLogger().setLevel(new_level)
+    
+    # Обновляем основные логгеры приложения
+    logging.getLogger("__main__").setLevel(new_level)
+    logging.getLogger("app_config").setLevel(new_level)
+    logging.getLogger("state").setLevel(new_level)
+    logging.getLogger("data_manager").setLevel(new_level)
+    logging.getLogger("handlers").setLevel(new_level)
+    logging.getLogger("modules").setLevel(new_level)
+    
+    logger.info(f"🔧 Уровень логирования обновлен: {app_config.log_level_str} (режим: {app_config.debug_mode and 'TESTING' or 'PRODUCTION'})")
+
 async def main() -> None:
     logger.info("Запуск бота...")
     application_instance: Optional[Application] = None # Переименовано для ясности
@@ -79,11 +97,17 @@ async def main() -> None:
             logger.critical("Токен бота не найден. Укажите BOT_TOKEN в .env или конфигурации.")
             return
         logger.debug(f"AppConfig инициализирован. Режим отладки: {app_config.debug_mode}")
+        
+        # Обновляем уровень логирования на основе конфигурации
+        update_logging_level(app_config)
 
         bot_state = BotState(app_config=app_config)
         data_manager = DataManager(state=bot_state, app_config=app_config)
         data_manager.load_all_data()
         data_manager_instance = data_manager
+        
+        # Передаем data_manager в BotState для автоматического сохранения
+        bot_state.data_manager = data_manager
 
         category_manager = CategoryManager(state=bot_state, app_config=app_config, data_manager=data_manager)
         score_manager = ScoreManager(app_config=app_config, state=bot_state, data_manager=data_manager)
@@ -106,9 +130,14 @@ async def main() -> None:
         application_instance = application_builder.build() # Присваиваем созданный application
         logger.info("Объект Application создан.")
 
+        # Передаем application в BotState для автоматического сохранения
+        bot_state.application = application_instance
+
         application_instance.bot_data['bot_state'] = bot_state
         application_instance.bot_data['app_config'] = app_config
         application_instance.bot_data['data_manager'] = data_manager
+        logger.debug(f"🔧 data_manager добавлен в application.bot_data: {data_manager}")
+        logger.debug(f"🔧 Доступные ключи в bot_data: {list(application_instance.bot_data.keys())}")
 
         common_handlers_instance = CommonHandlers(app_config=app_config, category_manager=category_manager, bot_state=bot_state)
         quiz_manager = QuizManager(
@@ -159,6 +188,7 @@ async def main() -> None:
             BotCommand(app_config.commands.quiz, "🏁 Начать викторину"),
             BotCommand(app_config.commands.top, "🏆 Показать рейтинг"),
             BotCommand(app_config.commands.global_top, "🏆 Показать глобальный рейтинг"),
+            BotCommand(app_config.commands.mystats, "📊 Показать вашу статистику"),
             BotCommand(app_config.commands.categories, "📚 Список категорий"),
             BotCommand(app_config.commands.help, "ℹ️ Помощь по командам"),
             BotCommand(app_config.commands.stop_quiz, "🛑 Остановить текущую викторину"),
@@ -166,6 +196,7 @@ async def main() -> None:
         ]
         admin_cmds = [
             (app_config.commands.admin_settings, "[Админ] ⚙️ Настройки бота"),
+            (app_config.commands.add_admin, "[Админ] ➕ Добавить администратора"),
             (app_config.commands.reloadcfg, "[Админ] 🔄 Перезагрузить категории"),
         ]
         for cmd, desc in admin_cmds:
@@ -178,7 +209,6 @@ async def main() -> None:
 
         await application_instance.initialize()
         await daily_quiz_scheduler.schedule_all_daily_quizzes_from_startup()
-        schedule_cleanup_job(application_instance.job_queue)
 
         if application_instance.updater:
             logger.info(f"Запуск бота (polling) с уровнем логирования: {logging.getLevelName(logger.getEffectiveLevel())}")
@@ -186,6 +216,13 @@ async def main() -> None:
                 allowed_updates=Update.ALL_TYPES
             )
             await application_instance.start()
+            
+            # Добавляем data_manager в bot_data после start() (на случай, если bot_data очищается)
+            application_instance.bot_data['data_manager'] = data_manager
+            logger.debug(f"🔧 data_manager добавлен в bot_data после start(): {data_manager}")
+            logger.debug(f"🔧 Доступные ключи в bot_data после start(): {list(application_instance.bot_data.keys())}")
+            
+            schedule_cleanup_job(application_instance.job_queue, bot_state)
             logger.info("Бот запущен и готов принимать обновления.")
             while application_instance.updater.running:
                 await asyncio.sleep(1)
@@ -206,18 +243,21 @@ async def main() -> None:
                 await application_instance.updater.stop()
                 logger.info("Updater остановлен в main().finally.")
 
-            if hasattr(application_instance, '_dispatcher_running') and application_instance._dispatcher_running:
-                 logger.info("Остановка Application (Dispatcher) в main().finally...")
-                 await application_instance.stop()
-                 logger.info("Application (Dispatcher) остановлен в main().finally.")
-            elif application_instance.running: # Fallback check
-                 logger.info("Остановка Application (Dispatcher) через application.running в main().finally...")
-                 await application_instance.stop()
-                 logger.info("Application (Dispatcher) остановлен в main().finally.")
+            # Проверяем, запущен ли диспетчер более безопасным способом
+            try:
+                if hasattr(application_instance, 'running') and application_instance.running:
+                    logger.info("Остановка Application в main().finally...")
+                    await application_instance.stop()
+                    logger.info("Application остановлен в main().finally.")
+            except Exception as e:
+                logger.warning(f"Ошибка при остановке Application: {e}")
 
             logger.info("Запуск Application.shutdown() в main().finally...")
-            await application_instance.shutdown()
-            logger.info("Application.shutdown() завершен в main().finally.")
+            try:
+                await application_instance.shutdown()
+                logger.info("Application.shutdown() завершен в main().finally.")
+            except Exception as e:
+                logger.warning(f"Ошибка при shutdown Application: {e}")
         else:
             logger.warning("Экземпляр Application не был создан, пропуск шагов остановки PTB в main().finally.")
 

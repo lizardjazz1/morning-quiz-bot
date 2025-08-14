@@ -33,7 +33,11 @@ class CommonHandlers:
             f"/{self.app_config.commands.help} \\- {escape_markdown_v2('показать эту справку')}"
         )
         try:
-            await update.message.reply_text(welcome_text, parse_mode=ParseMode.MARKDOWN_V2)
+            sent_msg = await update.message.reply_text(welcome_text, parse_mode=ParseMode.MARKDOWN_V2)
+            # Добавляем сообщение в список для удаления
+            bot_state = context.bot_data.get('bot_state')
+            if bot_state:
+                bot_state.add_message_for_deletion(update.effective_chat.id, sent_msg.message_id)
         except Exception as e:
             logger.error(f"Ошибка при отправке start_command: {e}")
 
@@ -72,7 +76,11 @@ class CommonHandlers:
             f"/{self.app_config.commands.cancel} \\- {escape_markdown_v2('отмена текущего диалога (например, настройки)')}"
         )
         try:
-            await update.message.reply_text(help_full_text, parse_mode=ParseMode.MARKDOWN_V2)
+            sent_msg = await update.message.reply_text(help_full_text, parse_mode=ParseMode.MARKDOWN_V2)
+            # Добавляем сообщение в список для удаления
+            bot_state = context.bot_data.get('bot_state')
+            if bot_state:
+                bot_state.add_message_for_deletion(update.effective_chat.id, sent_msg.message_id)
         except Exception as e:
             logger.error(f"Ошибка при отправке help_command: {e}")
 
@@ -83,7 +91,11 @@ class CommonHandlers:
 
         if not categories_data:
             try:
-                await update.message.reply_text(escape_markdown_v2("Категории вопросов еще не загружены или отсутствуют."), parse_mode=ParseMode.MARKDOWN_V2)
+                sent_msg = await update.message.reply_text(escape_markdown_v2("Категории вопросов еще не загружены или отсутствуют."), parse_mode=ParseMode.MARKDOWN_V2)
+                # Добавляем сообщение в список для удаления
+                bot_state = context.bot_data.get('bot_state')
+                if bot_state:
+                    bot_state.add_message_for_deletion(update.effective_chat.id, sent_msg.message_id)
             except Exception as e:
                  logger.error(f"Ошибка при отправке categories_command (нет категорий): {e}")
             return
@@ -102,21 +114,37 @@ class CommonHandlers:
                 part_buffer = response_lines[0] + "\n"
                 for line_idx, line_content in enumerate(response_lines[1:], 1):
                     if len(part_buffer) + len(line_content) + 1 > 4000:
-                        await update.message.reply_text(part_buffer.strip(), parse_mode=ParseMode.MARKDOWN_V2)
+                        sent_msg = await update.message.reply_text(part_buffer.strip(), parse_mode=ParseMode.MARKDOWN_V2)
+                        # Добавляем сообщение в список для удаления
+                        bot_state = context.bot_data.get('bot_state')
+                        if bot_state:
+                            bot_state.add_message_for_deletion(update.effective_chat.id, sent_msg.message_id)
                         part_buffer = line_content
                     else:
                         part_buffer += "\n" + line_content
                 if part_buffer.strip():
-                    await update.message.reply_text(part_buffer.strip(), parse_mode=ParseMode.MARKDOWN_V2)
+                    sent_msg = await update.message.reply_text(part_buffer.strip(), parse_mode=ParseMode.MARKDOWN_V2)
+                    # Добавляем сообщение в список для удаления
+                    bot_state = context.bot_data.get('bot_state')
+                    if bot_state:
+                        bot_state.add_message_for_deletion(update.effective_chat.id, sent_msg.message_id)
             else:
-                await update.message.reply_text(full_message, parse_mode=ParseMode.MARKDOWN_V2)
+                sent_msg = await update.message.reply_text(full_message, parse_mode=ParseMode.MARKDOWN_V2)
+                # Добавляем сообщение в список для удаления
+                bot_state = context.bot_data.get('bot_state')
+                if bot_state:
+                    bot_state.add_message_for_deletion(update.effective_chat.id, sent_msg.message_id)
         except Exception as e:
             logger.error(f"Ошибка при отправке списка категорий: {e}\nТекст сообщения (начало): {full_message[:500]}")
             try:
-                await update.message.reply_text(
+                sent_msg = await update.message.reply_text(
                     escape_markdown_v2("Произошла ошибка при отображении списка категорий."),
                     parse_mode=ParseMode.MARKDOWN_V2
                 )
+                # Добавляем сообщение в список для удаления
+                bot_state = context.bot_data.get('bot_state')
+                if bot_state:
+                    bot_state.add_message_for_deletion(update.effective_chat.id, sent_msg.message_id)
             except Exception as e_fallback:
                  logger.error(f"Ошибка при отправке fallback-сообщения для categories_command: {e_fallback}")
 
@@ -129,7 +157,11 @@ class CommonHandlers:
         chat_id = update.effective_chat.id
         cancel_message = escape_markdown_v2("Команда отмены получена. Если вы были в диалоге, он должен завершиться.")
         try:
-            await update.message.reply_text(cancel_message, parse_mode=ParseMode.MARKDOWN_V2)
+            sent_msg = await update.message.reply_text(cancel_message, parse_mode=ParseMode.MARKDOWN_V2)
+            # Добавляем сообщение в список для удаления
+            bot_state = context.bot_data.get('bot_state')
+            if bot_state:
+                bot_state.add_message_for_deletion(update.effective_chat.id, sent_msg.message_id)
         except Exception as e:
             logger.error(f"Ошибка при отправке cancel_command сообщения: {e}")
 

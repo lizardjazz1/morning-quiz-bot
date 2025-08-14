@@ -68,9 +68,20 @@ class CustomPollAnswerHandler:
         )
 
         if motivational_msg_text_md_escaped:
+            # Отправляем в групповой чат
             try:
                 await context.bot.send_message(
-                    chat_id=user.id, 
+                    chat_id=chat_id_int,
+                    text=motivational_msg_text_md_escaped,
+                    parse_mode=ParseMode.MARKDOWN_V2
+                )
+            except Exception as e:
+                logger.error(f"Не удалось отправить мотивационное сообщение в чат {chat_id_int}: {e}")
+            
+            # Отправляем в личные сообщения пользователю
+            try:
+                await context.bot.send_message(
+                    chat_id=user.id,
                     text=motivational_msg_text_md_escaped,
                     parse_mode=ParseMode.MARKDOWN_V2
                 )

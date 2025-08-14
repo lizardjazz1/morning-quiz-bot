@@ -40,7 +40,7 @@ class ScoreManager:
         # Обновление очков в активной сессии викторины (QuizState.scores)
         active_quiz = self.state.get_active_quiz(chat_id)
         if active_quiz:
-            active_quiz.scores.setdefault(user_id_str, {"name": user_name_for_state, "score": 0, "answered_this_session": set()})
+            active_quiz.scores.setdefault(user_id_str, {"name": user_name_for_state, "score": 0, "correct_count": 0, "answered_this_session": set()})
             # Убедимся, что имя в сессии тоже обновляется, если пользователь его сменил
             if active_quiz.scores[user_id_str].get("name") != user_name_for_state:
                  active_quiz.scores[user_id_str]["name"] = user_name_for_state
@@ -48,6 +48,9 @@ class ScoreManager:
             if poll_id not in active_quiz.scores[user_id_str]["answered_this_session"]:
                 if is_correct:
                     active_quiz.scores[user_id_str]["score"] += 1
+                    active_quiz.scores[user_id_str]["correct_count"] += 1
+                else:
+                    active_quiz.scores[user_id_str]["score"] -= 0.5  # Отнимаем 0.5 очка за неправильный ответ
                 active_quiz.scores[user_id_str]["answered_this_session"].add(poll_id)
 
         # Обновление очков в глобальной статистике (BotState.user_scores)
@@ -71,6 +74,8 @@ class ScoreManager:
         if poll_id not in current_user_data_global["answered_polls"]:
             if is_correct:
                 current_user_data_global["score"] += 1
+            else:
+                current_user_data_global["score"] -= 0.5  # Отнимаем 0.5 очка за неправильный ответ
             score_updated_in_global_state = True
             current_user_data_global["answered_polls"].add(poll_id)
 
@@ -187,7 +192,7 @@ class ScoreManager:
             if i < len(place_icons) and score_val > 0: # Медали только для топ-3 с положительным счетом
                 line_parts.append(place_icons[i])
             else:
-                line_parts.append(f"{escape_markdown_v2(str(i + 1))}\.") # Экранируем точку
+                line_parts.append(f"{escape_markdown_v2(str(i + 1))}\. ") # Экранируем точку и добавляем пробел
 
             # 2. Иконка рейтинга (эмодзи) - теперь определяется score, а не рангом
             rating_icon = self.get_rating_icon(score_val)
@@ -198,10 +203,21 @@ class ScoreManager:
 
             final_name_score_segment: str
             if is_session_score and num_questions_in_session is not None:
-                # Формат для сессии с количеством вопросов: "Имя: X/Y"
-                score_display_for_session = f"{score_val}/{num_questions_in_session}"
-                # escape_markdown_v2 применяется к числу и знаку /, т.к. они могут быть частью формата
-                final_name_score_segment = f"{escaped_user_name}: `{escape_markdown_v2(score_display_for_session)}`" # Числа в коде
+                # Формат для сессии: "Имя: C/Y | <ACHIEVEMENT> T"
+                correct_val = entry.get('correct_count', entry.get('correct', None))
+                if correct_val is None:
+                    # Фоллбек: если нет явного количества правильных ответов, используем max(score, 0)
+                    try:
+                        correct_val = int(score_val) if score_val > 0 else 0
+                    except Exception:
+                        correct_val = 0
+                score_display_for_session = f"{correct_val}/{num_questions_in_session}"
+                right_total_val = entry.get('global_total_score')
+                ach_icon = entry.get('achievement_icon', '⭐')
+                if right_total_val is not None:
+                    final_name_score_segment = f"{escaped_user_name}: `{escape_markdown_v2(score_display_for_session)}` | {ach_icon} `{escape_markdown_v2(str(right_total_val))}`"
+                else:
+                    final_name_score_segment = f"{escaped_user_name}: `{escape_markdown_v2(score_display_for_session)}`"
             else:
                 # Общий формат "Имя - X очков" (для общего рейтинга и для сессии без X/Y)
                 # Текст очков с правильным окончанием ("1 очко", "2 очка", "5 очков")

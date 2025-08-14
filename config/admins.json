@@ -1,0 +1,13 @@
+{
+    "admin_user_ids": [
+        123456789,
+        987654321,
+        621817842
+    ],
+    "admin_usernames": [
+        "@your_username",
+        "@another_admin",
+        "@mrlizardfromrussia"
+    ],
+    "description": "Список администраторов бота. Добавьте сюда ID пользователей или username (с @)"
+}

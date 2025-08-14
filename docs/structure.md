@@ -1,0 +1,39 @@
+```
+└── 📁morning-quiz-bot-beta
+    └── 📁config
+        └── quiz_config.json
+    └── 📁data
+        └── chat_settings.json
+        └── daily_quiz_subscriptions.json
+        └── malformed_questions.json
+        └── ptb_persistence.pickle
+        └── questions.json
+        └── users.json
+    └── 📁handlers
+        └── __init__.py
+        └── 📁__pycache__
+        └── cleanup_handler.py
+        └── common_handlers.py
+        └── config_handlers.py
+        └── daily_quiz_scheduler.py
+        └── quiz_manager.py
+        └── rating_handlers.py
+    └── 📁modules
+        └── __init__.py
+        └── 📁__pycache__
+        └── category_manager.py
+        └── quiz_engine.py
+        └── score_manager.py
+    └── .env
+    └── .gitignore
+    └── .replit
+    └── app_config.py
+    └── bot.log
+    └── bot.py
+    └── data_manager.py
+    └── poll_answer_handler.py
+    └── requirements.txt
+    └── run_bot.bat
+    └── state.py
+    └── utils.py
+```

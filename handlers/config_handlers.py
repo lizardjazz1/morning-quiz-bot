@@ -2,7 +2,7 @@
 from __future__ import annotations
 import logging
 import asyncio
-from typing import TYPE_CHECKING, List, Any, Optional, Dict, Union
+from typing import TYPE_CHECKING, List, Any, Optional, Dict, Union, Set
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, Message, CallbackQuery
 from telegram.ext import (
@@ -15,7 +15,7 @@ from telegram.error import BadRequest
 from app_config import AppConfig
 from data_manager import DataManager
 from modules.category_manager import CategoryManager
-from utils import is_user_admin_in_update, escape_markdown_v2, pluralize, format_seconds_to_human_readable_time
+from utils import is_user_admin_in_update, escape_markdown_v2, pluralize, format_seconds_to_human_readable_time, add_admin_to_config
 
 if TYPE_CHECKING:
     from .daily_quiz_scheduler import DailyQuizScheduler
@@ -147,6 +147,10 @@ class ConfigHandlers:
         try:
             sent_msg = await context.bot.send_message(chat_id=chat_id, text=new_text, reply_markup=new_markup, parse_mode=ParseMode.MARKDOWN_V2)
             context.chat_data[CTX_ADMIN_CFG_MSG_ID] = sent_msg.message_id
+            # Добавляем сообщение меню в глобальный список для периодической очистки
+            bot_state = context.bot_data.get('bot_state')
+            if bot_state:
+                bot_state.add_message_for_deletion(chat_id, sent_msg.message_id)
             if is_callback_query:
                 try: await query_or_update.answer()
                 except Exception: pass
@@ -905,6 +909,36 @@ class ConfigHandlers:
         context.chat_data.clear()
         return ConversationHandler.END
 
+    async def add_admin_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Команда для добавления администратора"""
+        if not update.message or not update.effective_user:
+            return
+        
+        # Проверяем, что команда отправлена в личных сообщениях
+        if update.effective_chat.type != "private":
+            await update.message.reply_text(
+                escape_markdown_v2("Эта команда доступна только в личных сообщениях с ботом."), 
+                parse_mode=ParseMode.MARKDOWN_V2
+            )
+            return
+        
+        # Добавляем пользователя как администратора
+        user_id = update.effective_user.id
+        username = update.effective_user.username
+        
+        success = await add_admin_to_config(user_id, username)
+        
+        if success:
+            await update.message.reply_text(
+                escape_markdown_v2(f"✅ Вы успешно добавлены как администратор!\n\nID: {user_id}\nUsername: @{username if username else 'не указан'}\n\nТеперь вы можете использовать административные команды в группах."), 
+                parse_mode=ParseMode.MARKDOWN_V2
+            )
+        else:
+            await update.message.reply_text(
+                escape_markdown_v2("❌ Ошибка при добавлении администратора. Попробуйте позже."), 
+                parse_mode=ParseMode.MARKDOWN_V2
+            )
+
     def get_handlers(self) -> List[Any]:
         cancel_handler_for_conv = CommandHandler(self.app_config.commands.cancel, self.cancel_config_conversation)
 
@@ -936,4 +970,5 @@ class ConfigHandlers:
         return [
             conv_handler,
             CommandHandler(self.app_config.commands.view_chat_config, self.view_chat_config_command),
+            CommandHandler(self.app_config.commands.add_admin, self.add_admin_command),
         ]

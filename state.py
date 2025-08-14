@@ -68,6 +68,7 @@ class BotState:
     def __init__(self, app_config: 'AppConfig'):
         self.app_config: 'AppConfig' = app_config
         self.application: Optional['Application'] = None
+        self.data_manager: Optional['DataManager'] = None  # Добавляем data_manager
 
         self.active_quizzes: Dict[int, QuizState] = {}
         self.current_polls: Dict[str, Dict[str, Any]] = {} # poll_id -> poll_data (включая chat_id, message_id, question_details, job_poll_end_name)
@@ -108,4 +109,35 @@ class BotState:
 
     def update_chat_settings(self, chat_id: int, new_settings: Dict[str, Any]) -> None:
         self.chat_settings[chat_id] = new_settings
+
+    def add_message_for_deletion(self, chat_id: int, message_id: int) -> None:
+        """Добавляет сообщение в список для периодического удаления"""
+        self.generic_messages_to_delete[chat_id].add(message_id)
+        logger.info(f"✅ Сообщение {message_id} добавлено в список для удаления в чате {chat_id}. Всего в чате: {len(self.generic_messages_to_delete[chat_id])}")
+        
+        # Автоматически сохраняем данные при добавлении сообщения
+        try:
+            if self.data_manager:
+                self.data_manager.save_messages_to_delete()
+                logger.info(f"💾 Данные сообщений для удаления автоматически сохранены")
+            else:
+                logger.warning(f"⚠️ data_manager не доступен в BotState")
+        except Exception as e:
+            logger.error(f"❌ Не удалось автоматически сохранить сообщения для удаления: {e}")
+
+    def remove_message_from_deletion(self, chat_id: int, message_id: int) -> None:
+        """Удаляет сообщение из списка для периодического удаления"""
+        if chat_id in self.generic_messages_to_delete:
+            self.generic_messages_to_delete[chat_id].discard(message_id)
+            logger.info(f"❌ Сообщение {message_id} удалено из списка для удаления в чате {chat_id}. Осталось: {len(self.generic_messages_to_delete[chat_id])}")
+            
+            # Автоматически сохраняем данные при удалении сообщения
+            try:
+                if self.data_manager:
+                    self.data_manager.save_messages_to_delete()
+                    logger.info(f"💾 Данные сообщений для удаления автоматически сохранены")
+                else:
+                    logger.warning(f"⚠️ data_manager не доступен в BotState")
+            except Exception as e:
+                logger.error(f"❌ Не удалось автоматически сохранить сообщения для удаления: {e}")
 

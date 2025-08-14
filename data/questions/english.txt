@@ -1,0 +1,10 @@
+{"question": "Правильная форма: He has ___ a letter.","options": ["write","wrote","written","writing"],"correct": "written"}
+{"question": "Синоним к 'happy'","options": ["sad","angry","glad","tired"],"correct": "glad"}
+{"question": "Правильный предлог: interested ___ science","options": ["at","on","in","for"],"correct": "in"}
+{"question": "Множественное число от 'child'","options": ["childs","childes","children","childrens"],"correct": "children"}
+{"question": "Выберите Past Simple: They ___ to the cinema yesterday.","options": ["go","goes","went","gone"],"correct": "went"}
+{"question": "Антоним к 'early'","options": ["soon","late","fast","slow"],"correct": "late"}
+{"question": "Правильная форма: If I ___ time, I'll call you.","options": ["will have","have","had","having"],"correct": "have"}
+{"question": "Правильная модальная: You ___ stop here (совет).","options": ["may","must","should","can"],"correct": "should"}
+{"question": "Притяжательный падеж: the ___ car (у Джона)","options": ["John car","Johns car","John's","Johns'"],"correct": "John's"}
+{"question": "Выберите Present Perfect: She ___ already ___ dinner.","options": ["has; cooked","have; cooks","had; cook","is; cooking"],"correct": "has; cooked"}

@@ -54,6 +54,7 @@ class CommandConfig:
         self.config: str = commands_data.get("config", "config") # Старая команда config, оставлена для совместимости, если где-то используется
         self.admin_settings: str = commands_data.get("admin_settings", "adminsettings") # Новая команда для ConversationHandler настроек
         self.view_chat_config: str = commands_data.get("view_chat_config", "viewchatconfig") # Для просмотра конфига чата
+        self.add_admin: str = commands_data.get("add_admin", "addadmin") # Команда для добавления администратора
 
         self.adddailyquiz: str = commands_data.get("adddailyquiz", "adddailyquiz")
         self.removedailyquiz: str = commands_data.get("removedailyquiz", "removedailyquiz")
@@ -79,6 +80,7 @@ class PathConfig:
         self.users_file: Path = self.data_dir / "users.json"
         self.chat_settings_file: Path = self.data_dir / "chat_settings.json"
         self.old_daily_quiz_subscriptions_file: Path = self.data_dir / "daily_quiz_subscriptions.json"
+        self.messages_to_delete_file: Path = self.data_dir / "messages_to_delete.json"
 
         self.quiz_config_file: Path = self.config_dir / "quiz_config.json"
         self.persistence_file_name: str = "ptb_persistence.pickle"
@@ -108,11 +110,19 @@ class AppConfig:
         self.bot_token: Optional[str] = os.getenv("BOT_TOKEN")
         logger.debug(f"AppConfig: BOT_TOKEN считан: {'Да' if self.bot_token else 'Нет'}")
 
-        self.log_level_str: str = os.getenv("LOG_LEVEL", "INFO").upper()
-        logger.debug(f"AppConfig: LOG_LEVEL считан: {self.log_level_str}")
-
-        self.debug_mode: bool = os.getenv("DEBUG_MODE", "False").lower() == "true"
-        logger.debug(f"AppConfig: DEBUG_MODE считан: {self.debug_mode}")
+        # Получаем режим работы из переменной окружения
+        mode = os.getenv("MODE", "production").lower()
+        self.debug_mode: bool = mode == "testing"
+        
+        # Автоматически определяем уровень логирования на основе режима
+        if mode == "testing":
+            self.log_level_str: str = "DEBUG"
+            logger.debug("🔧 Режим TESTING: установлен уровень логирования DEBUG")
+        else:
+            self.log_level_str: str = "INFO"
+            logger.debug("🔧 Режим PRODUCTION: установлен уровень логирования INFO")
+        
+        logger.debug(f"AppConfig: MODE считан: {mode} (debug_mode={self.debug_mode}, log_level={self.log_level_str})")
 
         logger.debug("AppConfig: Инициализация PathConfig...")
         self.paths = PathConfig(PROJECT_ROOT)

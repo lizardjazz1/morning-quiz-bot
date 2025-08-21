@@ -185,9 +185,10 @@ class AppConfig:
         default_config_structure = {
             "default_chat_settings": {
                 "default_quiz_type": "session", "default_num_questions": 10, "default_open_period_seconds": 30,
-                "default_interval_seconds": 30, "default_announce_quiz": False, "default_announce_delay_seconds": 30,
+                "default_announce_quiz": False, "default_announce_delay_seconds": 30,
                 "enabled_categories": None, "disabled_categories": [],
                 "auto_delete_bot_messages": True, # ИЗМЕНЕНИЕ: Добавлена новая настройка
+                "num_categories_per_quiz": 3, # ИЗМЕНЕНИЕ: Количество категорий для обычных викторин
                 "daily_quiz": {
                     "enabled": False, "times_msk": [{"hour": 7, "minute": 0}], "categories_mode": "random",
                     "num_random_categories": 3, "specific_categories": [], "num_questions": 10,

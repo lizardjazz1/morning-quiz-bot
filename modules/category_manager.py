@@ -74,7 +74,7 @@ class CategoryManager:
             self._save_category_usage_stats()
 
     def _get_weighted_random_categories(self, candidate_pool: List[str], num_to_pick: int, chat_id: Optional[int] = None) -> List[str]:
-        """Выбирает категории с учетом весов на основе частоты использования"""
+        """Выбирает категории с учетом весов на основе частоты использования в конкретном чате"""
         if not candidate_pool:
             return []
         
@@ -89,15 +89,27 @@ class CategoryManager:
             for category in candidate_pool:
                 if category in self._category_usage_stats:
                     stats = self._category_usage_stats[category]
-                    # Базовый вес = 1 / (1 + количество использований)
+                    
+                    # Базовый вес = 1 / (1 + общее количество использований)
                     base_weight = 1.0 / (1.0 + stats["total_usage"])
                     
                     # Бонус за давность использования (категории, которые давно не использовались, получают приоритет)
                     time_since_last_use = current_time - stats["last_used"]
                     time_bonus = min(time_since_last_use / 86400.0, 7.0)  # Максимум 7 дней
                     
-                    # Финальный вес
-                    final_weight = base_weight * (1.0 + time_bonus)
+                    # Штраф за частое использование в конкретном чате
+                    chat_penalty = 0.0
+                    if chat_id is not None:
+                        chat_id_str = str(chat_id)
+                        chat_usage = stats.get("chat_usage", {}).get(chat_id_str, 0)
+                        # Чем больше использований в чате, тем больше штраф
+                        chat_penalty = min(chat_usage * 0.5, 5.0)  # Максимум 5.0 штрафа
+                    
+                    # Финальный вес с учетом всех факторов
+                    final_weight = base_weight * (1.0 + time_bonus) - chat_penalty
+                    # Не допускаем отрицательных весов
+                    final_weight = max(final_weight, 0.1)
+                    
                     category_weights.append((category, final_weight))
                 else:
                     # Новые категории получают максимальный приоритет
@@ -183,28 +195,37 @@ class CategoryManager:
             num_random_categories_to_pick: Optional[int] = None
             daily_quiz_settings = chat_settings.get("daily_quiz", {})
             if chat_id is not None and daily_quiz_settings.get("enabled") and daily_quiz_settings.get("categories_mode") == "random":
+                # Ежедневная викторина: используем настройку num_random_categories
                 num_random_categories_to_pick = daily_quiz_settings.get(
                     "num_random_categories", self.app_config.daily_quiz_defaults.get("num_random_categories", 3)
                 )
                 logger.debug(f"Ежедневная викторина: ограничение на {num_random_categories_to_pick} категорий")
             else:
-                # Это обычная викторина - НЕ ограничиваем количество категорий
-                logger.debug(f"Обычная викторина: используем все доступные категории")
+                # Обычная викторина: используем настройку num_categories_per_quiz
+                num_random_categories_to_pick = chat_settings.get(
+                    "num_categories_per_quiz", self.app_config.default_chat_settings.get("num_categories_per_quiz", 3)
+                )
+                logger.debug(f"Обычная викторина: ограничение на {num_random_categories_to_pick} категорий")
 
             if num_random_categories_to_pick is not None and num_random_categories_to_pick > 0:
                 actual_num_to_sample_from_pool = min(num_random_categories_to_pick, len(candidate_pool_for_random))
                 if actual_num_to_sample_from_pool > 0:
-                    # Используем систему с весами для более справедливого выбора
+                    # Используем улучшенную систему с весами для более справедливого выбора
                     source_categories_names = self._get_weighted_random_categories(
                         candidate_pool_for_random, actual_num_to_sample_from_pool, chat_id
                     )
                 else:
                     source_categories_names = []
             else:
-                # Для обычных викторин используем все категории, но с весами
-                source_categories_names = self._get_weighted_random_categories(
-                    candidate_pool_for_random, len(candidate_pool_for_random), chat_id
-                )
+                # Fallback: если настройка не задана, используем 3 категории по умолчанию
+                num_random_categories_to_pick = 3
+                actual_num_to_sample_from_pool = min(num_random_categories_to_pick, len(candidate_pool_for_random))
+                if actual_num_to_sample_from_pool > 0:
+                    source_categories_names = self._get_weighted_random_categories(
+                        candidate_pool_for_random, actual_num_to_sample_from_pool, chat_id
+                    )
+                else:
+                    source_categories_names = []
         else:
             logger.error(f"get_questions: Неизвестный режим '{mode}'.")
             return []

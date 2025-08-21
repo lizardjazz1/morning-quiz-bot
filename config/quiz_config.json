@@ -7,6 +7,7 @@
         "default_announce_delay_seconds": 30,
         "enabled_categories": null,
         "disabled_categories": [],
+        "num_categories_per_quiz": 3,
         "daily_quiz": {
             "enabled": false,
             "times_msk": [

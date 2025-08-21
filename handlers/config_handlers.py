@@ -39,7 +39,8 @@ CB_ADM_EXECUTE_RESET_SETTINGS = f"{CB_ADM_}execute_reset"
 CB_ADM_SET_DEFAULT_QUIZ_TYPE = f"{CB_ADM_}set_def_q_type"
 CB_ADM_SET_DEFAULT_QUIZ_TYPE_OPT = f"{CB_ADM_}set_def_q_type_opt"
 CB_ADM_SET_DEFAULT_NUM_QUESTIONS = f"{CB_ADM_}set_def_num_q"
-CB_ADM_SET_DEFAULT_OPEN_PERIOD = f"{CB_ADM_}set_def_open_p"
+CB_ADM_SET_DEFAULT_NUM_CATEGORIES = f"{CB_ADM_}set_def_num_cat"
+CB_ADM_SET_DEFAULT_OPEN_PERIOD = f"{CB_ADM_}set_def_open_per"
 CB_ADM_SET_DEFAULT_ANNOUNCE_QUIZ = f"{CB_ADM_}set_def_ann_q"
 CB_ADM_SET_DEFAULT_ANNOUNCE_QUIZ_OPT = f"{CB_ADM_}set_def_ann_q_opt"
 CB_ADM_SET_DEFAULT_ANNOUNCE_DELAY = f"{CB_ADM_}set_def_ann_d"
@@ -189,8 +190,9 @@ class ConfigHandlers:
         kb_buttons = [
             [InlineKeyboardButton("Тип /quiz", callback_data=CB_ADM_SET_DEFAULT_QUIZ_TYPE),
              InlineKeyboardButton("Кол-во /quiz", callback_data=CB_ADM_SET_DEFAULT_NUM_QUESTIONS)],
-            [InlineKeyboardButton("Время ответа /quiz", callback_data=CB_ADM_SET_DEFAULT_OPEN_PERIOD),
-             InlineKeyboardButton("Интервал /quiz", callback_data=CB_ADM_SET_DEFAULT_INTERVAL_SECONDS)],
+            [InlineKeyboardButton("Кол-во категорий /quiz", callback_data=CB_ADM_SET_DEFAULT_NUM_CATEGORIES)],
+            [InlineKeyboardButton("Время ответа", callback_data=CB_ADM_SET_DEFAULT_OPEN_PERIOD)],
+            [InlineKeyboardButton("Интервал /quiz", callback_data=CB_ADM_SET_DEFAULT_INTERVAL_SECONDS)],
             [InlineKeyboardButton("Анонс /quiz", callback_data=CB_ADM_SET_DEFAULT_ANNOUNCE_QUIZ),
              InlineKeyboardButton("Задержка анонса", callback_data=CB_ADM_SET_DEFAULT_ANNOUNCE_DELAY)],
             [InlineKeyboardButton("Разрешенные категории", callback_data=CB_ADM_MANAGE_ENABLED_CATEGORIES)],
@@ -276,7 +278,8 @@ class ConfigHandlers:
         if part == "main" or part == "all":
             lines.append(f"*{escape_markdown_v2('Тип /quiz по умолчанию:')}* `{get_and_format_value(['default_quiz_type'])}`")
             lines.append(f"*{escape_markdown_v2('Кол-во вопросов /quiz:')}* `{get_and_format_value(['default_num_questions'])}`")
-            lines.append(f"*{escape_markdown_v2('Время на ответ /quiz:')}* `{get_and_format_value(['default_open_period_seconds'])}`")
+            lines.append(f"*{escape_markdown_v2('Кол-во категорий /quiz:')}* `{get_and_format_value(['num_categories_per_quiz'])}`")
+            lines.append(f"*{escape_markdown_v2('Время ответа /quiz:')}* `{get_and_format_value(['default_open_period_seconds'])}` сек")
             lines.append(f"*{escape_markdown_v2('Интервал между вопросами /quiz:')}* `{get_and_format_value(['default_interval_seconds'])}`")
             lines.append(f"*{escape_markdown_v2('Анонс /quiz:')}* `{get_and_format_value(['default_announce_quiz'])}`")
             if settings.get('default_announce_quiz', def_chat_s.get('default_announce_quiz')):
@@ -368,14 +371,17 @@ class ConfigHandlers:
             self.data_manager.update_chat_setting(chat_id, ["auto_delete_bot_messages"], new_value)
             await self._send_main_cfg_menu(query, context)
             return CFG_MAIN_MENU
-        elif action in [CB_ADM_SET_DEFAULT_NUM_QUESTIONS, CB_ADM_SET_DEFAULT_OPEN_PERIOD, CB_ADM_SET_DEFAULT_ANNOUNCE_DELAY, CB_ADM_SET_DEFAULT_INTERVAL_SECONDS]:
-            key_map = {
+        elif action in [CB_ADM_SET_DEFAULT_NUM_QUESTIONS, CB_ADM_SET_DEFAULT_NUM_CATEGORIES, CB_ADM_SET_DEFAULT_OPEN_PERIOD, CB_ADM_SET_DEFAULT_ANNOUNCE_DELAY, CB_ADM_SET_DEFAULT_INTERVAL_SECONDS]:
+            # Настройки по умолчанию для /quiz
+            def_s = settings.get("default_chat_settings", {})
+            action_to_key_mapping = {
                 CB_ADM_SET_DEFAULT_NUM_QUESTIONS: (["default_num_questions"], def_s.get('default_num_questions', 10), "Кол-во вопросов в /quiz", (1, self.app_config.max_questions_per_session), 'int'),
-                CB_ADM_SET_DEFAULT_OPEN_PERIOD: (["default_open_period_seconds"], def_s.get('default_open_period_seconds', 30), "Время на ответ в /quiz (сек)", (10, 600), 'int'),
+                CB_ADM_SET_DEFAULT_NUM_CATEGORIES: (["num_categories_per_quiz"], def_s.get('num_categories_per_quiz', 3), "Кол-во категорий в /quiz", (1, 10), 'int'),
+                CB_ADM_SET_DEFAULT_OPEN_PERIOD: (["default_open_period_seconds"], def_s.get('default_open_period_seconds', 30), "Время ответа в /quiz (сек)", (5, 300), 'int'),
                 CB_ADM_SET_DEFAULT_ANNOUNCE_DELAY: (["default_announce_delay_seconds"], def_s.get('default_announce_delay_seconds', 30), "Задержка перед анонсом /quiz (сек)", (0, 300), 'int'),
                 CB_ADM_SET_DEFAULT_INTERVAL_SECONDS: (["default_interval_seconds"], def_s.get('default_interval_seconds', 30), "Интервал между вопросами /quiz (сек)", (5, 300), 'int'),
             }
-            key_path, default_val_from_def_s, prompt_text_base, (min_val, max_val), val_type = key_map[action]
+            key_path, default_val_from_def_s, prompt_text_base, (min_val, max_val), val_type = action_to_key_mapping[action]
             current_val_resolved = settings
             for k_part in key_path: current_val_resolved = current_val_resolved.get(k_part, {}) if isinstance(current_val_resolved, dict) else None # type: ignore
             if current_val_resolved is None or not isinstance(current_val_resolved, (int, float, str, bool)): current_val_resolved = default_val_from_def_s

@@ -381,3 +381,16 @@ class DataManager:
 
     def get_all_questions(self) -> Dict[str, List[Dict[str, Any]]]:
         return self.state.quiz_data
+
+    def get_global_setting(self, key: str, default_value: Any = None) -> Any:
+        """Получает глобальную настройку из state"""
+        if not hasattr(self.state, 'global_settings'):
+            self.state.global_settings = {}
+        return self.state.global_settings.get(key, default_value)
+
+    def update_global_setting(self, key: str, value: Any) -> None:
+        """Обновляет глобальную настройку в state"""
+        if not hasattr(self.state, 'global_settings'):
+            self.state.global_settings = {}
+        self.state.global_settings[key] = value
+        logger.debug(f"Глобальная настройка '{key}' обновлена")

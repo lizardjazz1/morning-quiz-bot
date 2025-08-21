@@ -1,0 +1,140 @@
+warning: in the working copy of 'app_config.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'config/quiz_config.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'handlers/quiz_manager.py', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/app_config.py b/app_config.py[m
+[1mindex 3d5a823..180da77 100644[m
+[1m--- a/app_config.py[m
+[1m+++ b/app_config.py[m
+[36m@@ -194,7 +194,7 @@[m [mclass AppConfig:[m
+             },[m
+             "quiz_types_config": {[m
+                 "single": {"type": "single", "mode": "single_question", "default_num_questions": 1, "default_open_period_seconds": 30, "announce": False, "announce_delay_seconds": 0},[m
+[31m-                "session": {"type": "session", "mode": "serial_immediate", "default_num_questions": 10, "default_open_period_seconds": 30, "announce": False, "announce_delay_seconds": 30},[m
+[32m+[m[32m                "session": {"type": "session", "mode": "serial_immediate", "default_num_questions": 10, "default_open_period_seconds": 30, "default_interval_seconds": 30, "announce": False, "announce_delay_seconds": 30},[m
+                 "daily": {[m
+                     "type": "daily", "mode": "serial_interval", "default_num_questions": 10,[m
+                     "default_open_period_seconds": 600, "default_interval_seconds": 60, "announce": True,[m
+[1mdiff --git a/config/quiz_config.json b/config/quiz_config.json[m
+[1mindex 148a593..58a630e 100644[m
+[1m--- a/config/quiz_config.json[m
+[1m+++ b/config/quiz_config.json[m
+[36m@@ -38,6 +38,7 @@[m
+             "mode": "serial_immediate",[m
+             "default_num_questions": 10,[m
+             "default_open_period_seconds": 30,[m
+[32m+[m[32m            "default_interval_seconds": 30,[m
+             "announce": false,[m
+             "announce_delay_seconds": 30[m
+         },[m
+[1mdiff --git a/data/messages_to_delete.json b/data/messages_to_delete.json[m
+[1mindex b93db00..f8f5fd0 100644[m
+[1m--- a/data/messages_to_delete.json[m
+[1m+++ b/data/messages_to_delete.json[m
+[36m@@ -1,8 +1,13 @@[m
+ {[m
+[31m-    "349922953": [[m
+[31m-        3692[m
+[32m+[m[32m    "-1002970186440": [[m
+[32m+[m[32m        40,[m
+[32m+[m[32m        26[m
+     ],[m
+     "-4239123712": [[m
+[31m-        3695[m
+[32m+[m[32m        4356,[m
+[32m+[m[32m        4294,[m
+[32m+[m[32m        4335,[m
+[32m+[m[32m        4311,[m
+[32m+[m[32m        4376[m
+     ][m
+ }[m
+\ No newline at end of file[m
+[1mdiff --git a/handlers/quiz_manager.py b/handlers/quiz_manager.py[m
+[1mindex e47536b..525306b 100644[m
+[1m--- a/handlers/quiz_manager.py[m
+[1m+++ b/handlers/quiz_manager.py[m
+[36m@@ -32,6 +32,7 @@[m [mCB_QCFG_NUM_VAL = f"{CB_QCFG_}num_val"[m
+ CB_QCFG_CAT_MENU = f"{CB_QCFG_}cat_menu"[m
+ CB_QCFG_CAT_VAL = f"{CB_QCFG_}cat_val"[m
+ CB_QCFG_ANNOUNCE = f"{CB_QCFG_}announce"[m
+[32m+[m[32mCB_QCFG_INTERVAL = f"{CB_QCFG_}interval"[m
+ CB_QCFG_START = f"{CB_QCFG_}start"[m
+ CB_QCFG_CANCEL = f"{CB_QCFG_}cancel"[m
+ CB_QCFG_BACK = f"{CB_QCFG_}back_to_main_opts"[m
+[36m@@ -75,11 +76,11 @@[m [mclass QuizManager:[m
+ [m
+         return {[m
+             "quiz_type_key": quiz_type_key_for_params_lookup,[m
+[31m-            "quiz_mode": type_cfg_for_params.get("mode", "single_question" if num_q == 1 else "serial_immediate"),[m
+[32m+[m[32m            "quiz_mode": "serial_interval" if type_cfg_for_params.get("default_interval_seconds") else type_cfg_for_params.get("mode", "single_question" if num_q == 1 else "serial_immediate"),[m
+             "num_questions": num_q,[m
+             "open_period_seconds": chat_s.get("default_open_period_seconds", type_cfg_for_params.get("default_open_period_seconds", default_chat_settings_global.get("default_open_period_seconds",30))),[m
+             "announce_quiz": chat_s.get("default_announce_quiz", type_cfg_for_params.get("announce", default_chat_settings_global.get("default_announce_quiz", False))),[m
+[31m-            "announce_delay_seconds": chat_s.get("default_announce_delay_seconds", type_cfg_for_params.get("announce_delay_seconds", default_chat_settings_global.get("default_announce_delay_seconds", 5))),[m
+[32m+[m[32m            "announce_delay_seconds": chat_s.get("default_announce_delay_seconds", type_cfg_for_params.get("default_announce_delay_seconds", default_chat_settings_global.get("default_announce_delay_seconds", 5))),[m
+             "interval_seconds": type_cfg_for_params.get("default_interval_seconds"),[m
+             "enabled_categories_chat": chat_s.get("enabled_categories"),[m
+             "disabled_categories_chat": chat_s.get("disabled_categories", []),[m
+[36m@@ -140,8 +141,12 @@[m [mclass QuizManager:[m
+             num_questions = actual_num_questions_obtained[m
+ [m
+         user_id_int_for_state: Optional[int] = int(initiated_by_user.id) if initiated_by_user else None[m
+[32m+[m[41m        [m
+[32m+[m[32m        # Автоматически устанавливаем режим serial_interval, если есть интервал[m
+[32m+[m[32m        final_quiz_mode = "serial_interval" if interval_seconds else quiz_mode[m
+[32m+[m[41m        [m
+         current_quiz_state_instance = QuizState([m
+[31m-            chat_id=chat_id, quiz_type=quiz_type, quiz_mode=quiz_mode,[m
+[32m+[m[32m            chat_id=chat_id, quiz_type=quiz_type, quiz_mode=final_quiz_mode,[m
+             questions=questions_for_session, num_questions_to_ask=num_questions,[m
+             open_period_seconds=open_period_seconds, created_by_user_id=user_id_int_for_state,[m
+             original_command_message_id=original_command_message_id,[m
+[36m@@ -761,19 +766,22 @@[m [mclass QuizManager:[m
+         cat_display_text_escaped = escape_markdown_v2('Случайные' if cat_name_raw == 'random' else cat_name_raw)[m
+         announce_text_raw_escaped = escape_markdown_v2('Вкл' if cfg['announce'] else 'Выкл')[m
+         delay_text_md_escaped = f" \\(задержка {escape_markdown_v2(str(cfg['announce_delay_seconds']))} сек\\)" if cfg['announce'] else ""[m
+[32m+[m[32m        interval_text = f" \\(интервал {escape_markdown_v2(str(cfg.get('interval_seconds', 0)))} сек\\)" if cfg.get('interval_seconds') else ""[m
+         text = ([m
+             f"⚙️ *{escape_markdown_v2('Настройка викторины')}*\n\n"[m
+             f"🔢 {escape_markdown_v2('Количество вопросов:')} `{escape_markdown_v2(str(num_q_display))}`\n"[m
+             f"📚 {escape_markdown_v2('Категория:')} `{cat_display_text_escaped}`\n"[m
+[31m-            f"📢 {escape_markdown_v2('Анонс:')} `{announce_text_raw_escaped}`{delay_text_md_escaped}\n\n"[m
+[32m+[m[32m            f"📢 {escape_markdown_v2('Анонс:')} `{announce_text_raw_escaped}`{delay_text_md_escaped}\n"[m
+[32m+[m[32m            f"⏱️ {escape_markdown_v2('Интервал:')} `{escape_markdown_v2('Вкл' if cfg.get('interval_seconds') else 'Выкл')}`{interval_text}\n\n"[m
+             f"{escape_markdown_v2('Выберите параметр или запустите.')}"[m
+         )[m
+         cat_button_text_plain = ('Случайные' if cat_name_raw == 'random' else cat_name_raw)[m
+         if len(cat_button_text_plain) > 18 : cat_button_text_plain = cat_button_text_plain[:15] + "..."[m
+         announce_button_text_plain = 'Вкл' if cfg['announce'] else 'Выкл'[m
+[32m+[m[32m        interval_button_text_plain = 'Вкл' if cfg.get('interval_seconds') else 'Выкл'[m
+         kb_layout = [[m
+             [InlineKeyboardButton(f"Вопросы: {num_q_display}", callback_data=CB_QCFG_NUM_MENU), InlineKeyboardButton(f"Категория: {cat_button_text_plain}", callback_data=CB_QCFG_CAT_MENU)],[m
+[31m-            [InlineKeyboardButton(f"Анонс: {announce_button_text_plain}", callback_data=CB_QCFG_ANNOUNCE)],[m
+[32m+[m[32m            [InlineKeyboardButton(f"Анонс: {announce_button_text_plain}", callback_data=CB_QCFG_ANNOUNCE), InlineKeyboardButton(f"Интервал: {interval_button_text_plain}", callback_data=CB_QCFG_INTERVAL)],[m
+             [InlineKeyboardButton("▶️ Запустить викторину", callback_data=CB_QCFG_START)], [InlineKeyboardButton("❌ Отмена", callback_data=CB_QCFG_CANCEL)][m
+         ][m
+         markup = InlineKeyboardMarkup(kb_layout)[m
+[36m@@ -904,7 +912,7 @@[m [mclass QuizManager:[m
+                 return CFG_QUIZ_OPTIONS[m
+         elif action == CB_QCFG_CAT_MENU:[m
+             available_cats_data = self.category_manager.get_all_category_names(with_question_counts=False)[m
+[31m-            available_cats = [cat_info.get('name') for cat_info in available_cats_data if isinstance(cat_info.get('name'), str)][m
+[32m+[m[32m            available_cats = [cat_name for cat_name in available_cats_data if isinstance(cat_name, str)][m
+             cat_kb_list = [[InlineKeyboardButton("🎲 Случайные (из доступных)", callback_data=f"{CB_QCFG_CAT_VAL}:random")]][m
+             for cat_name in available_cats[:self.app_config.max_interactive_categories_to_show]:[m
+                 cat_kb_list.append([InlineKeyboardButton(cat_name, callback_data=f"{CB_QCFG_CAT_VAL}:{cat_name}")])[m
+[36m@@ -927,6 +935,15 @@[m [mclass QuizManager:[m
+             cfg['announce'] = not cfg['announce'][m
+             await self._send_quiz_cfg_message(query, context) [m
+             return CFG_QUIZ_OPTIONS[m
+[32m+[m[32m        elif action == CB_QCFG_INTERVAL:[m
+[32m+[m[32m            if cfg.get('interval_seconds'):[m
+[32m+[m[32m                cfg['interval_seconds'] = None[m
+[32m+[m[32m            else:[m
+[32m+[m[32m                # Получаем дефолтное значение интервала из конфигурации[m
+[32m+[m[32m                effective_params = self._get_effective_quiz_params(cfg['chat_id'], cfg['num_questions'])[m
+[32m+[m[32m                cfg['interval_seconds'] = effective_params.get('interval_seconds', 30)[m
+[32m+[m[32m            await self._send_quiz_cfg_message(query, context)[m[41m [m
+[32m+[m[32m            return CFG_QUIZ_OPTIONS[m
+         elif action == CB_QCFG_CANCEL:[m
+             return await self.cancel_quiz_cfg_command(update, context)[m
+ [m

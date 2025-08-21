@@ -76,6 +76,7 @@ class BotState:
         self.quiz_data: Dict[str, List[Dict[str, Any]]] = {}
         self.user_scores: Dict[str, Any] = {}
         self.chat_settings: Dict[int, Dict[str, Any]] = {}
+        self.global_settings: Dict[str, Any] = {}  # Глобальные настройки (статистика категорий и др.)
 
         self.global_command_cooldowns: Dict[str, Dict[int, datetime]] = defaultdict(dict)
         self.generic_messages_to_delete: Dict[int, Set[int]] = defaultdict(set)

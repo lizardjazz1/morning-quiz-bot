@@ -60,6 +60,8 @@ class CommandConfig:
         self.removedailyquiz: str = commands_data.get("removedailyquiz", "removedailyquiz")
         self.listdailyquizzes: str = commands_data.get("listdailyquizzes", "listdailyquizzes")
         self.reloadcfg: str = commands_data.get("reloadcfg", "reloadcfg")
+        self.reset_categories_stats: str = commands_data.get("reset_categories_stats", "reset_categories_stats")
+        self.test_categories: str = commands_data.get("test_categories", "test_categories")
         logger.debug("CommandConfig.__init__ завершен.")
 
 class PathConfig:
@@ -183,7 +185,7 @@ class AppConfig:
         default_config_structure = {
             "default_chat_settings": {
                 "default_quiz_type": "session", "default_num_questions": 10, "default_open_period_seconds": 30,
-                "default_announce_quiz": False, "default_announce_delay_seconds": 30,
+                "default_interval_seconds": 30, "default_announce_quiz": False, "default_announce_delay_seconds": 30,
                 "enabled_categories": None, "disabled_categories": [],
                 "auto_delete_bot_messages": True, # ИЗМЕНЕНИЕ: Добавлена новая настройка
                 "daily_quiz": {
@@ -194,7 +196,7 @@ class AppConfig:
             },
             "quiz_types_config": {
                 "single": {"type": "single", "mode": "single_question", "default_num_questions": 1, "default_open_period_seconds": 30, "announce": False, "announce_delay_seconds": 0},
-                "session": {"type": "session", "mode": "serial_immediate", "default_num_questions": 10, "default_open_period_seconds": 30, "announce": False, "announce_delay_seconds": 30},
+                "session": {"type": "session", "mode": "serial_immediate", "default_num_questions": 10, "default_open_period_seconds": 30, "default_interval_seconds": 30, "announce": False, "announce_delay_seconds": 30},
                 "daily": {
                     "type": "daily", "mode": "serial_interval", "default_num_questions": 10,
                     "default_open_period_seconds": 600, "default_interval_seconds": 60, "announce": True,
@@ -209,7 +211,8 @@ class AppConfig:
                     "global_top": "globaltop", "mystats": "mystats", "stop_quiz": "stopquiz", "cancel": "cancel",
                     "config": "config", "admin_settings": "adminsettings", "view_chat_config": "viewchatconfig",
                     "adddailyquiz": "adddailyquiz", "removedailyquiz": "removedailyquiz",
-                    "listdailyquizzes": "listdailyquizzes", "reloadcfg": "reloadcfg"
+                    "listdailyquizzes": "listdailyquizzes", "reloadcfg": "reloadcfg", "test_categories": "test_categories",
+                    "reset_categories_stats": "reset_categories_stats"
                 },
                 "max_questions_per_session": 50, "max_interactive_categories_to_show": 10,
                 "job_grace_period_seconds": 3, "max_poll_question_length": 280,

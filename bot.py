@@ -171,7 +171,7 @@ async def main() -> None:
             logger.error("Исключение при обработке обновления:", exc_info=context.error)
             if isinstance(update, Update) and update.effective_chat:
                 error_message_user = escape_markdown_v2(
-                    "Произошла внутренняя ошибка. Пожалуйста, сообщите администратору, если проблема повторится."
+                    "Произошла внутренняя ошибка. Пожалуйста, сообщите разработчику, если проблема повторится."
                 )
                 try:
                     await context.bot.send_message(
@@ -198,6 +198,8 @@ async def main() -> None:
             (app_config.commands.admin_settings, "[Админ] ⚙️ Настройки бота"),
             (app_config.commands.add_admin, "[Админ] ➕ Добавить администратора"),
             (app_config.commands.reloadcfg, "[Админ] 🔄 Перезагрузить категории"),
+            (app_config.commands.test_categories, "[Админ] 📊 Тест статистики категорий"),
+            (app_config.commands.reset_categories_stats, "[Админ] 🔄 Сброс статистики категорий"),
         ]
         for cmd, desc in admin_cmds:
             if cmd: bot_commands.append(BotCommand(cmd, desc))

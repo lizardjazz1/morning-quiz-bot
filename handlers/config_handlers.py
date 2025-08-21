@@ -69,6 +69,9 @@ CB_ADM_DAILY_TIME_BACK_TO_LIST = f"{CB_ADM_DAILY_TIME_}back_to_times_list"
 CB_ADM_TOGGLE_AUTO_DELETE_BOT_MESSAGES = f"{CB_ADM_}toggle_auto_del_msg"
 CB_ADM_TOGGLE_AUTO_DELETE_BOT_MESSAGES_OPT = f"{CB_ADM_}toggle_auto_del_msg_opt"
 
+# ИЗМЕНЕНИЕ: Константа для настройки интервала обычных квизов
+CB_ADM_SET_DEFAULT_INTERVAL_SECONDS = f"{CB_ADM_}set_default_interval"
+
 
 CTX_ADMIN_CFG_CHAT_ID = 'admin_cfg_chat_id'
 CTX_ADMIN_CFG_MSG_ID = 'admin_cfg_msg_id'
@@ -186,7 +189,8 @@ class ConfigHandlers:
         kb_buttons = [
             [InlineKeyboardButton("Тип /quiz", callback_data=CB_ADM_SET_DEFAULT_QUIZ_TYPE),
              InlineKeyboardButton("Кол-во /quiz", callback_data=CB_ADM_SET_DEFAULT_NUM_QUESTIONS)],
-            [InlineKeyboardButton("Время ответа /quiz", callback_data=CB_ADM_SET_DEFAULT_OPEN_PERIOD)],
+            [InlineKeyboardButton("Время ответа /quiz", callback_data=CB_ADM_SET_DEFAULT_OPEN_PERIOD),
+             InlineKeyboardButton("Интервал /quiz", callback_data=CB_ADM_SET_DEFAULT_INTERVAL_SECONDS)],
             [InlineKeyboardButton("Анонс /quiz", callback_data=CB_ADM_SET_DEFAULT_ANNOUNCE_QUIZ),
              InlineKeyboardButton("Задержка анонса", callback_data=CB_ADM_SET_DEFAULT_ANNOUNCE_DELAY)],
             [InlineKeyboardButton("Разрешенные категории", callback_data=CB_ADM_MANAGE_ENABLED_CATEGORIES)],
@@ -207,6 +211,7 @@ class ConfigHandlers:
         time_setting_key_paths = [
             ["default_open_period_seconds"],
             ["default_announce_delay_seconds"],
+            ["default_interval_seconds"],
             ["daily_quiz", "interval_seconds"],
             ["daily_quiz", "poll_open_seconds"]
         ]
@@ -272,6 +277,7 @@ class ConfigHandlers:
             lines.append(f"*{escape_markdown_v2('Тип /quiz по умолчанию:')}* `{get_and_format_value(['default_quiz_type'])}`")
             lines.append(f"*{escape_markdown_v2('Кол-во вопросов /quiz:')}* `{get_and_format_value(['default_num_questions'])}`")
             lines.append(f"*{escape_markdown_v2('Время на ответ /quiz:')}* `{get_and_format_value(['default_open_period_seconds'])}`")
+            lines.append(f"*{escape_markdown_v2('Интервал между вопросами /quiz:')}* `{get_and_format_value(['default_interval_seconds'])}`")
             lines.append(f"*{escape_markdown_v2('Анонс /quiz:')}* `{get_and_format_value(['default_announce_quiz'])}`")
             if settings.get('default_announce_quiz', def_chat_s.get('default_announce_quiz')):
                  lines.append(f"*{escape_markdown_v2('Задержка анонса:')}* `{get_and_format_value(['default_announce_delay_seconds'])}`")
@@ -362,11 +368,12 @@ class ConfigHandlers:
             self.data_manager.update_chat_setting(chat_id, ["auto_delete_bot_messages"], new_value)
             await self._send_main_cfg_menu(query, context)
             return CFG_MAIN_MENU
-        elif action in [CB_ADM_SET_DEFAULT_NUM_QUESTIONS, CB_ADM_SET_DEFAULT_OPEN_PERIOD, CB_ADM_SET_DEFAULT_ANNOUNCE_DELAY]:
+        elif action in [CB_ADM_SET_DEFAULT_NUM_QUESTIONS, CB_ADM_SET_DEFAULT_OPEN_PERIOD, CB_ADM_SET_DEFAULT_ANNOUNCE_DELAY, CB_ADM_SET_DEFAULT_INTERVAL_SECONDS]:
             key_map = {
                 CB_ADM_SET_DEFAULT_NUM_QUESTIONS: (["default_num_questions"], def_s.get('default_num_questions', 10), "Кол-во вопросов в /quiz", (1, self.app_config.max_questions_per_session), 'int'),
                 CB_ADM_SET_DEFAULT_OPEN_PERIOD: (["default_open_period_seconds"], def_s.get('default_open_period_seconds', 30), "Время на ответ в /quiz (сек)", (10, 600), 'int'),
                 CB_ADM_SET_DEFAULT_ANNOUNCE_DELAY: (["default_announce_delay_seconds"], def_s.get('default_announce_delay_seconds', 30), "Задержка перед анонсом /quiz (сек)", (0, 300), 'int'),
+                CB_ADM_SET_DEFAULT_INTERVAL_SECONDS: (["default_interval_seconds"], def_s.get('default_interval_seconds', 30), "Интервал между вопросами /quiz (сек)", (5, 300), 'int'),
             }
             key_path, default_val_from_def_s, prompt_text_base, (min_val, max_val), val_type = key_map[action]
             current_val_resolved = settings

@@ -2,6 +2,7 @@
 from __future__ import annotations
 import asyncio
 import logging
+import time
 from typing import List, Optional, Union, Dict, Any
 from datetime import timedelta
 import datetime as dt 
@@ -24,7 +25,7 @@ from utils import get_current_utc_time, schedule_job_unique, escape_markdown_v2,
 
 logger = logging.getLogger(__name__)
 
-(CFG_QUIZ_OPTIONS, CFG_QUIZ_NUM_QS) = map(str, range(2))
+(CFG_QUIZ_OPTIONS, CFG_QUIZ_NUM_QS, CFG_QUIZ_INTERVAL_OPTIONS, CFG_QUIZ_INTERVAL_INPUT, CFG_QUIZ_OPEN_PERIOD_OPTIONS, CFG_QUIZ_OPEN_PERIOD_INPUT) = map(str, range(6))
 
 CB_QCFG_ = "qcfg_"
 CB_QCFG_NUM_MENU = f"{CB_QCFG_}num_menu"
@@ -32,6 +33,10 @@ CB_QCFG_NUM_VAL = f"{CB_QCFG_}num_val"
 CB_QCFG_CAT_MENU = f"{CB_QCFG_}cat_menu"
 CB_QCFG_CAT_VAL = f"{CB_QCFG_}cat_val"
 CB_QCFG_ANNOUNCE = f"{CB_QCFG_}announce"
+CB_QCFG_INTERVAL = f"{CB_QCFG_}interval"
+CB_QCFG_INTERVAL_OPT = f"{CB_QCFG_}interval_opt"
+CB_QCFG_OPEN_PERIOD = f"{CB_QCFG_}open_period"
+CB_QCFG_OPEN_PERIOD_OPT = f"{CB_QCFG_}open_period_opt"
 CB_QCFG_START = f"{CB_QCFG_}start"
 CB_QCFG_CANCEL = f"{CB_QCFG_}cancel"
 CB_QCFG_BACK = f"{CB_QCFG_}back_to_main_opts"
@@ -73,14 +78,25 @@ class QuizManager:
 
         type_cfg_for_params = self.app_config.quiz_types_config.get(quiz_type_key_for_params_lookup, {})
 
+        # Определяем интервал: сначала из настроек чата, затем из конфигурации типа
+        interval_seconds = chat_s.get("default_interval_seconds", type_cfg_for_params.get("default_interval_seconds"))
+        
+        # Определяем режим на основе интервала
+        if num_q == 1:
+            quiz_mode = "single_question"
+        elif interval_seconds and interval_seconds > 0:
+            quiz_mode = "serial_interval"
+        else:
+            quiz_mode = "serial_immediate"
+        
         return {
             "quiz_type_key": quiz_type_key_for_params_lookup,
-            "quiz_mode": type_cfg_for_params.get("mode", "single_question" if num_q == 1 else "serial_immediate"),
+            "quiz_mode": quiz_mode,
             "num_questions": num_q,
             "open_period_seconds": chat_s.get("default_open_period_seconds", type_cfg_for_params.get("default_open_period_seconds", default_chat_settings_global.get("default_open_period_seconds",30))),
             "announce_quiz": chat_s.get("default_announce_quiz", type_cfg_for_params.get("announce", default_chat_settings_global.get("default_announce_quiz", False))),
-            "announce_delay_seconds": chat_s.get("default_announce_delay_seconds", type_cfg_for_params.get("announce_delay_seconds", default_chat_settings_global.get("default_announce_delay_seconds", 5))),
-            "interval_seconds": type_cfg_for_params.get("default_interval_seconds"),
+            "announce_delay_seconds": chat_s.get("default_announce_delay_seconds", type_cfg_for_params.get("default_announce_delay_seconds", default_chat_settings_global.get("default_announce_delay_seconds", 5))),
+            "interval_seconds": interval_seconds,
             "enabled_categories_chat": chat_s.get("enabled_categories"),
             "disabled_categories_chat": chat_s.get("disabled_categories", []),
         }
@@ -140,12 +156,30 @@ class QuizManager:
             num_questions = actual_num_questions_obtained
 
         user_id_int_for_state: Optional[int] = int(initiated_by_user.id) if initiated_by_user else None
+        
+        # Получаем эффективный интервал из параметров
+        effective_interval = interval_seconds
+        
+        # Получаем эффективное время ответа: сначала из параметров, затем из настроек чата
+        effective_open_period = open_period_seconds
+        if effective_open_period is None:
+            effective_params = self._get_effective_quiz_params(chat_id, num_questions)
+            effective_open_period = effective_params.get('open_period_seconds', 30)
+        
+        # Определяем режим викторины на основе интервала
+        if effective_interval and effective_interval > 0:
+            final_quiz_mode = "serial_interval"
+        else:
+            final_quiz_mode = "serial_immediate"
+        
+        logger.debug(f"DEBUG: Режим викторины: {final_quiz_mode}, интервал: {effective_interval}")
+        
         current_quiz_state_instance = QuizState(
-            chat_id=chat_id, quiz_type=quiz_type, quiz_mode=quiz_mode,
+            chat_id=chat_id, quiz_type=quiz_type, quiz_mode=final_quiz_mode,
             questions=questions_for_session, num_questions_to_ask=num_questions,
-            open_period_seconds=open_period_seconds, created_by_user_id=user_id_int_for_state,
+            open_period_seconds=effective_open_period, created_by_user_id=user_id_int_for_state,
             original_command_message_id=original_command_message_id,
-            interval_seconds=interval_seconds, quiz_start_time=get_current_utc_time()
+            interval_seconds=effective_interval, quiz_start_time=get_current_utc_time()
         )
 
         if interactive_start_message_id:
@@ -289,6 +323,24 @@ class QuizManager:
 
             quiz_state.current_question_index += 1
             logger.debug(f"_send_next_question: Индекс вопроса в чате {chat_id} увеличен до {quiz_state.current_question_index}.")
+            
+            # Планируем следующий вопрос, если есть интервал и это не последний вопрос
+            if (quiz_state.quiz_mode == "serial_interval" and 
+                quiz_state.interval_seconds is not None and 
+                quiz_state.interval_seconds > 0 and
+                quiz_state.current_question_index < quiz_state.num_questions_to_ask):
+                
+                delay_seconds = quiz_state.interval_seconds
+                job_name = f"delayed_next_q_after_send_chat_{chat_id}_qidx_{quiz_state.current_question_index}"
+                quiz_state.next_question_job_name = job_name
+                schedule_job_unique(
+                    self.application.job_queue,
+                    job_name=job_name,
+                    callback=self._trigger_next_question_job_after_interval,
+                    when=timedelta(seconds=delay_seconds),
+                    data={"chat_id": chat_id, "expected_q_index_at_trigger": quiz_state.current_question_index}
+                )
+                logger.info(f"Следующий вопрос (индекс {quiz_state.current_question_index}) будет отправлен через {delay_seconds} сек (режим serial_interval).")
         else:
             error_msg_text_send_poll = "Ошибка отправки опроса через Telegram API (QuizEngine.send_quiz_poll вернул None)."
             logger.error(f"_send_next_question: {error_msg_text_send_poll} Вопрос: {quiz_state.current_question_index}, чат: {chat_id}.")
@@ -713,7 +765,7 @@ class QuizManager:
                 final_announce_for_quick, params_for_quick_launch["announce_delay_seconds"],
                 category_names_for_quiz=parsed_categories_names if parsed_categories_names else None,
                 is_random_categories_mode=final_is_random_cats_for_quick,
-                interval_seconds=params_for_quick_launch.get("interval_seconds"),
+                interval_seconds=params_for_quick_launch.get("interval_seconds") if "interval_seconds" in params_for_quick_launch else None,
                 original_command_message_id=update.message.message_id,
                 interactive_start_message_id=None
             )
@@ -727,7 +779,7 @@ class QuizManager:
                 params_for_announce_only["num_questions"], params_for_announce_only["open_period_seconds"],
                 True, params_for_announce_only["announce_delay_seconds"],
                 is_random_categories_mode=True,
-                interval_seconds=params_for_announce_only.get("interval_seconds"),
+                interval_seconds=params_for_announce_only.get("interval_seconds") if "interval_seconds" in params_for_announce_only else None,
                 original_command_message_id=update.message.message_id,
                 interactive_start_message_id=None
             )
@@ -739,14 +791,22 @@ class QuizManager:
                 'num_questions': params_for_interactive["num_questions"], 'category_name': "random",
                 'announce': params_for_interactive["announce_quiz"], 'open_period_seconds': params_for_interactive["open_period_seconds"],
                 'announce_delay_seconds': params_for_interactive["announce_delay_seconds"], 'quiz_type_key': params_for_interactive["quiz_type_key"],
-                'quiz_mode': params_for_interactive["quiz_mode"], 'interval_seconds': params_for_interactive.get("interval_seconds"),
+                'quiz_mode': params_for_interactive["quiz_mode"], 'interval_seconds': params_for_interactive.get("interval_seconds") if "interval_seconds" in params_for_interactive else None,
                 'original_command_message_id': update.message.message_id, 'chat_id': chat_id, 'user_id': user.id
             }
-            await self._send_quiz_cfg_message(update, context)
+            logger.debug(f"quiz_command_entry: Вызываем _send_quiz_cfg_message для чата {chat_id}")
+            try:
+                await self._send_quiz_cfg_message(update, context)
+                logger.debug(f"quiz_command_entry: _send_quiz_cfg_message успешно выполнен для чата {chat_id}")
+            except Exception as e:
+                logger.error(f"quiz_command_entry: Ошибка в _send_quiz_cfg_message для чата {chat_id}: {e}", exc_info=True)
+                await update.message.reply_text("Произошла ошибка при настройке викторины. Пожалуйста, попробуйте еще раз.")
             return CFG_QUIZ_OPTIONS
 
     async def _send_quiz_cfg_message(self, update_or_query: Union[Update, CallbackQuery], context: ContextTypes.DEFAULT_TYPE) -> None:
+        logger.debug(f"_send_quiz_cfg_message: Начало выполнения. Тип: {type(update_or_query).__name__}")
         cfg = context.chat_data.get('quiz_cfg_progress')
+        logger.debug(f"_send_quiz_cfg_message: Данные конфигурации: {cfg}")
         if not cfg:
             logger.error("_send_quiz_cfg_message: Данные 'quiz_cfg_progress' не найдены.")
             if isinstance(update_or_query, CallbackQuery):
@@ -761,19 +821,39 @@ class QuizManager:
         cat_display_text_escaped = escape_markdown_v2('Случайные' if cat_name_raw == 'random' else cat_name_raw)
         announce_text_raw_escaped = escape_markdown_v2('Вкл' if cfg['announce'] else 'Выкл')
         delay_text_md_escaped = f" \\(задержка {escape_markdown_v2(str(cfg['announce_delay_seconds']))} сек\\)" if cfg['announce'] else ""
+        
+        # Получаем эффективный интервал из настроек пользователя
+        effective_interval = cfg.get('interval_seconds')
+        
+        # Определяем, включен ли интервал
+        # Если interval_seconds есть в cfg, используем его значение
+        # Если нет - интервал не был настроен пользователем, используем значение по умолчанию
+        interval_enabled = 'interval_seconds' in cfg and cfg.get('interval_seconds') is not None
+        interval_text = f" \\({escape_markdown_v2(str(effective_interval))} сек\\)" if interval_enabled and effective_interval else ""
+        # Получаем эффективное время ответа: сначала из cfg, затем из настроек чата
+        effective_open_period = cfg.get('open_period_seconds')
+        if effective_open_period is None:
+            effective_params = self._get_effective_quiz_params(cfg['chat_id'], cfg['num_questions'])
+            effective_open_period = effective_params.get('open_period_seconds', 30)
+        
         text = (
             f"⚙️ *{escape_markdown_v2('Настройка викторины')}*\n\n"
             f"🔢 {escape_markdown_v2('Количество вопросов:')} `{escape_markdown_v2(str(num_q_display))}`\n"
             f"📚 {escape_markdown_v2('Категория:')} `{cat_display_text_escaped}`\n"
-            f"📢 {escape_markdown_v2('Анонс:')} `{announce_text_raw_escaped}`{delay_text_md_escaped}\n\n"
+            f"⏰ {escape_markdown_v2('Время ответа:')} `{escape_markdown_v2(str(effective_open_period))} сек`\n"
+            f"📢 {escape_markdown_v2('Анонс:')} `{announce_text_raw_escaped}`{delay_text_md_escaped}\n"
+            f"⏱️ {escape_markdown_v2('Интервал:')} `{escape_markdown_v2('Вкл' if interval_enabled else 'Выкл')}`{interval_text}\n\n"
             f"{escape_markdown_v2('Выберите параметр или запустите.')}"
         )
         cat_button_text_plain = ('Случайные' if cat_name_raw == 'random' else cat_name_raw)
         if len(cat_button_text_plain) > 18 : cat_button_text_plain = cat_button_text_plain[:15] + "..."
         announce_button_text_plain = 'Вкл' if cfg['announce'] else 'Выкл'
+        interval_button_text_plain = 'Вкл' if interval_enabled else 'Выкл'
+        open_period_button_text_plain = f"{effective_open_period} сек"
         kb_layout = [
             [InlineKeyboardButton(f"Вопросы: {num_q_display}", callback_data=CB_QCFG_NUM_MENU), InlineKeyboardButton(f"Категория: {cat_button_text_plain}", callback_data=CB_QCFG_CAT_MENU)],
-            [InlineKeyboardButton(f"Анонс: {announce_button_text_plain}", callback_data=CB_QCFG_ANNOUNCE)],
+            [InlineKeyboardButton(f"⏰ Время ответа: {open_period_button_text_plain}", callback_data=CB_QCFG_OPEN_PERIOD), InlineKeyboardButton(f"⏱️ Интервал: {interval_button_text_plain}", callback_data=CB_QCFG_INTERVAL)],
+            [InlineKeyboardButton(f"📢 Анонс: {announce_button_text_plain}", callback_data=CB_QCFG_ANNOUNCE)],
             [InlineKeyboardButton("▶️ Запустить викторину", callback_data=CB_QCFG_START)], [InlineKeyboardButton("❌ Отмена", callback_data=CB_QCFG_CANCEL)]
         ]
         markup = InlineKeyboardMarkup(kb_layout)
@@ -815,7 +895,13 @@ class QuizManager:
             sent_msg = await context.bot.send_message(target_chat_id_for_send, text, reply_markup=markup, parse_mode=ParseMode.MARKDOWN_V2)
             context.chat_data['_quiz_cfg_msg_id'] = sent_msg.message_id
             if is_callback: await update_or_query.answer()
-        except Exception as e_send_new: logger.error(f"Не удалось отправить новое меню конфигурации: {e_send_new}")
+            logger.debug(f"_send_quiz_cfg_message: Меню конфигурации успешно отправлено в чат {target_chat_id_for_send}")
+        except Exception as e_send_new: 
+            logger.error(f"Не удалось отправить новое меню конфигурации: {e_send_new}")
+        except Exception as e:
+            logger.error(f"_send_quiz_cfg_message: Неожиданная ошибка: {e}", exc_info=True)
+        except Exception as e:
+            logger.error(f"_send_quiz_cfg_message: Неожиданная ошибка в основном блоке: {e}", exc_info=True)
 
     async def handle_quiz_cfg_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> Optional[str]:
         query = update.callback_query
@@ -860,18 +946,25 @@ class QuizManager:
 
             await query.answer()
 
+            # Получаем эффективный интервал из настроек пользователя
+            effective_interval = final_cfg.get('interval_seconds')
+            
             await self._initiate_quiz_session(
                 context, final_cfg['chat_id'], query.from_user, final_cfg['quiz_type_key'], final_cfg['quiz_mode'],
                 final_cfg['num_questions'], final_cfg['open_period_seconds'], final_cfg['announce'], final_cfg['announce_delay_seconds'],
                 category_names_for_quiz=[final_cfg['category_name']] if final_cfg['category_name'] != "random" else None,
                 is_random_categories_mode=(final_cfg['category_name'] == "random"),
-                interval_seconds=final_cfg.get('interval_seconds'),
+                interval_seconds=effective_interval,
                 original_command_message_id=final_cfg.get('original_command_message_id'),
                 interactive_start_message_id=interactive_start_message_id_to_pass
             )
             return ConversationHandler.END
         
         if action == CB_QCFG_BACK:
+            logger.debug(f"Обработка кнопки 'Назад' в состоянии {context.chat_data.get('_current_state', 'неизвестно')}")
+            # Очищаем флаги редактирования
+            context.chat_data.pop('_editing_interval', None)
+            context.chat_data.pop('_editing_open_period', None)
             await self._send_quiz_cfg_message(query, context) 
             return CFG_QUIZ_OPTIONS
         elif action == CB_QCFG_NUM_MENU:
@@ -904,7 +997,7 @@ class QuizManager:
                 return CFG_QUIZ_OPTIONS
         elif action == CB_QCFG_CAT_MENU:
             available_cats_data = self.category_manager.get_all_category_names(with_question_counts=False)
-            available_cats = [cat_info.get('name') for cat_info in available_cats_data if isinstance(cat_info.get('name'), str)]
+            available_cats = [cat_name for cat_name in available_cats_data if isinstance(cat_name, str)]
             cat_kb_list = [[InlineKeyboardButton("🎲 Случайные (из доступных)", callback_data=f"{CB_QCFG_CAT_VAL}:random")]]
             for cat_name in available_cats[:self.app_config.max_interactive_categories_to_show]:
                 cat_kb_list.append([InlineKeyboardButton(cat_name, callback_data=f"{CB_QCFG_CAT_VAL}:{cat_name}")])
@@ -927,6 +1020,110 @@ class QuizManager:
             cfg['announce'] = not cfg['announce']
             await self._send_quiz_cfg_message(query, context) 
             return CFG_QUIZ_OPTIONS
+        elif action == CB_QCFG_INTERVAL:
+            logger.debug(f"Обработка настройки интервала для чата {cfg.get('chat_id')}")
+            # Показываем меню для настройки интервала
+            current_interval = cfg.get('interval_seconds')
+            effective_params = self._get_effective_quiz_params(cfg['chat_id'], cfg['num_questions'])
+            default_interval = effective_params.get('interval_seconds', 30)
+            
+            if current_interval is not None:
+                # Интервал включен - показываем опции выключения или изменения
+                kb_interval_options = [
+                    [InlineKeyboardButton("❌ Выключить интервал", callback_data=f"{CB_QCFG_INTERVAL_OPT}:off")],
+                    [InlineKeyboardButton("⚙️ Изменить значение", callback_data=f"{CB_QCFG_INTERVAL_OPT}:custom")],
+                    [InlineKeyboardButton("⬅️ Назад", callback_data=CB_QCFG_BACK)]
+                ]
+                interval_menu_text = f"Интервал между вопросами: {current_interval} сек\n\nВыберите действие:"
+            else:
+                # Интервал выключен - показываем опции включения или настройки
+                kb_interval_options = [
+                    [InlineKeyboardButton("✅ Включить интервал", callback_data=f"{CB_QCFG_INTERVAL_OPT}:on")],
+                    [InlineKeyboardButton("⚙️ Настроить вручную", callback_data=f"{CB_QCFG_INTERVAL_OPT}:custom")],
+                    [InlineKeyboardButton("⬅️ Назад", callback_data=CB_QCFG_BACK)]
+                ]
+                interval_menu_text = f"Интервал между вопросами: выключен\n\nВыберите действие:"
+            
+            await query.message.edit_text(
+                escape_markdown_v2(interval_menu_text),
+                reply_markup=InlineKeyboardMarkup(kb_interval_options),
+                parse_mode=ParseMode.MARKDOWN_V2
+            )
+            await query.answer()
+            return CFG_QUIZ_INTERVAL_OPTIONS
+        elif action.startswith(CB_QCFG_INTERVAL_OPT):
+            opt_type = action.split(":", 1)[1]
+            if opt_type == "off":
+                # Выключаем интервал
+                cfg['interval_seconds'] = None
+                await query.answer("Интервал выключен")
+                await self._send_quiz_cfg_message(query, context)
+                return CFG_QUIZ_OPTIONS
+            elif opt_type == "on":
+                # Включаем интервал с дефолтным значением из настроек чата
+                effective_params = self._get_effective_quiz_params(cfg['chat_id'], cfg['num_questions'])
+                cfg['interval_seconds'] = effective_params.get('interval_seconds', 30)
+                await query.answer("Интервал включен с дефолтным значением")
+                await self._send_quiz_cfg_message(query, context)
+                return CFG_QUIZ_OPTIONS
+            elif opt_type == "custom":
+                # Показываем поле для ввода значения
+                context.chat_data['_editing_interval'] = True
+                await query.message.edit_text(
+                    f"Введите интервал между вопросами в секундах \\(от 5 до 300\\):\n\nТекущее значение: {cfg.get('interval_seconds', 'выключен')}",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Назад", callback_data=CB_QCFG_BACK)]]),
+                    parse_mode=ParseMode.MARKDOWN_V2
+                )
+                await query.answer()
+                return CFG_QUIZ_INTERVAL_INPUT
+        elif action == CB_QCFG_OPEN_PERIOD:
+            # Показываем меню для настройки времени ответа
+            current_open_period = cfg.get('open_period_seconds')
+            effective_params = self._get_effective_quiz_params(cfg['chat_id'], cfg['num_questions'])
+            default_open_period = effective_params.get('open_period_seconds', 30)
+            
+            if current_open_period is not None:
+                # Время ответа настроено - показываем опции изменения
+                kb_open_period_options = [
+                    [InlineKeyboardButton("⚙️ Изменить значение", callback_data=f"{CB_QCFG_OPEN_PERIOD_OPT}:custom")],
+                    [InlineKeyboardButton("⬅️ Назад", callback_data=CB_QCFG_BACK)]
+                ]
+                open_period_menu_text = f"Время на ответ: {current_open_period} сек\n\nВыберите действие:"
+            else:
+                # Время ответа не настроено - показываем опции настройки
+                kb_open_period_options = [
+                    [InlineKeyboardButton("✅ Использовать по умолчанию", callback_data=f"{CB_QCFG_OPEN_PERIOD_OPT}:default")],
+                    [InlineKeyboardButton("⚙️ Настроить вручную", callback_data=f"{CB_QCFG_OPEN_PERIOD_OPT}:custom")],
+                    [InlineKeyboardButton("⬅️ Назад", callback_data=CB_QCFG_BACK)]
+                ]
+                open_period_menu_text = f"Время на ответ: не настроено\n\nВыберите действие:"
+            
+            await query.message.edit_text(
+                open_period_menu_text,
+                reply_markup=InlineKeyboardMarkup(kb_open_period_options),
+                parse_mode=ParseMode.MARKDOWN_V2
+            )
+            await query.answer()
+            return CFG_QUIZ_OPEN_PERIOD_OPTIONS
+        elif action.startswith(CB_QCFG_OPEN_PERIOD_OPT):
+            opt_type = action.split(":", 1)[1]
+            if opt_type == "default":
+                # Используем дефолтное значение из настроек чата
+                effective_params = self._get_effective_quiz_params(cfg['chat_id'], cfg['num_questions'])
+                cfg['open_period_seconds'] = effective_params.get('open_period_seconds', 30)
+                await query.answer("Используется время по умолчанию")
+                await self._send_quiz_cfg_message(query, context)
+                return CFG_QUIZ_OPTIONS
+            elif opt_type == "custom":
+                # Показываем поле для ввода значения
+                context.chat_data['_editing_open_period'] = True
+                await query.message.edit_text(
+                    f"Введите время на ответ в секундах \\(от 10 до 300\\):\n\nТекущее значение: {cfg.get('open_period_seconds', 'не настроено')}",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Назад", callback_data=CB_QCFG_BACK)]]),
+                    parse_mode=ParseMode.MARKDOWN_V2
+                )
+                await query.answer()
+                return CFG_QUIZ_OPEN_PERIOD_INPUT
         elif action == CB_QCFG_CANCEL:
             return await self.cancel_quiz_cfg_command(update, context)
 
@@ -957,6 +1154,62 @@ class QuizManager:
         except ValueError:
             await update.message.reply_text(f"Это не число\\. Пожалуйста, введите число или `/{escape_markdown_v2(self.app_config.commands.cancel)}` для отмены\\.", parse_mode=ParseMode.MARKDOWN_V2, reply_to_message_id=update.message.message_id)
         return CFG_QUIZ_NUM_QS
+
+    async def handle_typed_interval_seconds(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> Optional[str]:
+        if not update.message or not update.message.text:
+            return CFG_QUIZ_INTERVAL_INPUT
+        cfg = context.chat_data.get('quiz_cfg_progress')
+        if not cfg:
+            await update.message.reply_text(escape_markdown_v2("Сессия настройки истекла. Пожалуйста, начните заново командой /quiz."), parse_mode=ParseMode.MARKDOWN_V2)
+            return ConversationHandler.END
+        
+        # Проверяем, что мы действительно редактируем интервал
+        if not context.chat_data.get('_editing_interval'):
+            await update.message.reply_text(escape_markdown_v2("Ошибка: неожиданный ввод. Пожалуйста, используйте кнопки меню."), parse_mode=ParseMode.MARKDOWN_V2)
+            return CFG_QUIZ_OPTIONS
+        
+        try:
+            interval = int(update.message.text.strip())
+            if 5 <= interval <= 300:
+                cfg['interval_seconds'] = interval
+                context.chat_data.pop('_editing_interval', None)  # Убираем флаг
+                try: await update.message.delete()
+                except Exception: pass
+                await self._send_quiz_cfg_message(update, context)
+                return CFG_QUIZ_OPTIONS
+            else:
+                await update.message.reply_text(escape_markdown_v2("Интервал должен быть от 5 до 300 секунд. Попробуйте еще раз или используйте кнопку 'Назад' для отмены."), parse_mode=ParseMode.MARKDOWN_V2, reply_to_message_id=update.message.message_id)
+        except ValueError:
+            await update.message.reply_text(escape_markdown_v2("Это не число. Пожалуйста, введите число от 5 до 300 или используйте кнопку 'Назад' для отмены."), parse_mode=ParseMode.MARKDOWN_V2, reply_to_message_id=update.message.message_id)
+        return CFG_QUIZ_INTERVAL_INPUT
+
+    async def handle_typed_open_period_seconds(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> Optional[str]:
+        if not update.message or not update.message.text:
+            return CFG_QUIZ_OPEN_PERIOD_INPUT
+        cfg = context.chat_data.get('quiz_cfg_progress')
+        if not cfg:
+            await update.message.reply_text(escape_markdown_v2("Сессия настройки истекла. Пожалуйста, начните заново командой /quiz."), parse_mode=ParseMode.MARKDOWN_V2)
+            return ConversationHandler.END
+        
+        # Проверяем, что мы действительно редактируем время ответа
+        if not context.chat_data.get('_editing_open_period'):
+            await update.message.reply_text(escape_markdown_v2("Ошибка: неожиданный ввод. Пожалуйста, используйте кнопки меню."), parse_mode=ParseMode.MARKDOWN_V2)
+            return CFG_QUIZ_OPTIONS
+        
+        try:
+            open_period = int(update.message.text.strip())
+            if 10 <= open_period <= 300:
+                cfg['open_period_seconds'] = open_period
+                context.chat_data.pop('_editing_open_period', None)  # Убираем флаг
+                try: await update.message.delete()
+                except Exception: pass
+                await self._send_quiz_cfg_message(update, context)
+                return CFG_QUIZ_OPTIONS
+            else:
+                await update.message.reply_text(escape_markdown_v2("Время на ответ должно быть от 10 до 300 секунд. Попробуйте еще раз или используйте кнопку 'Назад' для отмены."), parse_mode=ParseMode.MARKDOWN_V2, reply_to_message_id=update.message.message_id)
+        except ValueError:
+            await update.message.reply_text(escape_markdown_v2("Это не число. Пожалуйста, введите число от 10 до 300 или используйте кнопку 'Назад' для отмены."), parse_mode=ParseMode.MARKDOWN_V2, reply_to_message_id=update.message.message_id)
+        return CFG_QUIZ_OPEN_PERIOD_INPUT
 
     async def cancel_quiz_cfg_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         query = update.callback_query
@@ -1029,9 +1282,105 @@ class QuizManager:
             states={
                 CFG_QUIZ_OPTIONS: [CallbackQueryHandler(self.handle_quiz_cfg_callback, pattern=f"^{CB_QCFG_}")],
                 CFG_QUIZ_NUM_QS: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_typed_num_questions)],
+                CFG_QUIZ_INTERVAL_OPTIONS: [CallbackQueryHandler(self.handle_quiz_cfg_callback, pattern=f"^{CB_QCFG_}")],
+                CFG_QUIZ_INTERVAL_INPUT: [
+                    CallbackQueryHandler(self.handle_quiz_cfg_callback, pattern=f"^{CB_QCFG_}"),
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_typed_interval_seconds)
+                ],
+                CFG_QUIZ_OPEN_PERIOD_OPTIONS: [CallbackQueryHandler(self.handle_quiz_cfg_callback, pattern=f"^{CB_QCFG_}")],
+                CFG_QUIZ_OPEN_PERIOD_INPUT: [
+                    CallbackQueryHandler(self.handle_quiz_cfg_callback, pattern=f"^{CB_QCFG_}"),
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_typed_open_period_seconds)
+                ],
             },
             fallbacks=[cancel_handler_for_conv],
             per_chat=True, per_user=True, name="quiz_interactive_setup_conv", persistent=True, allow_reentry=True
         )
-        return [conv_handler, CommandHandler(self.app_config.commands.stop_quiz, self.stop_quiz_command)]
+        return [
+            conv_handler, 
+            CommandHandler(self.app_config.commands.stop_quiz, self.stop_quiz_command),
+            CommandHandler(self.app_config.commands.test_categories, self.test_categories_command),
+            CommandHandler(self.app_config.commands.reset_categories_stats, self.reset_categories_stats_command)
+        ]
+
+    async def test_categories_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Тестовая команда для проверки системы приоритетов категорий"""
+        if not update.message or not update.effective_chat:
+            return
+        
+        chat_id = update.effective_chat.id
+        logger.info(f"Тест системы приоритетов категорий для чата {chat_id}")
+        
+        try:
+            # Получаем статистику использования категорий (только для чтения)
+            stats = self.category_manager.get_category_usage_stats(read_only=True)
+            
+            if not stats:
+                await update.message.reply_text(
+                    escape_markdown_v2("📊 Статистика использования категорий пока пуста.\n\n"
+                                    "Для накопления данных запустите несколько викторин командой /quiz")
+                )
+                return
+            
+            # Показываем топ-5 наиболее используемых категорий
+            sorted_stats = sorted(stats.items(), key=lambda x: x[1].get('total_usage', 0), reverse=True)
+            top_categories = sorted_stats[:5]
+            
+            response_text = "📊 *Статистика использования категорий:*\n\n"
+            for i, (cat_name, cat_stats) in enumerate(top_categories, 1):
+                total_usage = cat_stats.get('total_usage', 0)
+                last_used = cat_stats.get('last_used', 0)
+                if last_used:
+                    days_ago = int((time.time() - last_used) / 86400)
+                    if days_ago == 0:
+                        last_used_str = "сегодня"
+                    elif days_ago == 1:
+                        last_used_str = "вчера"
+                    else:
+                        last_used_str = f"{days_ago} дн. назад"
+                else:
+                    last_used_str = "никогда"
+                
+                response_text += f"{i}\\. *{escape_markdown_v2(cat_name)}*\n"
+                response_text += f"   Использований: {total_usage}\n"
+                response_text += f"   Последний раз: {last_used_str}\n\n"
+            
+            response_text += f"Всего категорий в статистике: {len(stats)}"
+            
+            await update.message.reply_text(response_text, parse_mode=ParseMode.MARKDOWN_V2)
+            
+        except Exception as e:
+            logger.error(f"Ошибка в тесте категорий: {e}", exc_info=True)
+            await update.message.reply_text(escape_markdown_v2("Произошла ошибка при получении статистики категорий."))
+
+    async def reset_categories_stats_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Команда для сброса статистики использования категорий (только для администраторов)"""
+        if not update.message or not update.effective_chat:
+            return
+        
+        # Проверяем права администратора
+        if not await is_user_admin_in_update(update, context):
+            await update.message.reply_text(
+                escape_markdown_v2("❌ У вас нет прав для выполнения этой команды. Требуются права администратора.")
+            )
+            return
+        
+        chat_id = update.effective_chat.id
+        user = update.effective_user
+        logger.info(f"Сброс статистики категорий запрошен пользователем {user.id} ({user.full_name}) в чате {chat_id}")
+        
+        try:
+            # Сбрасываем статистику
+            self.category_manager.reset_category_usage_stats()
+            
+            await update.message.reply_text(
+                escape_markdown_v2("✅ Статистика использования категорий успешно сброшена.\n\n"
+                                "Теперь при проведении викторин будет накапливаться новая корректная статистика.")
+            )
+            
+        except Exception as e:
+            logger.error(f"Ошибка при сбросе статистики категорий: {e}", exc_info=True)
+            await update.message.reply_text(
+                escape_markdown_v2("❌ Произошла ошибка при сбросе статистики категорий.")
+            )
 

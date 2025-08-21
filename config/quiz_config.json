@@ -22,7 +22,8 @@
             "interval_seconds": 60,
             "poll_open_seconds": 600
         },
-        "auto_delete_bot_messages": true
+        "auto_delete_bot_messages": true,
+        "default_interval_seconds": 30
     },
     "quiz_types_config": {
         "single": {
@@ -38,6 +39,7 @@
             "mode": "serial_immediate",
             "default_num_questions": 10,
             "default_open_period_seconds": 30,
+            "default_interval_seconds": 30,
             "announce": false,
             "announce_delay_seconds": 30
         },
@@ -78,7 +80,8 @@
             "adddailyquiz": "adddailyquiz",
             "removedailyquiz": "removedailyquiz",
             "listdailyquizzes": "listdailyquizzes",
-            "reloadcfg": "reloadcfg"
+            "reloadcfg": "reloadcfg",
+            "test_categories": "test_categories"
         },
         "max_questions_per_session": 50,
         "max_interactive_categories_to_show": 10,

@@ -31,8 +31,15 @@ logger = logging.getLogger(__name__)
     CFG_DAILY_ADD_TIME
 ) = map(str, range(7))
 
+CFG_MAIN_MENU = 'cfg_main_menu'
+CFG_DAILY_MENU = 'cfg_daily_menu'
+CFG_QUIZ_MENU = 'cfg_quiz_menu'
+CFG_DAILY_TIMES_MENU = 'cfg_daily_times_menu'
+
 CB_ADM_ = "admcfg_"
-CB_ADM_BACK_TO_MAIN = f"{CB_ADM_}main_menu_back"
+CB_ADM_BACK_TO_MAIN = f"{CB_ADM_}back_to_main"
+CB_ADM_BACK_TO_DAILY_MENU = f"{CB_ADM_}back_to_daily_menu"
+CB_ADM_BACK_TO_QUIZ_MENU = f"{CB_ADM_}back_to_quiz_menu"
 CB_ADM_FINISH_CONFIG = f"{CB_ADM_}finish"
 CB_ADM_CONFIRM_RESET_SETTINGS = f"{CB_ADM_}confirm_reset"
 CB_ADM_EXECUTE_RESET_SETTINGS = f"{CB_ADM_}execute_reset"
@@ -50,7 +57,8 @@ CB_ADM_CAT_SEL_ = f"{CB_ADM_}g_cat_sel_"
 CB_ADM_CAT_TOGGLE = f"{CB_ADM_CAT_SEL_}toggle"
 CB_ADM_CAT_SAVE_SELECTION = f"{CB_ADM_CAT_SEL_}save"
 CB_ADM_CAT_CLEAR_SELECTION = f"{CB_ADM_CAT_SEL_}clear"
-CB_ADM_GOTO_DAILY_MENU = f"{CB_ADM_}goto_daily"
+CB_ADM_GOTO_DAILY_MENU = f"{CB_ADM_}goto_daily_menu"
+CB_ADM_GOTO_QUIZ_MENU = f"{CB_ADM_}goto_quiz_menu"
 CB_ADM_BACK_TO_DAILY_MENU = f"{CB_ADM_}daily_menu_back"
 CB_ADM_DAILY_TOGGLE_ENABLED = f"{CB_ADM_}daily_toggle_en"
 CB_ADM_DAILY_MANAGE_TIMES = f"{CB_ADM_}daily_manage_times"
@@ -188,16 +196,10 @@ class ConfigHandlers:
         prompt_text = escape_markdown_v2("Выберите параметр для изменения:")
         text = f"{header_text}\n\n{display_text}\n\n{daily_brief}\n\n{prompt_text}"
         kb_buttons = [
-            [InlineKeyboardButton("Тип /quiz", callback_data=CB_ADM_SET_DEFAULT_QUIZ_TYPE),
-             InlineKeyboardButton("Кол-во /quiz", callback_data=CB_ADM_SET_DEFAULT_NUM_QUESTIONS)],
-            [InlineKeyboardButton("Кол-во категорий /quiz", callback_data=CB_ADM_SET_DEFAULT_NUM_CATEGORIES)],
-            [InlineKeyboardButton("Время ответа", callback_data=CB_ADM_SET_DEFAULT_OPEN_PERIOD)],
-            [InlineKeyboardButton("Интервал /quiz", callback_data=CB_ADM_SET_DEFAULT_INTERVAL_SECONDS)],
-            [InlineKeyboardButton("Анонс /quiz", callback_data=CB_ADM_SET_DEFAULT_ANNOUNCE_QUIZ),
-             InlineKeyboardButton("Задержка анонса", callback_data=CB_ADM_SET_DEFAULT_ANNOUNCE_DELAY)],
+            [InlineKeyboardButton("Настройки /quiz ➡️", callback_data=CB_ADM_GOTO_QUIZ_MENU)],
             [InlineKeyboardButton("Разрешенные категории", callback_data=CB_ADM_MANAGE_ENABLED_CATEGORIES)],
             [InlineKeyboardButton("Запрещенные категории", callback_data=CB_ADM_MANAGE_DISABLED_CATEGORIES)],
-            [InlineKeyboardButton("Автоудаление сообщений", callback_data=CB_ADM_TOGGLE_AUTO_DELETE_BOT_MESSAGES)], # ИЗМЕНЕНИЕ
+            [InlineKeyboardButton("Автоудаление сообщений", callback_data=CB_ADM_TOGGLE_AUTO_DELETE_BOT_MESSAGES)],
             [InlineKeyboardButton("Ежедневная Викторина ➡️", callback_data=CB_ADM_GOTO_DAILY_MENU)],
             [InlineKeyboardButton("Сбросить всё к по умолчанию", callback_data=CB_ADM_CONFIRM_RESET_SETTINGS)],
             [InlineKeyboardButton("✅ Завершить настройку", callback_data=CB_ADM_FINISH_CONFIG)],
@@ -279,16 +281,20 @@ class ConfigHandlers:
             lines.append(f"*{escape_markdown_v2('Тип /quiz по умолчанию:')}* `{get_and_format_value(['default_quiz_type'])}`")
             lines.append(f"*{escape_markdown_v2('Кол-во вопросов /quiz:')}* `{get_and_format_value(['default_num_questions'])}`")
             lines.append(f"*{escape_markdown_v2('Кол-во категорий /quiz:')}* `{get_and_format_value(['num_categories_per_quiz'])}`")
-            lines.append(f"*{escape_markdown_v2('Время ответа /quiz:')}* `{get_and_format_value(['default_open_period_seconds'])}` сек")
-            lines.append(f"*{escape_markdown_v2('Интервал между вопросами /quiz:')}* `{get_and_format_value(['default_interval_seconds'])}`")
-            lines.append(f"*{escape_markdown_v2('Анонс /quiz:')}* `{get_and_format_value(['default_announce_quiz'])}`")
-            if settings.get('default_announce_quiz', def_chat_s.get('default_announce_quiz')):
-                 lines.append(f"*{escape_markdown_v2('Задержка анонса:')}* `{get_and_format_value(['default_announce_delay_seconds'])}`")
             lines.append(f"*{escape_markdown_v2('Разрешенные категории для чата:')}* {get_and_format_value(['enabled_categories'])}")
             lines.append(f"*{escape_markdown_v2('Запрещенные категории для чата:')}* {get_and_format_value(['disabled_categories'])}")
             # ИЗМЕНЕНИЕ: Отображение новой настройки
             lines.append(f"*{escape_markdown_v2('Автоудаление сообщений бота:')}* `{get_and_format_value(['auto_delete_bot_messages'], default_value_override=True)}`")
 
+        if part == "quiz" or part == "all":
+            lines.append(f"*{escape_markdown_v2('Тип /quiz по умолчанию:')}* `{get_and_format_value(['default_quiz_type'])}`")
+            lines.append(f"*{escape_markdown_v2('Кол-во вопросов:')}* `{get_and_format_value(['default_num_questions'])}`")
+            lines.append(f"*{escape_markdown_v2('Кол-во категорий:')}* `{get_and_format_value(['num_categories_per_quiz'])}`")
+            lines.append(f"*{escape_markdown_v2('Время ответа:')}* `{get_and_format_value(['default_open_period_seconds'])}` сек")
+            lines.append(f"*{escape_markdown_v2('Интервал между вопросами:')}* `{get_and_format_value(['default_interval_seconds'])}`")
+            lines.append(f"*{escape_markdown_v2('Анонс /quiz:')}* `{get_and_format_value(['default_announce_quiz'])}`")
+            if settings.get('default_announce_quiz', def_chat_s.get('default_announce_quiz')):
+                 lines.append(f"*{escape_markdown_v2('Задержка анонса:')}* `{get_and_format_value(['default_announce_delay_seconds'])}`")
 
         if part == "daily_brief" or part == "daily" or part == "all":
             lines.append(f"*{escape_markdown_v2('Ежедневная викторина:')}* `{get_and_format_value(['daily_quiz', 'enabled'])}`")
@@ -371,37 +377,12 @@ class ConfigHandlers:
             self.data_manager.update_chat_setting(chat_id, ["auto_delete_bot_messages"], new_value)
             await self._send_main_cfg_menu(query, context)
             return CFG_MAIN_MENU
-        elif action in [CB_ADM_SET_DEFAULT_NUM_QUESTIONS, CB_ADM_SET_DEFAULT_NUM_CATEGORIES, CB_ADM_SET_DEFAULT_OPEN_PERIOD, CB_ADM_SET_DEFAULT_ANNOUNCE_DELAY, CB_ADM_SET_DEFAULT_INTERVAL_SECONDS]:
-            # Настройки по умолчанию для /quiz
-            def_s = settings.get("default_chat_settings", {})
-            action_to_key_mapping = {
-                CB_ADM_SET_DEFAULT_NUM_QUESTIONS: (["default_num_questions"], def_s.get('default_num_questions', 10), "Кол-во вопросов в /quiz", (1, self.app_config.max_questions_per_session), 'int'),
-                CB_ADM_SET_DEFAULT_NUM_CATEGORIES: (["num_categories_per_quiz"], def_s.get('num_categories_per_quiz', 3), "Кол-во категорий в /quiz", (1, 10), 'int'),
-                CB_ADM_SET_DEFAULT_OPEN_PERIOD: (["default_open_period_seconds"], def_s.get('default_open_period_seconds', 30), "Время ответа в /quiz (сек)", (5, 300), 'int'),
-                CB_ADM_SET_DEFAULT_ANNOUNCE_DELAY: (["default_announce_delay_seconds"], def_s.get('default_announce_delay_seconds', 30), "Задержка перед анонсом /quiz (сек)", (0, 300), 'int'),
-                CB_ADM_SET_DEFAULT_INTERVAL_SECONDS: (["default_interval_seconds"], def_s.get('default_interval_seconds', 30), "Интервал между вопросами /quiz (сек)", (5, 300), 'int'),
-            }
-            key_path, default_val_from_def_s, prompt_text_base, (min_val, max_val), val_type = action_to_key_mapping[action]
-            current_val_resolved = settings
-            for k_part in key_path: current_val_resolved = current_val_resolved.get(k_part, {}) if isinstance(current_val_resolved, dict) else None # type: ignore
-            if current_val_resolved is None or not isinstance(current_val_resolved, (int, float, str, bool)): current_val_resolved = default_val_from_def_s
-
-            current_display_val_str = str(current_val_resolved)
-            if key_path in [["default_open_period_seconds"], ["default_announce_delay_seconds"]] and isinstance(current_val_resolved, int):
-                current_display_val_str = format_seconds_to_human_readable_time(current_val_resolved)
-
-            escaped_prompt_base = escape_markdown_v2(prompt_text_base)
-            escaped_current_val_display = escape_markdown_v2(current_display_val_str)
-            escaped_range = escape_markdown_v2(f"{min_val}–{max_val}")
-            prompt_to_show = (f"Введите новое значение для `{escaped_prompt_base}`\\.\nТекущее: `{escaped_current_val_display}`\\.\nДопустимый диапазон: `{escaped_range}` сек\\.")
-            if key_path == ["default_num_questions"]:
-                 prompt_to_show = (f"Введите новое значение для `{escaped_prompt_base}`\\.\nТекущее: `{escaped_current_val_display}`\\.\nДопустимый диапазон: `{escaped_range}`\\.")
-
-            context.chat_data[CTX_INPUT_TARGET_KEY_PATH] = key_path
-            context.chat_data[CTX_INPUT_PROMPT] = prompt_to_show
-            context.chat_data[CTX_INPUT_CONSTRAINTS] = {'min': min_val, 'max': max_val, 'type': val_type}
-            await self._update_config_message(query, context, prompt_to_show, InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Отмена", callback_data=CB_ADM_BACK_TO_MAIN)]]))
-            return CFG_INPUT_VALUE
+        elif action == CB_ADM_GOTO_QUIZ_MENU:
+            await self._send_quiz_cfg_menu(query, context)
+            return CFG_QUIZ_MENU
+        elif action == CB_ADM_GOTO_DAILY_MENU:
+            await self._send_daily_cfg_menu(query, context)
+            return CFG_DAILY_MENU
         elif action == CB_ADM_MANAGE_ENABLED_CATEGORIES:
             context.chat_data[CTX_CATEGORY_SELECTION_MODE] = 'enabled_categories'
             context.chat_data[CTX_CATEGORY_SELECTION_TITLE] = escape_markdown_v2('разрешенных категорий для /quiz')
@@ -415,9 +396,6 @@ class ConfigHandlers:
             context.chat_data[CTX_TEMP_CATEGORY_SELECTION] = set(settings.get('disabled_categories', []))
             await self._send_category_selection_menu(query, context)
             return CFG_SELECT_GENERAL_CATEGORIES
-        elif action == CB_ADM_GOTO_DAILY_MENU:
-            await self._send_daily_cfg_menu(query, context)
-            return CFG_DAILY_MENU
         elif action == CB_ADM_CONFIRM_RESET_SETTINGS:
             kb = [[InlineKeyboardButton("‼️ ДА, СБРОСИТЬ ВСЕ НАСТРОЙКИ ‼️", callback_data=CB_ADM_EXECUTE_RESET_SETTINGS)],
                   [InlineKeyboardButton("⬅️ Нет, отмена", callback_data=CB_ADM_BACK_TO_MAIN)]]
@@ -443,6 +421,7 @@ class ConfigHandlers:
         fallback_state_after_input: str
         if menu_sender_method_name == "_send_daily_cfg_menu": fallback_state_after_input = CFG_DAILY_MENU
         elif menu_sender_method_name == "_send_daily_times_menu": fallback_state_after_input = CFG_DAILY_TIMES_MENU
+        elif menu_sender_method_name == "_send_quiz_cfg_menu": fallback_state_after_input = CFG_QUIZ_MENU
         else: fallback_state_after_input = CFG_MAIN_MENU
 
         if not chat_id or not key_path or not constraints:
@@ -651,6 +630,112 @@ class ConfigHandlers:
         context.chat_data[CTX_CURRENT_MENU_SENDER_CB_NAME] = "_send_daily_cfg_menu"
         context.chat_data[CTX_INPUT_CANCEL_CB_DATA] = CB_ADM_BACK_TO_DAILY_MENU
         await self._update_config_message(query_or_update, context, text_for_menu, InlineKeyboardMarkup(kb))
+
+    async def _send_quiz_cfg_menu(self, query_or_update: Optional[Union[Update, CallbackQuery]], context: ContextTypes.DEFAULT_TYPE):
+        chat_id = context.chat_data.get(CTX_ADMIN_CFG_CHAT_ID)
+        if not chat_id: return
+
+        settings = self.data_manager.get_chat_settings(chat_id)
+        display_text = self._format_settings_display(settings, part="quiz")
+        header_text = f"*{escape_markdown_v2('🏁 Настройки /quiz')}*"
+        prompt_text = escape_markdown_v2("Выберите параметр для изменения:")
+        text_for_menu = f"{header_text}\n\n{display_text}\n\n{prompt_text}"
+
+        kb = [
+            [InlineKeyboardButton("Тип /quiz", callback_data=CB_ADM_SET_DEFAULT_QUIZ_TYPE),
+             InlineKeyboardButton("Кол-во вопросов", callback_data=CB_ADM_SET_DEFAULT_NUM_QUESTIONS)],
+            [InlineKeyboardButton("Кол-во категорий", callback_data=CB_ADM_SET_DEFAULT_NUM_CATEGORIES)],
+            [InlineKeyboardButton("Время ответа", callback_data=CB_ADM_SET_DEFAULT_OPEN_PERIOD)],
+            [InlineKeyboardButton("Интервал между вопросами", callback_data=CB_ADM_SET_DEFAULT_INTERVAL_SECONDS)],
+            [InlineKeyboardButton("Анонс /quiz", callback_data=CB_ADM_SET_DEFAULT_ANNOUNCE_QUIZ),
+             InlineKeyboardButton("Задержка анонса", callback_data=CB_ADM_SET_DEFAULT_ANNOUNCE_DELAY)],
+            [InlineKeyboardButton("⬅️ Назад в главное меню", callback_data=CB_ADM_BACK_TO_MAIN)]
+        ]
+
+        context.chat_data[CTX_CURRENT_MENU_SENDER_CB_NAME] = "_send_quiz_cfg_menu"
+        context.chat_data[CTX_INPUT_CANCEL_CB_DATA] = CB_ADM_BACK_TO_QUIZ_MENU
+        await self._update_config_message(query_or_update, context, text_for_menu, InlineKeyboardMarkup(kb))
+
+    async def handle_quiz_menu_callbacks(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> Optional[str]:
+        query = update.callback_query
+        await query.answer()
+        action = query.data
+        chat_id = context.chat_data.get(CTX_ADMIN_CFG_CHAT_ID)
+        if not chat_id: return ConversationHandler.END
+
+        settings = self.data_manager.get_chat_settings(chat_id)
+        def_s = self.app_config.default_chat_settings
+        context.chat_data[CTX_CURRENT_MENU_SENDER_CB_NAME] = "_send_quiz_cfg_menu"
+        context.chat_data[CTX_INPUT_CANCEL_CB_DATA] = CB_ADM_BACK_TO_QUIZ_MENU
+
+        if action == CB_ADM_BACK_TO_MAIN:
+            await self._send_main_cfg_menu(query, context)
+            return CFG_MAIN_MENU
+        elif action == CB_ADM_BACK_TO_QUIZ_MENU:
+            await self._send_quiz_cfg_menu(query, context)
+            return CFG_QUIZ_MENU
+        elif action == CB_ADM_SET_DEFAULT_QUIZ_TYPE:
+            current_val = settings.get('default_quiz_type', def_s['default_quiz_type'])
+            kb = []
+            for q_type_key in ["session", "single"]:
+                q_type_config = self.app_config.quiz_types_config.get(q_type_key, {})
+                q_type_name = q_type_config.get("type", q_type_key)
+                prefix = "✅ " if q_type_name == current_val else "☑️ "
+                kb.append([InlineKeyboardButton(f"{prefix}{q_type_name.capitalize()}", callback_data=f"{CB_ADM_SET_DEFAULT_QUIZ_TYPE_OPT}:{q_type_name}")])
+            kb.append([InlineKeyboardButton("⬅️ Назад", callback_data=CB_ADM_BACK_TO_QUIZ_MENU)])
+            await self._update_config_message(query, context, escape_markdown_v2("Выберите тип /quiz по умолчанию:"), InlineKeyboardMarkup(kb))
+            return CFG_QUIZ_MENU
+        elif action.startswith(CB_ADM_SET_DEFAULT_QUIZ_TYPE_OPT):
+            val = action.split(":", 1)[1]
+            self.data_manager.update_chat_setting(chat_id, ["default_quiz_type"], val)
+            await self._send_quiz_cfg_menu(query, context)
+            return CFG_QUIZ_MENU
+        elif action == CB_ADM_SET_DEFAULT_ANNOUNCE_QUIZ:
+            current_val = settings.get('default_announce_quiz', def_s['default_announce_quiz'])
+            kb = [
+                [InlineKeyboardButton(f"{'✅ ' if current_val else '☑️ '}Включить анонс", callback_data=f"{CB_ADM_SET_DEFAULT_ANNOUNCE_QUIZ_OPT}:true")],
+                [InlineKeyboardButton(f"{'✅ ' if not current_val else '☑️ '}Выключить анонс", callback_data=f"{CB_ADM_SET_DEFAULT_ANNOUNCE_QUIZ_OPT}:false")],
+                [InlineKeyboardButton("⬅️ Назад", callback_data=CB_ADM_BACK_TO_QUIZ_MENU)]
+            ]
+            await self._update_config_message(query, context, escape_markdown_v2("Включить анонс для /quiz по умолчанию?"), InlineKeyboardMarkup(kb))
+            return CFG_QUIZ_MENU
+        elif action.startswith(CB_ADM_SET_DEFAULT_ANNOUNCE_QUIZ_OPT):
+            val = action.split(":", 1)[1] == "true"
+            self.data_manager.update_chat_setting(chat_id, ["default_announce_quiz"], val)
+            await self._send_quiz_cfg_menu(query, context)
+            return CFG_QUIZ_MENU
+        elif action in [CB_ADM_SET_DEFAULT_NUM_QUESTIONS, CB_ADM_SET_DEFAULT_NUM_CATEGORIES, CB_ADM_SET_DEFAULT_OPEN_PERIOD, CB_ADM_SET_DEFAULT_ANNOUNCE_DELAY, CB_ADM_SET_DEFAULT_INTERVAL_SECONDS]:
+            # Настройки по умолчанию для /quiz
+            def_s = settings.get("default_chat_settings", {})
+            action_to_key_mapping = {
+                CB_ADM_SET_DEFAULT_NUM_QUESTIONS: (["default_num_questions"], def_s.get('default_num_questions', 10), "Кол-во вопросов в /quiz", (1, self.app_config.max_questions_per_session), 'int'),
+                CB_ADM_SET_DEFAULT_NUM_CATEGORIES: (["num_categories_per_quiz"], def_s.get('num_categories_per_quiz', 3), "Кол-во категорий в /quiz", (1, 10), 'int'),
+                CB_ADM_SET_DEFAULT_OPEN_PERIOD: (["default_open_period_seconds"], def_s.get('default_open_period_seconds', 30), "Время ответа в /quiz (сек)", (5, 300), 'int'),
+                CB_ADM_SET_DEFAULT_ANNOUNCE_DELAY: (["default_announce_delay_seconds"], def_s.get('default_announce_delay_seconds', 30), "Задержка перед анонсом /quiz (сек)", (0, 300), 'int'),
+                CB_ADM_SET_DEFAULT_INTERVAL_SECONDS: (["default_interval_seconds"], def_s.get('default_interval_seconds', 30), "Интервал между вопросами /quiz (сек)", (5, 300), 'int'),
+            }
+            key_path, default_val_from_def_s, prompt_text_base, (min_val, max_val), val_type = action_to_key_mapping[action]
+            current_val_resolved = settings
+            for k_part in key_path: current_val_resolved = current_val_resolved.get(k_part, {}) if isinstance(current_val_resolved, dict) else None # type: ignore
+            if current_val_resolved is None or not isinstance(current_val_resolved, (int, float, str, bool)): current_val_resolved = default_val_from_def_s
+
+            current_display_val_str = str(current_val_resolved)
+            if key_path in [["default_open_period_seconds"], ["default_announce_delay_seconds"]] and isinstance(current_val_resolved, int):
+                current_display_val_str = format_seconds_to_human_readable_time(current_val_resolved)
+
+            escaped_prompt_base = escape_markdown_v2(prompt_text_base)
+            escaped_current_val_display = escape_markdown_v2(current_display_val_str)
+            escaped_range = escape_markdown_v2(f"{min_val}–{max_val}")
+            prompt_to_show = (f"Введите новое значение для `{escaped_prompt_base}`\\.\nТекущее: `{escaped_current_val_display}`\\.\nДопустимый диапазон: `{escaped_range}` сек\\.")
+            if key_path == ["default_num_questions"]:
+                 prompt_to_show = (f"Введите новое значение для `{escaped_prompt_base}`\\.\nТекущее: `{escaped_current_val_display}`\\.\nДопустимый диапазон: `{escaped_range}`\\.")
+
+            context.chat_data[CTX_INPUT_TARGET_KEY_PATH] = key_path
+            context.chat_data[CTX_INPUT_PROMPT] = prompt_to_show
+            context.chat_data[CTX_INPUT_CONSTRAINTS] = {'min': min_val, 'max': max_val, 'type': val_type}
+            await self._update_config_message(query, context, prompt_to_show, InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Отмена", callback_data=CB_ADM_BACK_TO_QUIZ_MENU)]]))
+            return CFG_INPUT_VALUE
+        return CFG_QUIZ_MENU
 
     async def handle_daily_menu_callbacks(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> Optional[str]:
         query = update.callback_query
@@ -959,10 +1044,12 @@ class ConfigHandlers:
             entry_points=[CommandHandler(self.app_config.commands.admin_settings, self.admin_settings_entry)],
             states={
                 CFG_MAIN_MENU: [CallbackQueryHandler(self.handle_main_menu_callbacks, pattern=f"^{CB_ADM_}")],
+                CFG_QUIZ_MENU: [CallbackQueryHandler(self.handle_quiz_menu_callbacks, pattern=f"^{CB_ADM_}")],
                 CFG_INPUT_VALUE: [
                     MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_input_value),
                     CallbackQueryHandler(self.handle_main_menu_callbacks, pattern=f"^{CB_ADM_BACK_TO_MAIN}$"),
                     CallbackQueryHandler(self.handle_daily_menu_callbacks, pattern=f"^{CB_ADM_BACK_TO_DAILY_MENU}$"),
+                    CallbackQueryHandler(self.handle_quiz_menu_callbacks, pattern=f"^{CB_ADM_BACK_TO_QUIZ_MENU}$"),
                     CallbackQueryHandler(self.handle_daily_times_menu_callbacks, pattern=f"^{CB_ADM_DAILY_TIME_BACK_TO_LIST}$")
                 ],
                 CFG_SELECT_GENERAL_CATEGORIES: [

@@ -1,29 +1,58 @@
 # modules/score_manager.py
 import logging
-from typing import Dict, List, Any, Optional, Tuple
-from datetime import datetime, timezone # datetime используется для now_utc
+from typing import Dict, List, Any, Optional, Tuple, TYPE_CHECKING
+from datetime import datetime, timezone, date # datetime используется для now_utc, date для ежедневного сброса
 
 from telegram import User as TelegramUser
 
-from app_config import AppConfig
-from state import BotState
-from data_manager import DataManager
+if TYPE_CHECKING:
+    from app_config import AppConfig
+    from state import BotState
+    from data_manager import DataManager
+
 from utils import escape_markdown_v2, pluralize, get_username_or_firstname # get_username_or_firstname используется для мотивационных сообщений
 
 logger = logging.getLogger(__name__)
 
 class ScoreManager:
-    def __init__(self, app_config: AppConfig, state: BotState, data_manager: DataManager):
+    def __init__(self, app_config: 'AppConfig', state: 'BotState', data_manager: 'DataManager'):
         self.app_config = app_config
         self.state = state
         self.data_manager = data_manager
 
-    async def update_score_and_get_motivation(
+    def _should_reset_daily_data(self, last_reset_date: Optional[str]) -> bool:
+        """Проверяет, нужно ли сбросить ежедневные данные"""
+        if not last_reset_date:
+            return True
+        
+        try:
+            last_reset = datetime.fromisoformat(last_reset_date).date()
+            today = date.today()
+            return last_reset < today
+        except (ValueError, TypeError):
+            return True
+
+    def _reset_daily_data_if_needed(self, current_user_data_global: Dict[str, Any]) -> None:
+        """Сбрасывает ежедневные данные если прошел день"""
+        last_reset = current_user_data_global.get("last_daily_reset")
+        
+        if self._should_reset_daily_data(last_reset):
+            # Сбрасываем ежедневные данные
+            current_user_data_global["daily_answered_polls"] = set()
+            current_user_data_global["last_daily_reset"] = date.today().isoformat()
+            logger.info(f"Сброшены ежедневные данные для пользователя")
+
+    async     def update_score_and_get_motivation(
         self, chat_id: int, user: TelegramUser, poll_id: str, is_correct: bool,
         quiz_type_of_poll: str
-    ) -> Tuple[bool, Optional[str]]:
+    ) -> Tuple[bool, Optional[str], Optional[str]]:
         user_id_str = str(user.id)
         chat_id_str = str(chat_id)
+        
+        # Проверяем корректность данных
+        if chat_id == user.id:
+            logger.warning(f"ВНИМАНИЕ: chat_id ({chat_id}) равен user.id ({user.id}) - это личный чат")
+            # В личном чате chat_id и user.id одинаковые, это нормально
 
         # ИЗМЕНЕНО: Логика определения имени для state. Приоритет first_name.
         user_first_name = user.first_name
@@ -54,92 +83,244 @@ class ScoreManager:
                 active_quiz.scores[user_id_str]["answered_this_session"].add(poll_id)
 
         # Обновление очков в глобальной статистике (BotState.user_scores)
-        self.state.user_scores.setdefault(chat_id_str, {})
-        self.state.user_scores[chat_id_str].setdefault(user_id_str, {
-            "name": user_name_for_state,
-            "score": 0,
-            "answered_polls": set(),
-            "first_answer_time": None,
-            "last_answer_time": None,
-            "milestones_achieved": set()
-        })
+        # ИСПРАВЛЕНО: Используем правильную структуру данных
+        if chat_id not in self.state.user_scores:
+            self.state.user_scores[chat_id] = {}
 
-        current_user_data_global = self.state.user_scores[chat_id_str][user_id_str]
+        # Проверяем, есть ли уже данные пользователя
+        if user_id_str not in self.state.user_scores[chat_id]:
+            # Если пользователя нет, инициализируем с базовыми данными
+            self.state.user_scores[chat_id][user_id_str] = {
+                "name": user_name_for_state,
+                "score": 0,
+                "answered_polls": set(),  # Общая история всех ответов (для статистики)
+                "correct_answers_count": 0,  # Количество правильных ответов в чате
+                "daily_answered_polls": set(),  # НОВОЕ: ответы за сегодня
+                "first_answer_time": None,
+                "last_answer_time": None,
+                "last_daily_reset": date.today().isoformat(),  # НОВОЕ: дата последнего сброса
+                "milestones_achieved": set(),
+                "consecutive_correct": 0,  # НОВОЕ: серия правильных ответов
+                "max_consecutive_correct": 0,  # НОВОЕ: максимальная серия
+                "streak_achievements_earned": set()  # НОВОЕ: полученные ачивки за серию
+            }
+            logger.info(f"🔍 ДЕБАГ: Создан новый пользователь {user_id_str} с полями streak_achievements_earned и daily_answered_polls")
+        else:
+            # Убеждаемся, что у существующего пользователя есть все необходимые поля
+            current_user_data_global = self.state.user_scores[chat_id][user_id_str]
+            logger.info(f"🔍 ДЕБАГ: Проверяем поля существующего пользователя {user_id_str}")
+            logger.info(f"🔍 ДЕБАГ: Текущие поля: {list(current_user_data_global.keys())}")
+            
+            # НОВОЕ: Добавляем поля для ежедневной защиты от накрутки
+            if "daily_answered_polls" not in current_user_data_global:
+                current_user_data_global["daily_answered_polls"] = set()
+                logger.info(f"🔍 ДЕБАГ: Добавлено поле daily_answered_polls")
+            else:
+                logger.info(f"🔍 ДЕБАГ: Поле daily_answered_polls уже есть: {len(current_user_data_global['daily_answered_polls'])} вопросов")
+                
+            if "last_daily_reset" not in current_user_data_global:
+                current_user_data_global["last_daily_reset"] = date.today().isoformat()
+                logger.info(f"🔍 ДЕБАГ: Добавлено поле last_daily_reset")
+            else:
+                logger.info(f"🔍 ДЕБАГ: Поле last_daily_reset уже есть: {current_user_data_global['last_daily_reset']}")
+            
+            if "streak_achievements_earned" not in current_user_data_global:
+                current_user_data_global["streak_achievements_earned"] = set()
+                logger.info(f"🔍 ДЕБАГ: Добавлено поле streak_achievements_earned")
+            else:
+                logger.info(f"🔍 ДЕБАГ: Поле streak_achievements_earned уже есть: {current_user_data_global['streak_achievements_earned']}")
+                
+            if "consecutive_correct" not in current_user_data_global:
+                current_user_data_global["consecutive_correct"] = 0
+                logger.info(f"🔍 ДЕБАГ: Добавлено поле consecutive_correct")
+            else:
+                logger.info(f"🔍 ДЕБАГ: Поле consecutive_correct уже есть: {current_user_data_global['consecutive_correct']}")
+                
+            if "max_consecutive_correct" not in current_user_data_global:
+                current_user_data_global["max_consecutive_correct"] = 0
+                logger.info(f"🔍 ДЕБАГ: Добавлено поле max_consecutive_correct")
+            else:
+                logger.info(f"🔍 ДЕБАГ: Поле max_consecutive_correct уже есть: {current_user_data_global['max_consecutive_correct']}")
+
+            if "correct_answers_count" not in current_user_data_global:
+                current_user_data_global["correct_answers_count"] = 0
+                logger.info(f"🔍 ДЕБАГ: Добавлено поле correct_answers_count")
+            else:
+                logger.info(f"🔍 ДЕБАГ: Поле correct_answers_count уже есть: {current_user_data_global['correct_answers_count']}")
+
+        current_user_data_global = self.state.user_scores[chat_id][user_id_str]
+
+        # НОВОЕ: Проверяем и сбрасываем ежедневные данные если нужно
+        self._reset_daily_data_if_needed(current_user_data_global)
 
         # Обновляем имя в глобальном state, если оно изменилось
         if current_user_data_global.get("name") != user_name_for_state:
             current_user_data_global["name"] = user_name_for_state
             score_updated_in_global_state = True # Считаем это обновлением, чтобы данные сохранились
 
-        if poll_id not in current_user_data_global["answered_polls"]:
+        # НОВОЕ: Логика ачивок проверяется при каждом ответе, а не только при первом
+        motivational_message_text = ""      # Сообщение для чата (включает streak ачивки)
+        motivational_message_ls = ""        # Сообщение для лички (только чатовые ачивки, без streak)
+        streak_message_text = ""            # Только streak ачивки для удаления
+        name_for_motivation = get_username_or_firstname(user)
+        current_score_for_motivation = current_user_data_global.get("score", 0)
+        # Округляем баллы до 1 знака после запятой, как в других местах системы
+        chat_score_for_motivation = round(current_score_for_motivation, 1)
+
+        # Проверяем чатовые ачивки
+        chat_achievements_config = self.app_config.parsed_chat_achievements
+        sorted_chat_keys = sorted(chat_achievements_config.keys(), key=abs, reverse=True)
+        found_chat_milestone = None
+
+        for score_threshold in sorted_chat_keys:
+            if score_threshold > 0 and chat_score_for_motivation >= score_threshold:
+                found_chat_milestone = score_threshold
+                break
+            elif score_threshold < 0 and chat_score_for_motivation <= score_threshold:
+                found_chat_milestone = score_threshold
+                break
+            elif score_threshold == 0 and chat_score_for_motivation == 0:
+                found_chat_milestone = score_threshold
+
+        # Обрабатываем чатовые ачивки
+        if found_chat_milestone is not None:
+            chat_milestone_id = f"chat_achievement_{chat_id_str}_{user_id_str}_{found_chat_milestone}"
+            
+            # Проверяем, не была ли эта чатовая ачивка уже получена в этом чате
+            if chat_milestone_id not in current_user_data_global.get("milestones_achieved", set()):
+                # Получаем базовое чатовое сообщение и экранируем его
+                base_chat_message = chat_achievements_config[found_chat_milestone].format(
+                    user_name=name_for_motivation,
+                    user_score=chat_score_for_motivation
+                )
+                chat_message_escaped = escape_markdown_v2(base_chat_message)
+                
+                # Чатовые ачивки идут и в чат, и в личку (остаются навсегда)
+                motivational_message_text = chat_message_escaped
+                motivational_message_ls = chat_message_escaped
+                
+                # Добавляем чатовую ачивку только в текущий чат
+                current_user_data_global.setdefault("milestones_achieved", set()).add(chat_milestone_id)
+                score_updated_in_global_state = True
+                logger.info(f"Пользователь {user_id_str} ({user_name_for_state}) получил ЧАТОВУЮ ачивку {found_chat_milestone} в чате {chat_id_str} ({chat_score_for_motivation} очков).")
+
+        # Обрабатываем ачивки за серию правильных ответов
+        # ПЕРЕМЕЩЕНО: Проверяем streak ачивки ПОСЛЕ обновления серии, чтобы использовать актуальное значение
+        # Эта проверка будет выполнена в конце метода, после обновления consecutive_correct
+
+        # НОВАЯ ЛОГИКА: Обновляем очки только если пользователь не отвечал на этот вопрос СЕГОДНЯ
+        if poll_id not in current_user_data_global.get("daily_answered_polls", set()):
+            # НОВАЯ ЛОГИКА: Обновляем очки с учетом бонусов за серию (В РАМКАХ ОДНОГО ЧАТА)
+            current_score = current_user_data_global.get("score", 0)
+            current_consecutive = current_user_data_global.get("consecutive_correct", 0)
+            
             if is_correct:
-                current_user_data_global["score"] += 1
+                # Увеличиваем серию правильных ответов В ЭТОМ ЧАТЕ
+                new_consecutive = current_consecutive + 1
+                current_user_data_global["consecutive_correct"] = new_consecutive
+                
+                # Обновляем максимальную серию В ЭТОМ ЧАТЕ
+                max_consecutive = current_user_data_global.get("max_consecutive_correct", 0)
+                if new_consecutive > max_consecutive:
+                    current_user_data_global["max_consecutive_correct"] = new_consecutive
+                
+                # Проверяем, есть ли бонус за серию
+                streak_bonus_config = self.app_config.global_settings.get("streak_bonuses", {})
+                if streak_bonus_config.get("enabled", False):
+                    min_streak = streak_bonus_config.get("min_streak_for_bonus", 3)
+                    if new_consecutive >= min_streak:
+                        base_multiplier = streak_bonus_config.get("base_multiplier", 0.1)
+                        max_multiplier = streak_bonus_config.get("max_multiplier", 1.0)
+                        
+                        # Вычисляем бонус (максимум 100%)
+                        bonus_multiplier = min(new_consecutive * base_multiplier, max_multiplier)
+                        score_bonus = 1 + bonus_multiplier
+                        
+                        current_user_data_global["score"] = current_score + score_bonus
+                        logger.info(f"Пользователь {user_id_str} получил бонус за серию {new_consecutive} в чате {chat_id}: +{score_bonus:.2f} очков")
+                    else:
+                        current_user_data_global["score"] = current_score + 1
+                else:
+                    current_user_data_global["score"] = current_score + 1
             else:
-                current_user_data_global["score"] -= 0.5  # Отнимаем 0.5 очка за неправильный ответ
+                # Сбрасываем серию при неправильном ответе В ЭТОМ ЧАТЕ
+                current_user_data_global["consecutive_correct"] = 0
+                current_user_data_global["score"] = current_score - 0.5
+                logger.info(f"Пользователь {user_id_str} сбросил серию правильных ответов в чате {chat_id}")
+            
             score_updated_in_global_state = True
-            current_user_data_global["answered_polls"].add(poll_id)
+            
+            # НОВОЕ: Увеличиваем счетчик правильных ответов если ответ правильный
+            if is_correct:
+                current_user_data_global["correct_answers_count"] = current_user_data_global.get("correct_answers_count", 0) + 1
+
+            # НОВОЕ: Добавляем в ежедневные ответы (для защиты от накрутки в течение дня)
+            current_user_data_global.setdefault("daily_answered_polls", set()).add(poll_id)
+
+            # НОВОЕ: Также добавляем в общую историю (для статистики)
+            current_user_data_global.setdefault("answered_polls", set()).add(poll_id)
+            
+            # ОТЛАДКА: Логируем обновление
+            logger.info(f"ОТЛАДКА: Пользователь {user_id_str} в чате {chat_id} ответил на опрос {poll_id}. Ежедневных ответов: {len(current_user_data_global.get('daily_answered_polls', set()))}, всего ответов: {len(current_user_data_global.get('answered_polls', set()))}")
+            
+            # ИСПРАВЛЕНО: Проверяем streak ачивки ПОСЛЕ обновления серии
+            if is_correct:
+                new_consecutive = current_user_data_global.get("consecutive_correct", 0)
+                if new_consecutive > 0:
+                            # Загружаем streak ачивки из системного файла
+                            import random
+                            import json
+                            from pathlib import Path
+                            
+                            streak_messages = []
+                            try:
+                                streak_file_path = Path("data/system/streak_achievements.json")
+                                if streak_file_path.exists():
+                                    with open(streak_file_path, 'r', encoding='utf-8') as f:
+                                        streak_data = json.load(f)
+                                        # Получаем все доступные пороги из файла
+                                        available_thresholds = [int(k) for k in streak_data.get("streak_achievements", {}).keys()]
+                                        # Сортируем по убыванию и находим подходящий
+                                        for threshold in sorted(available_thresholds, reverse=True):
+                                            if new_consecutive >= threshold:
+                                                streak_messages = streak_data.get("streak_achievements", {}).get(str(threshold), [])
+                                                break
+                            except Exception as e:
+                                logger.warning(f"Не удалось загрузить streak ачивки из файла: {e}")
+                            
+                            # Если файл загрузился и есть сообщения
+                            if streak_messages:
+                                # Выбираем случайное сообщение из вариантов
+                                random_message = random.choice(streak_messages)
+                                streak_message = random_message.format(
+                                    user_name=name_for_motivation,
+                                    streak=new_consecutive
+                                )
+                                
+                                streak_message_escaped = escape_markdown_v2(streak_message)
+                                
+                                # Streak ачивки добавляются в отдельное сообщение для удаления
+                                if streak_message_text:
+                                    streak_message_text += f"\n\n{streak_message_escaped}"
+                                else:
+                                    streak_message_text = streak_message_escaped
+                                
+                                logger.info(f"Пользователь {user_id_str} ({user_name_for_state}) получил АЧИВКУ ЗА СЕРИЮ {threshold} в чате {chat_id_str} (серия: {new_consecutive} правильных ответов подряд).")
+        else:
+            logger.debug(f"Пользователь {user_id_str} уже отвечал на опрос {poll_id} сегодня")
 
             now_utc = datetime.now(timezone.utc)
             if current_user_data_global["first_answer_time"] is None:
                 current_user_data_global["first_answer_time"] = now_utc.isoformat()
             current_user_data_global["last_answer_time"] = now_utc.isoformat()
 
-            # Логика мотивационных сообщений
-            # Используем get_username_or_firstname для текста мотивационного сообщения,
-            # чтобы сохранить старое поведение (показ @username если есть).
-            name_for_motivation = get_username_or_firstname(user)
-            current_score_for_motivation = current_user_data_global["score"]
-            milestones_config = self.app_config.parsed_motivational_messages
-
-            # Ищем подходящее сообщение по очкам, начиная с наибольшего порога
-            # Сообщения могут быть как для положительных, так и для отрицательных порогов
-            # Сортируем ключи (очки) по убыванию абсолютного значения, чтобы сначала проверять "крупные" изменения
-            sorted_milestones_keys = sorted(milestones_config.keys(), key=abs, reverse=True)
-
-            found_milestone_for_message = None
-
-            for score_threshold in sorted_milestones_keys:
-                # Положительные пороги: достигаются при score >= threshold
-                if score_threshold > 0 and current_score_for_motivation >= score_threshold:
-                    found_milestone_for_message = score_threshold
-                    break
-                # Отрицательные пороги: достигаются при score <= threshold
-                elif score_threshold < 0 and current_score_for_motivation <= score_threshold:
-                    found_milestone_for_message = score_threshold
-                    break
-                # Порог 0: если других не подошло и есть сообщение для 0
-                elif score_threshold == 0 and current_score_for_motivation == 0 :
-                    found_milestone_for_message = score_threshold
-                    # не break, т.к. могут быть специфичные отрицательные пороги ниже 0
-
-            if found_milestone_for_message is not None:
-                # Проверяем, не было ли это сообщение уже отправлено для этого порога
-                milestone_id_str = f"motivational_{chat_id_str}_{user_id_str}_{found_milestone_for_message}" # Более уникальный ID
-                achieved_milestones_set = current_user_data_global.setdefault("milestones_achieved", set())
-
-                should_send_message = False
-                if found_milestone_for_message > 0 and current_score_for_motivation >= found_milestone_for_message:
-                    should_send_message = True
-                elif found_milestone_for_message < 0 and current_score_for_motivation <= found_milestone_for_message:
-                    should_send_message = True
-
-                if should_send_message and milestone_id_str not in achieved_milestones_set:
-                    motivational_message_text = self.app_config.parsed_motivational_messages[found_milestone_for_message].format(
-                        user_name=escape_markdown_v2(name_for_motivation),
-                        user_score=current_score_for_motivation
-                    )
-                    achieved_milestones_set.add(milestone_id_str)
-                    score_updated_in_global_state = True
-                    logger.info(f"Пользователь {user_id_str} ({user_name_for_state}) в чате {chat_id_str} достиг рубежа {found_milestone_for_message} ({current_score_for_motivation} очков). Сообщение: '{motivational_message_text[:50]}...'")
-                    # break # Если хотим отправлять только одно сообщение за раз, раскомментировать
-        else: # poll_id уже был в answered_polls, но имя могло измениться
-            if not score_updated_in_global_state: # Если только имя изменилось, а очки нет
-                 pass # score_updated_in_global_state уже true, если имя менялось
-
         if score_updated_in_global_state:
-            self.data_manager.save_user_data()
+            # Сохраняем данные для конкретного чата
+            self.data_manager.save_user_data(chat_id)
+            # Обновляем глобальную статистику
+            self.data_manager.update_global_statistics()
 
-        return score_updated_in_global_state, motivational_message_text
+        return score_updated_in_global_state, motivational_message_text, motivational_message_ls, streak_message_text
 
     def get_rating_icon(self, score: int) -> str:
         if score > 0:
@@ -163,90 +344,136 @@ class ScoreManager:
     ) -> str:
         logger.debug(f"format_scores вызван. Title: '{title}', is_session: {is_session_score}, num_q_sess: {num_questions_in_session}, items: {len(scores_list)}")
 
+        # КЭШИРОВАНИЕ: Создаем ключ кэша для быстрой работы
+        cache_key = f"scores_{title}_{is_session_score}_{num_questions_in_session}_{hash(str(scores_list))}"
+        
+        # Проверяем кэш
+        if hasattr(self, '_scores_cache') and cache_key in self._scores_cache:
+            logger.debug(f"Используем кэшированный рейтинг для '{title}'")
+            return self._scores_cache[cache_key]
+
         escaped_title = escape_markdown_v2(title)
         if not scores_list:
             empty_message = "Пока нет результатов для отображения."
             if is_session_score:
                 empty_message = "Никто не набрал очков в этой сессии."
-            return f"*{escaped_title}*\n\n{escape_markdown_v2(empty_message)}"
+            result = f"*{escaped_title}*\n\n{escape_markdown_v2(empty_message)}"
+        else:
+            lines = [f"*{escaped_title}*"]
 
-        lines = [f"*{escaped_title}*"]
-
-        if is_session_score and num_questions_in_session is not None:
-            # В сессионном счете мы показываем X/Y, поэтому счет в скобках не нужен
-            # lines.append(escape_markdown_v2(f"(Всего вопросов в сессии: {num_questions_in_session})"))
-            pass # Убрано для компактности и соответствия новому формату
-
-        lines.append("") # Пустая строка для разделения
-
-        place_icons = ["🥇", "🥈", "🥉"] # Определяем здесь, чтобы использовать ниже
-
-        for i, entry in enumerate(scores_list):
-            user_id_for_name = entry.get("user_id", "??") # Используем user_id для fallback имени
-            user_name_raw = entry.get('name', f'Игрок {user_id_for_name}')
-            score_val = entry.get('score', 0)
-
-            line_parts: List[str] = []
-
-            # 1. Место (иконка или номер)
-            if i < len(place_icons) and score_val > 0: # Медали только для топ-3 с положительным счетом
-                line_parts.append(place_icons[i])
-            else:
-                line_parts.append(f"{escape_markdown_v2(str(i + 1))}\. ") # Экранируем точку и добавляем пробел
-
-            # 2. Иконка рейтинга (эмодзи) - теперь определяется score, а не рангом
-            rating_icon = self.get_rating_icon(score_val)
-            line_parts.append(rating_icon)
-
-            # 3. Имя и очки - ИЗМЕНЕНА ЛОГИКА ФОРМИРОВАНИЯ ЭТОЙ ЧАСТИ
-            escaped_user_name = escape_markdown_v2(user_name_raw)
-
-            final_name_score_segment: str
             if is_session_score and num_questions_in_session is not None:
-                # Формат для сессии: "Имя: C/Y \| <ACHIEVEMENT> T"
-                correct_val = entry.get('correct_count', entry.get('correct', None))
-                if correct_val is None:
-                    # Фоллбек: если нет явного количества правильных ответов, используем max(score, 0)
-                    try:
-                        correct_val = int(score_val) if score_val > 0 else 0
-                    except Exception:
-                        correct_val = 0
-                score_display_for_session = f"{correct_val}/{num_questions_in_session}"
-                right_total_val = entry.get('global_total_score')
-                ach_icon = entry.get('achievement_icon', '⭐')
-                if right_total_val is not None:
-                    final_name_score_segment = f"{escaped_user_name}: `{escape_markdown_v2(score_display_for_session)}` \| {ach_icon} `{escape_markdown_v2(str(right_total_val))}`"
+                # В сессионном счете мы показываем X/Y, поэтому счет в скобках не нужен
+                # lines.append(escape_markdown_v2(f"(Всего вопросов в сессии: {num_questions_in_session})"))
+                pass # Убрано для компактности и соответствия новому формату
+
+            lines.append("") # Пустая строка для разделения
+
+            place_icons = ["🥇", "🥈", "🥉"] # Определяем здесь, чтобы использовать ниже
+
+            for i, entry in enumerate(scores_list):
+                user_id_for_name = entry.get("user_id", "??") # Используем user_id для fallback имени
+                user_name_raw = entry.get('name', f'Игрок {user_id_for_name}')
+                score_val = entry.get('score', 0)
+
+                line_parts: List[str] = []
+
+                # 1. Место (иконка или номер)
+                if i < len(place_icons) and score_val > 0: # Медали только для топ-3 с положительным счетом
+                    line_parts.append(place_icons[i])
                 else:
-                    final_name_score_segment = f"{escaped_user_name}: `{escape_markdown_v2(score_display_for_session)}`"
-            else:
-                # Общий формат "Имя - X очков" (для общего рейтинга и для сессии без X/Y)
-                # Текст очков с правильным окончанием ("1 очко", "2 очка", "5 очков")
-                player_score_pluralized_text = pluralize(score_val, "очко", "очка", "очков")
+                    line_parts.append(f"{escape_markdown_v2(str(i + 1))}\\. ") # Экранируем точку и добавляем пробел
 
-                # Определяем часть со счетом для вывода
-                score_display_part: str
-                if score_val < 0:
-                    # Для отрицательного счета добавляем минус перед числом
-                    # Используем абсолютное значение для текста плюрализации, но сохраняем знак для вывода
-                    # Предполагаем, что pluralize(score_val) вернет текст типа "74 очка" для score_val=-74
-                    score_display_part = f"- {escape_markdown_v2(player_score_pluralized_text)}" # Добавляем минус и пробел
+                # 2. Иконка рейтинга (эмодзи) - теперь определяется score, а не рангом
+                rating_icon = self.get_rating_icon(score_val)
+                line_parts.append(rating_icon)
+
+                # 3. Имя и очки - ИЗМЕНЕНА ЛОГИКА ФОРМИРОВАНИЯ ЭТОЙ ЧАСТИ
+                escaped_user_name = escape_markdown_v2(user_name_raw)
+
+                final_name_score_segment: str
+                if is_session_score and num_questions_in_session is not None:
+                    # Формат для сессии: "Имя: C/Y | СТАТИСТИКА ЧАТА | <ACHIEVEMENT> T"
+                    correct_val = entry.get('correct_count', entry.get('correct', None))
+                    if correct_val is None:
+                        # Фоллбек: если нет явного количества правильных ответов, используем max(score, 0)
+                        try:
+                            correct_val = int(score_val) if score_val > 0 else 0
+                        except Exception:
+                            correct_val = 0
+                    score_display_for_session = f"{correct_val}/{num_questions_in_session}"
+
+                    # Статистика в текущем чате
+                    current_chat_score = entry.get('current_chat_score', 0)
+                    current_chat_answered = entry.get('current_chat_answered', 0)
+
+                    # Формируем строку статистики чата
+                    if current_chat_answered > 0:
+                        score_str = str(round(current_chat_score, 1))
+                        answered_str = str(current_chat_answered)
+                        chat_stats_text = f"`🏠 {escape_markdown_v2(score_str)} \\| {escape_markdown_v2(answered_str)}`"
+                    else:
+                        chat_stats_text = "`🏠 0.0 \\| 0`"
+
+                    right_total_val = entry.get('global_total_score')
+                    ach_icon = entry.get('achievement_icon', '⭐')
+                    if right_total_val is not None:
+                        # Округляем глобальные очки до 1 знака после запятой
+                        rounded_global_score = round(float(right_total_val), 1)
+
+                        # Получаем данные для нового формата
+                        current_chat_answered = entry.get('current_chat_answered', 0)
+                        current_chat_correct = entry.get('current_chat_correct', 0)
+
+                        # Формируем статистику: правильные в чате / всего отвеченных в чате
+                        answers_stats = f"{current_chat_correct}/{current_chat_answered}" if current_chat_answered > 0 else "0/0"
+
+                        # Новый формат: имя + результат сессии + статистика ответов + чат + глобальный
+                        # Имя обычным текстом, только числа в обратных кавычках, палочки тоже обычным текстом
+                        final_name_score_segment = f"{ach_icon} {escaped_user_name}: `{escape_markdown_v2(score_display_for_session)}` \\| `{escape_markdown_v2(answers_stats)}` \\| `🏠 {escape_markdown_v2(str(round(current_chat_score, 1)))}` \\| `👑 {escape_markdown_v2(str(rounded_global_score))}`"
+                    else:
+                        final_name_score_segment = f"{escaped_user_name}: `{escape_markdown_v2(score_display_for_session)}` \\| {chat_stats_text}"
                 else:
-                    score_display_part = escape_markdown_v2(player_score_pluralized_text)
+                    # Общий формат "Имя - X очков" (для общего рейтинга и для сессии без X/Y)
+                    # Текст очков с правильным окончанием ("1 очко", "2 очка", "5 очков")
+                    player_score_pluralized_text = pluralize(score_val, "очко", "очка", "очков")
 
-                # Формируем конечный сегмент "Имя: `Счет`"
-                final_name_score_segment = f"{escaped_user_name}: `{score_display_part}`" # Числа в коде
+                    # Определяем часть со счетом для вывода
+                    score_display_part: str
+                    if score_val < 0:
+                        # Для отрицательного счета добавляем минус перед числом
+                        # Используем абсолютное значение для текста плюрализации, но сохраняем знак для вывода
+                        # Предполагаем, что pluralize(score_val) вернет текст типа "74 очка" для score_val=-74
+                        score_display_part = f"- {escape_markdown_v2(player_score_pluralized_text)}" # Добавляем минус и пробел
+                    else:
+                        score_display_part = escape_markdown_v2(player_score_pluralized_text)
 
-            line_parts.append(final_name_score_segment)
-            lines.append(" ".join(line_parts))
+                    # Формируем конечный сегмент "Имя: `Счет`"
+                    final_name_score_segment = f"{escaped_user_name}: `{score_display_part}`" # Числа в коде
 
-        return "\n".join(lines)
+                line_parts.append(final_name_score_segment)
+                lines.append(" ".join(line_parts))
+
+            result = "\n".join(lines)
+
+        # КЭШИРОВАНИЕ: Сохраняем результат в кэш
+        if not hasattr(self, '_scores_cache'):
+            self._scores_cache = {}
+        self._scores_cache[cache_key] = result
+        
+        # Ограничиваем размер кэша (храним только последние 100 результатов)
+        if len(self._scores_cache) > 100:
+            # Удаляем самый старый элемент
+            oldest_key = next(iter(self._scores_cache))
+            del self._scores_cache[oldest_key]
+
+        return result
 
     def get_chat_rating(self, chat_id: int, top_n: int = 10) -> List[Dict[str, Any]]:
-        chat_id_str = str(chat_id)
-        if chat_id_str not in self.state.user_scores or not self.state.user_scores[chat_id_str]:
+        # chat_id уже int, используем его напрямую
+        if chat_id not in self.state.user_scores or not self.state.user_scores[chat_id]:
             return []
 
-        scores_in_chat = self.state.user_scores[chat_id_str]
+        scores_in_chat = self.state.user_scores[chat_id]
         # Сортируем по убыванию очков, затем по имени (для стабильности при равных очках)
         # data.get('name', '') or f"User {uid}" ensures name exists for sorting
         sorted_users = sorted(
@@ -258,6 +485,8 @@ class ScoreManager:
         for i, (user_id_str, data) in enumerate(sorted_users[:top_n]):
             user_name = data.get("name", f"User {user_id_str}") # Уже должно быть подготовлено
             score = data.get("score", 0)
+            # ИСПРАВЛЕНО: Округляем очки до 1 знака после запятой
+            score = round(score, 1)
             try:
                 user_id_int = int(user_id_str)
             except ValueError:
@@ -268,19 +497,19 @@ class ScoreManager:
     def get_global_rating(self, top_n: int = 10) -> List[Dict[str, Any]]:
         global_scores_agg: Dict[str, Dict[str, Any]] = {} # user_id_str -> {"name": ..., "score": ...}
 
-        for chat_id_str, users_in_chat_dict in self.state.user_scores.items():
-            for user_id_str, user_data_dict in users_in_chat_dict.items():
+        for chat_id, users_in_chat_dict in self.state.user_scores.items():
+            for user_id, user_data_dict in users_in_chat_dict.items():
                 user_score = user_data_dict.get("score", 0)
-                user_name = user_data_dict.get("name", f"User {user_id_str}") # Имя уже должно быть подготовлено
+                user_name = user_data_dict.get("name", f"User {user_id}") # Имя уже должно быть подготовлено
 
-                if user_id_str not in global_scores_agg:
-                    global_scores_agg[user_id_str] = {"name": user_name, "score": 0}
+                if user_id not in global_scores_agg:
+                    global_scores_agg[user_id] = {"name": user_name, "score": 0}
 
-                global_scores_agg[user_id_str]["score"] += user_score
+                global_scores_agg[user_id]["score"] += user_score
                 # Имя берем из первой встреченной записи; можно улучшить, если имя может меняться глобально
                 # Но так как имя теперь first_name, оно должно быть консистентно для user_id
-                if global_scores_agg[user_id_str]["name"] == f"User {user_id_str}" and user_name != f"User {user_id_str}":
-                    global_scores_agg[user_id_str]["name"] = user_name
+                if global_scores_agg[user_id]["name"] == f"User {user_id}" and user_name != f"User {user_id}":
+                    global_scores_agg[user_id]["name"] = user_name
 
 
         sorted_global_users = sorted(
@@ -294,16 +523,19 @@ class ScoreManager:
                 user_id_int = int(user_id_str)
             except ValueError:
                 user_id_int = 0
+            score = data.get("score", 0)
+            # ИСПРАВЛЕНО: Округляем очки до 1 знака после запятой
+            score = round(score, 1)
             top_global_list.append({
                 "user_id": user_id_int,
                 "name": data.get("name", f"User {user_id_str}"),
-                "score": data.get("score", 0)
+                "score": score
             })
         return top_global_list
 
     def get_user_stats_in_chat(self, chat_id: int, user_id: str) -> Optional[Dict[str, Any]]:
-        chat_id_str = str(chat_id)
-        user_scores_chat = self.state.user_scores.get(chat_id_str, {}).get(user_id)
+        # chat_id уже int, user_id остается str
+        user_scores_chat = self.state.user_scores.get(chat_id, {}).get(user_id)
         if not user_scores_chat:
             return None
 
@@ -369,8 +601,13 @@ class ScoreManager:
         if display_name is None: # Если пользователь нигде не имел осмысленного имени
             display_name = f"User {user_id}"
 
+        # Округляем общий счет до 1 знака после запятой
+        total_score = round(total_score, 1)
+
         # Избегаем деления на ноль
         average_score_per_poll = (total_score / total_answered_polls) if total_answered_polls > 0 else 0.0
+        # Округляем средний счет до 2 знаков после запятой
+        average_score_per_poll = round(average_score_per_poll, 2)
 
         return {
             "name": display_name,
@@ -379,5 +616,34 @@ class ScoreManager:
             "average_score_per_poll": average_score_per_poll,
             "first_answer_time_overall": first_answer_overall,
             "last_answer_time_overall": last_answer_overall,
+        }
+
+    def get_current_chat_user_stats(self, user_id: str, chat_id: int) -> Optional[Dict[str, Any]]:
+        """Получает статистику пользователя только в текущем чате"""
+        user_id_str = str(user_id)
+
+        if chat_id not in self.state.user_scores:
+            return None
+
+        user_chat_data = self.state.user_scores[chat_id].get(user_id_str)
+        if not user_chat_data:
+            return None
+
+        total_score = user_chat_data.get("score", 0)
+        answered_polls = user_chat_data.get("answered_polls", set())
+        total_answered_polls = len(answered_polls) if isinstance(answered_polls, set) else 0
+        correct_answers_count = user_chat_data.get("correct_answers_count", 0)
+        display_name = user_chat_data.get("name", f"User {user_id}")
+
+        # Избегаем деления на ноль
+        average_score_per_poll = (total_score / total_answered_polls) if total_answered_polls > 0 else 0.0
+        average_score_per_poll = round(average_score_per_poll, 2)
+
+        return {
+            "name": display_name,
+            "total_score": round(total_score, 1),
+            "answered_polls": total_answered_polls,
+            "correct_answers_count": correct_answers_count,
+            "average_score_per_poll": average_score_per_poll,
         }
 

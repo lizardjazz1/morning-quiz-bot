@@ -1,11 +1,11 @@
 #app_config.py
 import json
-import logging
 import os
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+from modules.logger_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 logger.debug("Модуль app_config.py начал загружаться.")
 
 try:
@@ -47,21 +47,21 @@ class CommandConfig:
         self.top: str = commands_data.get("top", "top")
         self.global_top: str = commands_data.get("globaltop", "globaltop")
         self.mystats: str = commands_data.get("mystats", "mystats")
+        self.chatcategories: str = commands_data.get("chatcategories", "chatcategories")
         self.stop_quiz: str = commands_data.get("stopquiz", "stopquiz")
         self.cancel: str = commands_data.get("cancel", "cancel")
 
         # Имена команд для администрирования
-        self.config: str = commands_data.get("config", "config") # Старая команда config, оставлена для совместимости, если где-то используется
         self.admin_settings: str = commands_data.get("admin_settings", "adminsettings") # Новая команда для ConversationHandler настроек
-        self.view_chat_config: str = commands_data.get("view_chat_config", "viewchatconfig") # Для просмотра конфига чата
-        self.add_admin: str = commands_data.get("add_admin", "addadmin") # Команда для добавления администратора
 
         self.adddailyquiz: str = commands_data.get("adddailyquiz", "adddailyquiz")
         self.removedailyquiz: str = commands_data.get("removedailyquiz", "removedailyquiz")
         self.listdailyquizzes: str = commands_data.get("listdailyquizzes", "listdailyquizzes")
         self.reloadcfg: str = commands_data.get("reloadcfg", "reloadcfg")
         self.reset_categories_stats: str = commands_data.get("reset_categories_stats", "reset_categories_stats")
-        self.test_categories: str = commands_data.get("test_categories", "test_categories")
+        self.chat_stats: str = commands_data.get("chat_stats", "chat_stats")
+        self.category_stats: str = commands_data.get("category_stats", "category_stats")
+        self.daily_wisdom: str = commands_data.get("daily_wisdom", "dailywisdom")
         logger.debug("CommandConfig.__init__ завершен.")
 
 class PathConfig:
@@ -149,12 +149,33 @@ class AppConfig:
         self.max_poll_option_length: int = self.global_settings.get("max_poll_option_length", 90)
         self.rating_display_limit: int = self.global_settings.get("rating_display_limit", 10)
         self.max_daily_quiz_times_per_chat: int = self.global_settings.get("max_daily_quiz_times_per_chat", 5)
-        logger.debug("AppConfig: Глобальные параметры установлены.")
 
-        self.parsed_motivational_messages: Dict[int, str] = self._parse_motivational_messages(
-            self.global_settings.get("motivational_messages", {})
+        # ===== НАСТРОЙКИ ОПТИМИЗАЦИИ CPU USAGE =====
+        # Минимальный интервал между сохранениями данных (секунды)
+        self.data_save_throttle_seconds: int = self.global_settings.get("data_save_throttle_seconds", 30)
+
+        # Максимальное количество одновременных I/O операций
+        self.max_concurrent_io_operations: int = self.global_settings.get("max_concurrent_io_operations", 5)
+
+        # Интервал очистки кэшей (секунды)
+        self.cache_cleanup_interval_seconds: int = self.global_settings.get("cache_cleanup_interval_seconds", 300)
+
+        # Размер LRU кэша для markdown
+        self.markdown_cache_size: int = self.global_settings.get("markdown_cache_size", 1000)
+
+        # Rate limiting для API вызовов (запросов в минуту)
+        self.api_rate_limit_per_minute: int = self.global_settings.get("api_rate_limit_per_minute", 30)
+
+        logger.debug("AppConfig: Глобальные параметры и оптимизации CPU установлены.")
+
+        self.parsed_chat_achievements: Dict[int, str] = self._parse_achievement_messages(
+            self.global_settings.get("chat_achievements", {})
         )
-        logger.debug("AppConfig: Мотивационные сообщения обработаны.")
+        logger.debug("AppConfig: Чатовые ачивки обработаны.")
+        
+        # Streak ачивки теперь загружаются из data/system/streak_achievements.json
+        self.parsed_streak_achievements: Dict[int, str] = {}
+        logger.debug("AppConfig: Streak ачивки пропущены (загружаются из отдельного файла).")
 
         _daily_type_cfg = self.quiz_types_config.get("daily", {})
         _daily_chat_defaults_from_config = self.default_chat_settings.get("daily_quiz", {})
@@ -189,6 +210,18 @@ class AppConfig:
                 "enabled_categories": None, "disabled_categories": [],
                 "auto_delete_bot_messages": True, # ИЗМЕНЕНИЕ: Добавлена новая настройка
                 "num_categories_per_quiz": 3, # ИЗМЕНЕНИЕ: Количество категорий для обычных викторин
+                "quiz_categories_mode": "all", # НОВОЕ: Режим выбора категорий для /quiz
+                "quiz_categories_pool": [], # НОВОЕ: Пул категорий для /quiz
+                # НОВОЕ: Настройки для /quiz команды
+                "quiz_settings": {
+                    "default_categories_mode": "all",  # all, random, specific
+                    "default_num_random_categories": 3,
+                    "default_specific_categories": [],
+                    "default_interval_seconds": 30,
+                    "default_open_period_seconds": 30,
+                    "default_announce_quiz": False,
+                    "default_announce_delay_seconds": 5
+                },
                 "daily_quiz": {
                     "enabled": False, "times_msk": [{"hour": 7, "minute": 0}], "categories_mode": "random",
                     "num_random_categories": 3, "specific_categories": [], "num_questions": 10,
@@ -210,16 +243,69 @@ class AppConfig:
                 "commands": {
                     "start": "start", "help": "help", "quiz": "quiz", "categories": "categories", "top": "top",
                     "global_top": "globaltop", "mystats": "mystats", "stop_quiz": "stopquiz", "cancel": "cancel",
-                    "config": "config", "admin_settings": "adminsettings", "view_chat_config": "viewchatconfig",
-                    "adddailyquiz": "adddailyquiz", "removedailyquiz": "removedailyquiz",
-                    "listdailyquizzes": "listdailyquizzes", "reloadcfg": "reloadcfg", "test_categories": "test_categories",
-                    "reset_categories_stats": "reset_categories_stats"
+                    "chatcategories": "chatcategories", "config": "config", "admin_settings": "adminsettings",
+                    "view_chat_config": "viewchatconfig", "adddailyquiz": "adddailyquiz", "removedailyquiz": "removedailyquiz",
+                    "listdailyquizzes": "listdailyquizzes", "reloadcfg": "reloadcfg",
+                    "reset_categories_stats": "reset_categories_stats", "chat_stats": "chat_stats", "category_stats": "category_stats",
+                    "daily_wisdom": "dailywisdom"
                 },
                 "max_questions_per_session": 50, "max_interactive_categories_to_show": 10,
                 "job_grace_period_seconds": 3, "max_poll_question_length": 280,
                 "max_poll_option_length": 90, "rating_display_limit": 10,
                 "max_daily_quiz_times_per_chat": 5,
-                "motivational_messages": {"10": "Отличный старт, {user_name}! У тебя уже {user_score} очков!", "-5": "{user_name}, не везет... У тебя {user_score} очков. Не сдавайся!"}
+                "chat_achievements": {
+                    "-100": "💀 {user_name}, ты блин издеваешься, такое не возможно вообще! Попробуй не вытворять больше!",
+                    "-50": "😵 {user_name}, ну и нуб, прям с порога падает... Поправься уже!",
+                    "-25": "⚰️ {user_name}, это уже эпично... {user_score} очков. Нужен герой!",
+                    "-20": "🤦‍♂️ {user_name}, опять промах? Кажется, тебе пора на тренировку.",
+                    "-10": "🙃 {user_name}, ну ничего, даже у профессионалов бывают плохие дни... правда?",
+                    "-5": "😔 {user_name}, не везет... У тебя {user_score} очков. Не сдавайся!",
+                    "0": "😐 {user_name}, нейтральная территория. {user_score} очков. Время действовать!",
+                    "15": "🎯 {user_name} первый шаг! 15 очков — начало пути!",
+                    "30": "🔥 {user_name} разогревается и зажигает чат! 30 очков!",
+                    "50": "🌟 {user_name} - легенда чата! {user_score} очков!",
+                    "75": "⚡ {user_name} повышает уровень — 75 очков в кармане!",
+                    "100": "💎 {user_name} - бриллиант чата! {user_score} очков!",
+                    "150": "🏅 {user_name} уверенно входит в топ — 150 очков!",
+                    "250": "💎 Ого ого! {user_name} набрал {user_score} очков!",
+                    "300": "💎 {user_name} набрал 300 очков! Ты настоящий алмаз в нашем сообществе!",
+                    "350": "🪐 {user_name} полёт на орбиту знаний — 350 очков!",
+                    "500": "🏆 {user_name} набрал 500 очков! Настоящий чемпион!",
+                    "600": "👑 {user_name} новый БОСС викторины! 600 очков — вершина земного уровня!",
+                    "750": "🌈 {user_name} набрал 750 очков! Дал дал ушёл!",
+                    "800": "🌈 {user_name} переступает грань возможного — 800 очков!",
+                    "1000": "✨ {user_name} набрал 1000 очков! Ты легенда!",
+                    "1200": "✨ {user_name} — легенда вне понимания! 1200 очков!",
+                    "1500": "🔥 {user_name} набрал 1500 очков! Огонь неистощимой энергии!",
+                    "1700": "🌋🔥 {user_name} взрывается, как суперновая звезда! 1700 очков!",
+                    "2000": "🚀 {user_name} набрал 2000 очков! Сверхзвездный уровень!",
+                    "2200": "🌀 {user_name} достиг(ла) вихря космического сознания! 2200 очков!",
+                    "2500": "⚔️ {user_name} набрал 2500 очков! Персонаж мифов и легенд!",
+                    "2700": "⚔️ {user_name} теперь персонаж мифов и легенд! 2700 очков!",
+                    "3000": "👑 {user_name} набрал 3000 очков! Царь и бог знаний!",
+                    "3200": "👾 {user_name} властвует над мультивселенной знаний! 3200 очков!",
+                    "3500": "🌌 {user_name} набрал 3500 очков! Космический уровень!",
+                    "3700": "🌌⚡ {user_name} разрывает пространство и время! 3700 очков!",
+                    "4000": "🌟 {user_name} набрал 4000 очков! Звездный уровень!",
+                    "4200": "⛩️ {user_name} вошёл(ла) в ранг божества всезнания! 4200 очков!",
+                    "4500": "💫 {user_name} набрал 4500 очков! Божественный уровень!",
+                    "4700": "🧬 {user_name} переписал(а) ДНК самой викторины! 4700 очков!",
+                    "5000": "💥 {user_name} набрал 5000 очков! Э-э-это ты создатель вселенной?!",
+                    "5200": "💀🚫 ВСЁ, {user_name} СЛОМАЛ(А) СИСТЕМУ! 5200 очков!",
+                    "5500": "🌌 {user_name} набрал 5500 очков! За пределами понимания!",
+                    "6000": "💎✨ {user_name} достиг абсолютного совершенства! 6000 очков! Конец игры!",
+                    "5": "🎯 {user_name} начинает свой путь в этом чате! {user_score} очков!",
+                    "10": "🔥 {user_name} разогревается! {user_score} очков в чате!",
+                    "25": "👑 {user_name} - король этого чата! {user_score} очков!"
+                },
+                # УДАЛЕНО: Streak ачивки теперь загружаются из data/system/streak_achievements.json
+                # НОВОЕ: Настройки бонусов за серию
+                "streak_bonuses": {
+                    "enabled": True,
+                    "base_multiplier": 0.2,
+                    "max_multiplier": 3.0,
+                    "min_streak_for_bonus": 5
+                }
             }
         }
         try:
@@ -271,18 +357,18 @@ class AppConfig:
         logger.warning("AppConfig._load_json_config: Возвращается дефолтная структура конфигурации.")
         return default_config_structure
 
-    def _parse_motivational_messages(self, messages_config: Dict[str, str]) -> Dict[int, str]:
-        logger.debug("AppConfig._parse_motivational_messages начат.")
+    def _parse_achievement_messages(self, messages_config: Dict[str, str]) -> Dict[int, str]:
+        logger.debug("AppConfig._parse_achievement_messages начат.")
         parsed_messages: Dict[int, str] = {}
         if not isinstance(messages_config, dict):
-            logger.warning("AppConfig._parse_motivational_messages: Конфигурация 'motivational_messages' не является словарем.")
+            logger.warning("AppConfig._parse_achievement_messages: Конфигурация 'chat_achievements' не является словарем.")
             return {}
         for k_str, v_str in messages_config.items():
             try:
                 parsed_messages[int(k_str)] = str(v_str)
             except ValueError:
-                logger.warning(f"AppConfig._parse_motivational_messages: Не удалось конвертировать ключ '{k_str}' в int.")
-        logger.debug(f"AppConfig._parse_motivational_messages завершен. Обработано {len(parsed_messages)} сообщений.")
+                logger.warning(f"AppConfig._parse_achievement_messages: Не удалось конвертировать ключ '{k_str}' в int.")
+        logger.debug(f"AppConfig._parse_achievement_messages завершен. Обработано {len(parsed_messages)} сообщений.")
         return parsed_messages
 
 logger.debug("Модуль app_config.py завершил загрузку.")

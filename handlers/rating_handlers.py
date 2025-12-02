@@ -85,7 +85,7 @@ class RatingHandlers:
         user_chat_stats = self.score_manager.get_user_stats_in_chat(chat_id, user_id_str)
         user_global_stats = self.score_manager.get_global_user_stats(user_id_str)
 
-        reply_parts = [f"📊 *Ваша статистика, {user_first_name_escaped}*"]
+        reply_parts = [escape_markdown_v2(f"📊 Ваша статистика, {user.first_name}")]
 
         if user_chat_stats:
             score_chat = user_chat_stats.get('score', 0)
@@ -94,22 +94,24 @@ class RatingHandlers:
             chat_title_val = update.effective_chat.title if update.effective_chat.title else "этот чат"
             chat_title_escaped = escape_markdown_v2(chat_title_val)
 
-            reply_parts.append(f"\n🏆 *В чате \\({chat_title_escaped}\\):*")
-            reply_parts.append(f"{escape_markdown_v2('⭐ Общий рейтинг:')} `{escape_markdown_v2(str(score_chat))}`")
-            reply_parts.append(f"{escape_markdown_v2('🙋 Отвечено на опросы:')} `{escape_markdown_v2(str(answered_chat))}`")
-            reply_parts.append(f"{escape_markdown_v2('🎯 Средний балл за опрос:')} `{escape_markdown_v2(f'{avg_score_chat:.2f}')}`")
+            reply_parts.append(escape_markdown_v2(f"\n🏆 В чате ({chat_title_val}):"))
+            # ИСПРАВЛЕНО: Округляем score_chat до 1 знака для устранения проблемы с плавающей точкой
+            reply_parts.append(escape_markdown_v2(f"⭐ Рейтинг: {round(score_chat, 1)}"))
+            reply_parts.append(escape_markdown_v2(f"🙋 Отвечено на опросы: {answered_chat}"))
+            reply_parts.append(escape_markdown_v2(f"🎯 Средний балл за опрос: {avg_score_chat:.2f}"))
         else:
-            reply_parts.append(f"\n{escape_markdown_v2(f'{user.first_name}, у вас пока нет статистики в этом чате.')}")
+            reply_parts.append(escape_markdown_v2(f"\n{user.first_name}, у вас пока нет статистики в этом чате."))
 
         if user_global_stats:
             global_total_score = user_global_stats.get('total_score', 0)
             global_answered_polls = user_global_stats.get('answered_polls', 0)
             global_avg_score = user_global_stats.get('average_score_per_poll', 0.0)
 
-            reply_parts.append(f"\n🌍 *Глобально:*")
-            reply_parts.append(f"{escape_markdown_v2('⭐ Общий рейтинг:')} `{escape_markdown_v2(str(global_total_score))}`")
-            reply_parts.append(f"{escape_markdown_v2('🙋 Всего отвечено на опросы:')} `{escape_markdown_v2(str(global_answered_polls))}`")
-            reply_parts.append(f"{escape_markdown_v2('🎯 Средний балл за опрос:')} `{escape_markdown_v2(f'{global_avg_score:.2f}')}`")
+            reply_parts.append(escape_markdown_v2(f"\n🌍 Глобально:"))
+            # ИСПРАВЛЕНО: Округляем глобальный рейтинг до 1 знака после запятой
+            reply_parts.append(escape_markdown_v2(f"⭐ Общий рейтинг: {round(global_total_score, 1)}"))
+            reply_parts.append(escape_markdown_v2(f"🙋 Всего отвечено на опросы: {global_answered_polls}"))
+            reply_parts.append(escape_markdown_v2(f"🎯 Средний балл за опрос: {global_avg_score:.1f}"))
         else:
              reply_parts.append(f"\n{escape_markdown_v2(f'{user.first_name}, у вас пока нет глобальной статистики.')}")
 

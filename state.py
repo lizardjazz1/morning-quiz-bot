@@ -1,9 +1,9 @@
 #state.py
-import logging
 import copy
 from typing import Dict, Any, Set, Optional, List, TYPE_CHECKING
 from collections import defaultdict
 from datetime import datetime
+from modules.logger_config import get_logger
 
 from utils import get_current_utc_time # utils.py должен быть доступен
 
@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from app_config import AppConfig
     from telegram.ext import Application
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class QuizState:
     def __init__(self,
@@ -58,11 +58,38 @@ class QuizState:
         # self.current_poll_end_job_name: Optional[str] = None
         self.next_question_job_name: Optional[str] = None # Для отложенной отправки следующего вопроса в режиме serial_interval после раннего ответа
         self.poll_and_solution_message_ids: List[Dict[str, Optional[int]]] = []
+        self.results_message_ids: Set[int] = set() # ID сообщений с результатами викторины для удаления через 2 мин
 
     def get_current_question_data(self) -> Optional[Dict[str, Any]]:
         if 0 <= self.current_question_index < len(self.questions):
             return self.questions[self.current_question_index]
         return None
+
+    def __getstate__(self):
+        """
+        Подготавливает объект для сериализации через pickle
+        Исключает несериализуемые объекты
+        """
+        state = self.__dict__.copy()
+        
+        # Исключаем несериализуемые объекты
+        if 'next_question_job_name' in state:
+            del state['next_question_job_name']
+            
+        logger.debug(f"QuizState для чата {self.chat_id} подготовлен для сериализации")
+        return state
+
+    def __setstate__(self, state):
+        """
+        Восстанавливает объект после десериализации
+        Устанавливает несериализуемые объекты в None
+        """
+        self.__dict__.update(state)
+        
+        # Восстанавливаем несериализуемые объекты как None
+        self.next_question_job_name = None
+        
+        logger.debug(f"QuizState для чата {self.chat_id} восстановлен после десериализации")
 
 class BotState:
     def __init__(self, app_config: 'AppConfig'):
@@ -141,4 +168,83 @@ class BotState:
                     logger.warning(f"⚠️ data_manager не доступен в BotState")
             except Exception as e:
                 logger.error(f"❌ Не удалось автоматически сохранить сообщения для удаления: {e}")
+
+    def __getstate__(self):
+        """
+        Подготавливает объект для сериализации через pickle
+        Исключает несериализуемые объекты
+        """
+        state = self.__dict__.copy()
+        
+        # Исключаем несериализуемые объекты
+        if 'application' in state:
+            del state['application']
+        if 'data_manager' in state:
+            del state['data_manager']
+        if 'app_config' in state:
+            del state['app_config']
+        
+        # Дополнительная очистка current_polls от потенциально проблемных данных
+        if 'current_polls' in state:
+            cleaned_polls = {}
+            for poll_id, poll_data in state['current_polls'].items():
+                if isinstance(poll_data, dict):
+                    # Создаем копию без потенциально проблемных полей
+                    cleaned_poll = poll_data.copy()
+                    # Удаляем поля, которые могут содержать несериализуемые объекты
+                    cleaned_poll.pop('job_poll_end_name', None)
+                    cleaned_poll.pop('next_question_job_name', None)
+                    cleaned_polls[poll_id] = cleaned_poll
+                else:
+                    # Если poll_data не dict, пропускаем
+                    logger.warning(f"Пропущен невалидный poll_data для {poll_id}: {type(poll_data)}")
+            state['current_polls'] = cleaned_polls
+            
+        logger.debug("BotState подготовлен для сериализации (исключены несериализуемые объекты)")
+        return state
+
+    def __setstate__(self, state):
+        """
+        Восстанавливает объект после десериализации
+        Устанавливает несериализуемые объекты в None
+        """
+        self.__dict__.update(state)
+        
+        # Восстанавливаем несериализуемые объекты как None
+        self.application = None
+        self.data_manager = None
+        self.app_config = None
+        
+        logger.debug("BotState восстановлен после десериализации (несериализуемые объекты установлены в None)")
+
+    def prepare_for_persistence(self):
+        """
+        Подготавливает состояние для сохранения через persistence
+        Очищает несериализуемые объекты
+        """
+        # Временно очищаем несериализуемые объекты
+        self.application = None
+        self.data_manager = None
+        self.app_config = None
+        
+        # Очищаем current_polls от потенциально проблемных данных
+        if hasattr(self, 'current_polls'):
+            cleaned_polls = {}
+            for poll_id, poll_data in self.current_polls.items():
+                if isinstance(poll_data, dict):
+                    cleaned_poll = poll_data.copy()
+                    cleaned_poll.pop('job_poll_end_name', None)
+                    cleaned_poll.pop('next_question_job_name', None)
+                    cleaned_polls[poll_id] = cleaned_poll
+            self.current_polls = cleaned_polls
+        
+        logger.debug("BotState подготовлен для persistence (временная очистка)")
+        
+    def restore_after_persistence(self, app_config, data_manager=None):
+        """
+        Восстанавливает несериализуемые объекты после загрузки из persistence
+        """
+        self.app_config = app_config
+        self.data_manager = data_manager
+        logger.debug("BotState восстановлен после persistence")
 

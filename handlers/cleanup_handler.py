@@ -41,6 +41,10 @@ async def cleanup_old_messages_job(context: ContextTypes.DEFAULT_TYPE):
     total_messages_to_process = sum(len(message_ids) for message_ids in bot_state.generic_messages_to_delete.values())
     logger.info(f"📊 Всего сообщений для обработки: {total_messages_to_process} в {len(bot_state.generic_messages_to_delete)} чатах")
 
+    # ОПТИМИЗАЦИЯ: Ограничиваем количество обрабатываемых сообщений за раз
+    max_messages_per_batch = 50
+    processed_in_this_batch = 0
+    
     chats_to_remove_entry_for = [] # Список ID чатов, для которых запись в словаре стала пустой
 
     # Итерируемся по копии ключей словаря, чтобы безопасно удалять элементы из него
@@ -51,14 +55,22 @@ async def cleanup_old_messages_job(context: ContextTypes.DEFAULT_TYPE):
 
         processed_message_ids = set() # Сообщения, которые были обработаны (удалены или ошибка типа "не найдено")
 
-        # Итерируемся по копии сета, чтобы безопасно удалять элементы из оригинального сета
-        for msg_id in list(message_ids_set):
+        # ОПТИМИЗАЦИЯ: Ограничиваем количество сообщений для обработки в одном чате
+        messages_to_process = list(message_ids_set)[:max_messages_per_batch - processed_in_this_batch]
+        
+        # Итерируемся по ограниченному списку сообщений
+        for msg_id in messages_to_process:
+            if processed_in_this_batch >= max_messages_per_batch:
+                logger.info(f"Достигнут лимит обрабатываемых сообщений ({max_messages_per_batch}), останавливаем обработку")
+                break
+                
             try:
                 # Здесь можно добавить логику проверки "времени жизни" сообщения, если это необходимо.
                 # Например, если сообщения хранятся с временными метками и удаляются только по истечении N часов.
                 await context.bot.delete_message(chat_id=chat_id, message_id=msg_id)
                 logger.debug(f"Удалено старое сообщение {msg_id} из чата {chat_id}")
                 processed_message_ids.add(msg_id)
+                processed_in_this_batch += 1
             except Exception as e:
                 error_str = str(e).lower()
                 # Распространенные ошибки, указывающие, что сообщение уже удалено или не может быть удалено
@@ -69,6 +81,7 @@ async def cleanup_old_messages_job(context: ContextTypes.DEFAULT_TYPE):
                    "chat not found" in error_str: # Если чат удален/бот кикнут
                     logger.warning(f"Сообщение {msg_id} в чате {chat_id} не найдено/не может быть удалено (или чат не найден): {e}. Удаление из списка отслеживания.")
                     processed_message_ids.add(msg_id)
+                    processed_in_this_batch += 1
                 else:
                     # Другие ошибки (например, временные проблемы с сетью) - оставляем сообщение для следующей попытки
                     logger.error(f"Не удалось удалить сообщение {msg_id} из чата {chat_id}: {e}")
@@ -80,6 +93,10 @@ async def cleanup_old_messages_job(context: ContextTypes.DEFAULT_TYPE):
         # Если после обработки сет сообщений для чата стал пустым, помечаем на удаление из словаря
         if not message_ids_set:
              chats_to_remove_entry_for.append(chat_id)
+             
+        # ОПТИМИЗАЦИЯ: Проверяем лимит обработанных сообщений
+        if processed_in_this_batch >= max_messages_per_batch:
+            break
 
     # Удаляем записи для чатов, у которых не осталось сообщений для удаления
     for chat_id_to_remove in chats_to_remove_entry_for:
@@ -87,7 +104,7 @@ async def cleanup_old_messages_job(context: ContextTypes.DEFAULT_TYPE):
             del bot_state.generic_messages_to_delete[chat_id_to_remove]
             logger.debug(f"Удалена запись для чата {chat_id_to_remove} из generic_messages_to_delete (список сообщений пуст).")
 
-    logger.info("Задача очистки старых сообщений завершена.")
+    logger.info(f"Задача очистки старых сообщений завершена. Обработано сообщений: {processed_in_this_batch}")
 
 def schedule_cleanup_job(job_queue: JobQueue, bot_state=None) -> None:
     """Планирует периодическую задачу очистки сообщений."""

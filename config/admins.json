@@ -5,8 +5,6 @@
         621817842
     ],
     "admin_usernames": [
-        "@your_username",
-        "@another_admin",
         "@mrlizardfromrussia"
     ],
     "description": "Список администраторов бота. Добавьте сюда ID пользователей или username (с @)"

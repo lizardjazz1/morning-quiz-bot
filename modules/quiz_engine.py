@@ -4,6 +4,7 @@ import logging
 from typing import List, Dict, Any, Tuple, Optional, TYPE_CHECKING
 
 from utils import escape_markdown_v2
+from modules.telegram_utils import safe_send_message
 
 if TYPE_CHECKING:
     from app_config import AppConfig
@@ -129,7 +130,12 @@ class QuizEngine:
 
         if question_data.get("solution"):
             try:
-                placeholder_msg = await context.bot.send_message(chat_id=chat_id, text="💡", parse_mode=None)
+                placeholder_msg = await safe_send_message(
+                bot=context.bot,
+                chat_id=chat_id,
+                text="💡",
+                parse_mode=None
+            )
                 if poll_id_str in self.state.current_polls:
                      self.state.current_polls[poll_id_str]["solution_placeholder_message_id"] = placeholder_msg.message_id
             except Exception as e_placeholder:
@@ -147,6 +153,12 @@ class QuizEngine:
         solution_text_raw = poll_info.get("question_details", {}).get("solution")
         if not solution_text_raw:
             return None
+
+        # ОПТИМИЗАЦИЯ: Ограничиваем длину текста решения
+        max_solution_length = 4000  # Оставляем запас для заголовка
+        if len(solution_text_raw) > max_solution_length:
+            logger.warning(f"Текст решения слишком длинный ({len(solution_text_raw)} символов), обрезаем до {max_solution_length}")
+            solution_text_raw = solution_text_raw[:max_solution_length] + "..."
 
         q_text_short_plain_for_log = poll_info.get("question_details", {}).get("question", "вопросу")[:30]
         idx_session_for_log = poll_info.get("question_session_index", -1)
@@ -184,7 +196,8 @@ class QuizEngine:
                 )
                 solution_sent_or_edited_msg_id = placeholder_msg_id
             else:
-                new_solution_msg = await context.bot.send_message(
+                new_solution_msg = await safe_send_message(
+                    bot=context.bot,
                     chat_id=chat_id,
                     text=solution_message_full_truncated,
                     parse_mode=None
@@ -200,7 +213,8 @@ class QuizEngine:
                     await context.bot.delete_message(chat_id=chat_id, message_id=placeholder_msg_id)
                 except Exception: pass
                 try:
-                    new_fallback_solution_msg = await context.bot.send_message(
+                    new_fallback_solution_msg = await safe_send_message(
+                        bot=context.bot,
                         chat_id=chat_id,
                         text=solution_message_full_truncated,
                         parse_mode=None

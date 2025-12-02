@@ -1,5 +1,0 @@
-{"question": "Какой тип коллекции в Python хранит уникальные элементы без порядка?","options": ["list","tuple","set","dict"],"correct": "set"}
-{"question": "Как называется операция в Git для отправки локальных коммитов в удаленный репозиторий?","options": ["pull","push","merge","rebase"],"correct": "push"}
-{"question": "Какая сложность у хэш‑поиска в среднем?","options": ["O(1)","O(log n)","O(n)","O(n log n)"],"correct": "O(1)"}
-{"question": "Какой формат используется для описания API по OpenAPI?","options": ["YAML/JSON","XML","CSV","INI"],"correct": "YAML/JSON"}
-{"question": "Какой SQL оператор выбирает данные?","options": ["INSERT","UPDATE","SELECT","DELETE"],"correct": "SELECT"}

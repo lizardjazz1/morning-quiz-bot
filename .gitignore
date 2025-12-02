@@ -58,6 +58,12 @@ bot.log
 data/users.json
 data/chat_settings.json
 data/ptb_persistence.pickle
+data/chats/
+data/global/users.json
+data/statistics/
+data/questions_backup/
+data/backups/
+# data/images/ - оставляем, нужны для фото-квизов
 
 # Test files
 test.py
@@ -74,3 +80,10 @@ test.py
 # Backup files
 *.bak
 *.backup
+backups/
+archive/
+ARCHITECTURE/
+
+# Temporary/artifact files
+tatus*
+*new data structure*

@@ -1,21 +1,25 @@
-#bot.py
-import sys
-import os
-
-# Добавляем корень проекта в sys.path для корректных импортов
-project_root = os.path.dirname(os.path.abspath(__file__))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
+﻿#bot.py
 import logging
+import logging.handlers
 import asyncio
-from typing import Optional # Добавлен Optional
+import os
+import sys
+import subprocess
+from typing import Optional
+from pathlib import Path
+from datetime import datetime
 
-from telegram import Update, BotCommand
+from telegram import (
+    Update,
+    BotCommand,
+    BotCommandScopeAllPrivateChats,
+    BotCommandScopeAllGroupChats,
+    BotCommandScopeAllChatAdministrators,
+)
 from telegram.ext import (
-    Application, CommandHandler,
+    Application, CommandHandler, MessageHandler,
     CallbackQueryHandler, ContextTypes, PicklePersistence, ConversationHandler,
-    Defaults
+    Defaults, filters
 )
 from telegram.constants import ParseMode
 from telegram.error import BadRequest
@@ -24,20 +28,25 @@ from telegram.error import BadRequest
 from app_config import AppConfig
 from state import BotState
 from data_manager import DataManager
-from poll_answer_handler import CustomPollAnswerHandler
+from handlers.poll_answer_handler import CustomPollAnswerHandler
 from utils import escape_markdown_v2
 
 # Менеджеры логики
 from modules.category_manager import CategoryManager
 from modules.score_manager import ScoreManager
+from modules.photo_quiz_manager import PhotoQuizManager
+from backup_manager import BackupManager
 
 # Обработчики команд и колбэков
 from handlers.quiz_manager import QuizManager
 from handlers.rating_handlers import RatingHandlers
 from handlers.config_handlers import ConfigHandlers
 from handlers.daily_quiz_scheduler import DailyQuizScheduler
+from handlers.wisdom_scheduler import WisdomScheduler
 from handlers.common_handlers import CommonHandlers
 from handlers.cleanup_handler import schedule_cleanup_job
+from handlers.backup_handlers import BackupHandlers
+from handlers.photo_quiz_handlers import PhotoQuizHandlers
 
 # Настройка логирования
 # Сначала создаем временный уровень для инициализации
@@ -49,11 +58,30 @@ LOG_LEVEL_MAP = {
 }
 TEMP_LOG_LEVEL_DEFAULT = LOG_LEVEL_MAP.get(TEMP_LOG_LEVEL_STR, logging.INFO)
 
+# Создаем папку logs если её нет
+logs_dir = Path("logs")
+logs_dir.mkdir(exist_ok=True)
+
+# Создаем logger ДО его использования
+logger = logging.getLogger(__name__)
+
+# Формируем имя файла с timestamp
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+log_filename = f"bot_{timestamp}.log"
+log_filepath = logs_dir / log_filename
+
+# Выводим информацию о созданном файле лога
+logger.info(f"📝 Лог будет сохранен в: {log_filepath}")
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=TEMP_LOG_LEVEL_DEFAULT,
     handlers=[
-        logging.FileHandler("bot.log", encoding='utf-8'),
+        logging.handlers.RotatingFileHandler(
+            log_filepath, 
+            maxBytes=10*1024*1024,  # 10 MB
+            backupCount=5,           # Хранить 5 файлов бэкапа
+            encoding='utf-8'
+        ),
         logging.StreamHandler(sys.stdout)
     ]
 )
@@ -65,8 +93,6 @@ logging.getLogger("telegram.net.TelegramRetryer").setLevel(logging.INFO)
 logging.getLogger("telegram.net.HTTPXRequest").setLevel(logging.INFO)
 logging.getLogger("apscheduler").setLevel(logging.INFO)
 
-
-logger = logging.getLogger(__name__)
 
 def update_logging_level(app_config):
     """Обновляет уровень логирования на основе конфигурации приложения"""
@@ -85,7 +111,54 @@ def update_logging_level(app_config):
     
     logger.info(f"🔧 Уровень логирования обновлен: {app_config.log_level_str} (режим: {app_config.debug_mode and 'TESTING' or 'PRODUCTION'})")
 
+def check_and_kill_duplicate_bots() -> None:
+    """Проверяет и завершает дублирующие процессы бота"""
+    try:
+        # Получаем текущий PID
+        current_pid = os.getpid()
+        logger.info(f"Текущий PID бота: {current_pid}")
+
+        # Ищем все процессы Python, содержащие bot.py
+        result = subprocess.run(
+            ['pgrep', '-f', 'python.*bot.py'],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        if result.returncode == 0:
+            pids = result.stdout.strip().split('\n')
+            pids = [pid for pid in pids if pid and pid != str(current_pid)]
+
+            if pids:
+                logger.warning(f"Найдены дублирующие процессы бота: {pids}")
+                for pid in pids:
+                    try:
+                        logger.info(f"Завершение дублирующего процесса: {pid}")
+                        subprocess.run(['kill', '-TERM', pid], timeout=5)
+                        # Ждем завершения процесса
+                        subprocess.run(['sleep', '2'], timeout=5)
+                        logger.info(f"Процесс {pid} завершен")
+                    except subprocess.TimeoutExpired:
+                        logger.warning(f"Не удалось завершить процесс {pid} за отведенное время")
+                    except Exception as e:
+                        logger.error(f"Ошибка при завершении процесса {pid}: {e}")
+            else:
+                logger.info("Дублирующие процессы бота не найдены")
+        else:
+            logger.info("Процессы бота не найдены (это нормально при первом запуске)")
+
+    except subprocess.TimeoutExpired:
+        logger.warning("Таймаут при проверке дублирующих процессов")
+    except Exception as e:
+        logger.error(f"Ошибка при проверке дублирующих процессов: {e}")
+
+
 async def main() -> None:
+    """Main entry point for the Morning Quiz Bot"""
+    # Проверяем и завершаем дублирующие процессы бота
+    check_and_kill_duplicate_bots()
+
     logger.info("Запуск бота...")
     application_instance: Optional[Application] = None # Переименовано для ясности
     data_manager_instance: Optional[DataManager] = None
@@ -101,6 +174,9 @@ async def main() -> None:
         # Обновляем уровень логирования на основе конфигурации
         update_logging_level(app_config)
 
+        # Логируем информацию о созданном файле лога
+        logger.info(f"📝 Файл лога создан: {log_filepath}")
+
         bot_state = BotState(app_config=app_config)
         data_manager = DataManager(state=bot_state, app_config=app_config)
         data_manager.load_all_data()
@@ -110,7 +186,15 @@ async def main() -> None:
         bot_state.data_manager = data_manager
 
         category_manager = CategoryManager(state=bot_state, app_config=app_config, data_manager=data_manager)
+        # Добавляем category_manager в data_manager для доступа при завершении работы
+        data_manager.category_manager = category_manager
         score_manager = ScoreManager(app_config=app_config, state=bot_state, data_manager=data_manager)
+        
+        # Инициализируем PhotoQuizManager
+        photo_quiz_manager = PhotoQuizManager(data_manager=data_manager, score_manager=score_manager)
+        
+        # Инициализируем BackupManager
+        backup_manager = BackupManager(project_root=Path.cwd())
 
         persistence_path = os.path.join(app_config.data_dir, app_config.persistence_file_name)
         persistence = PicklePersistence(filepath=persistence_path)
@@ -160,12 +244,72 @@ async def main() -> None:
         if hasattr(config_handlers, 'set_daily_quiz_scheduler'):
             config_handlers.set_daily_quiz_scheduler(daily_quiz_scheduler)
 
-        logger.info("Регистрация обработчиков PTB...")
+        # Инициализируем WisdomScheduler
+        wisdom_scheduler = WisdomScheduler(
+            app_config=app_config, data_manager=data_manager, bot_state=bot_state, application=application_instance
+        )
+        if hasattr(config_handlers, 'set_wisdom_scheduler'):
+            config_handlers.set_wisdom_scheduler(wisdom_scheduler)
+
+        # Инициализируем BackupHandlers
+        backup_handlers = BackupHandlers(app_config=app_config, backup_manager=backup_manager)
+        
+        # Инициализируем PhotoQuizHandlers
+        photo_quiz_handlers = PhotoQuizHandlers(photo_quiz_manager=photo_quiz_manager)
+
+        # ===== ПРОВЕРКА РЕЖИМА ТЕХНИЧЕСКОГО ОБСЛУЖИВАНИЯ =====
+        if data_manager.is_maintenance_mode():
+            logger.info("🔧 Обнаружен режим технического обслуживания. Добавляем обработчики обслуживания.")
+            # Добавляем обработчики обслуживания с высоким приоритетом
+            maintenance_handlers = common_handlers_instance.get_maintenance_handlers()
+            for handler in maintenance_handlers:
+                application_instance.add_handler(handler)
+            logger.info(f"✅ Добавлено {len(maintenance_handlers)} обработчиков режима обслуживания")
+        else:
+            logger.info("✅ Режим технического обслуживания не активен")
+
+        logger.debug("Регистрация обработчиков PTB...")
         application_instance.add_handlers(quiz_manager.get_handlers())
         application_instance.add_handlers(rating_handlers.get_handlers())
         application_instance.add_handlers(common_handlers_instance.get_handlers())
         application_instance.add_handlers(config_handlers.get_handlers())
+        application_instance.add_handlers(backup_handlers.get_handlers())
         application_instance.add_handler(poll_answer_handler_instance.get_handler())
+        
+        # Добавляем обработчики фото-викторины
+        application_instance.add_handlers(photo_quiz_handlers.get_handlers())
+
+        # ===== ВОССТАНОВЛЕНИЕ АКТИВНЫХ ВИКТОРИН =====
+        logger.info("🔄 Восстановление активных викторин после перезапуска...")
+        try:
+            # Очищаем устаревшие викторины
+            data_manager.cleanup_stale_quizzes()
+
+            # Восстанавливаем актуальные викторины
+            await quiz_manager.restore_all_active_quizzes()
+
+            # Настраиваем автоматическое сохранение викторин
+            quiz_manager.schedule_quiz_auto_save()
+
+            logger.info("✅ Система восстановления викторин инициализирована")
+
+        except Exception as e:
+            logger.error(f"❌ Ошибка при инициализации системы восстановления викторин: {e}", exc_info=True)
+
+        # ===== ОЧИСТКА УВЕДОМЛЕНИЙ ОБ ОБСЛУЖИВАНИИ =====
+        logger.info("🧹 Проверка необходимости очистки уведомлений об обслуживании...")
+        try:
+            # Создаем временный контекст для очистки
+            temp_context = type('TempContext', (), {
+                'bot_data': application_instance.bot_data,
+                'application': application_instance
+            })()
+
+            await common_handlers_instance.cleanup_maintenance_notifications(temp_context)
+            logger.info("✅ Проверка очистки уведомлений об обслуживании завершена")
+
+        except Exception as e:
+            logger.error(f"❌ Ошибка при очистке уведомлений об обслуживании: {e}", exc_info=True)
 
         async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
             logger.error("Исключение при обработке обновления:", exc_info=context.error)
@@ -182,35 +326,60 @@ async def main() -> None:
                     logger.error(f"Не удалось отправить уведомление об ошибке пользователю: {e_send_err_notify}")
 
         application_instance.add_error_handler(error_handler)
-        logger.info("Все обработчики PTB зарегистрированы.")
+        logger.debug("Все обработчики PTB зарегистрированы.")
 
         bot_commands = [
+            BotCommand(app_config.commands.start, "🚀 Начать работу с ботом"),
             BotCommand(app_config.commands.quiz, "🏁 Начать викторину"),
+            BotCommand("photo_quiz", "🖼️ Фото-викторина"),
             BotCommand(app_config.commands.top, "🏆 Показать рейтинг"),
             BotCommand(app_config.commands.global_top, "🏆 Показать глобальный рейтинг"),
             BotCommand(app_config.commands.mystats, "📊 Показать вашу статистику"),
             BotCommand(app_config.commands.categories, "📚 Список категорий"),
+            BotCommand(app_config.commands.category_stats, "📊 Статистика категорий"),
+            BotCommand(app_config.commands.chatcategories, "🎲 Очередь категорий с весами"),
             BotCommand(app_config.commands.help, "ℹ️ Помощь по командам"),
             BotCommand(app_config.commands.stop_quiz, "🛑 Остановить текущую викторину"),
+            BotCommand("stop_photo_quiz", "🛑 Остановить фото-викторину"),
+            BotCommand("photo_quiz_help", "ℹ️ Помощь по фото-викторине"),
             BotCommand(app_config.commands.cancel, "↩️ Отменить текущее действие"),
         ]
-        admin_cmds = [
-            (app_config.commands.admin_settings, "[Админ] ⚙️ Настройки бота"),
-            (app_config.commands.add_admin, "[Админ] ➕ Добавить администратора"),
-            (app_config.commands.reloadcfg, "[Админ] 🔄 Перезагрузить категории"),
-            (app_config.commands.test_categories, "[Админ] 📊 Тест статистики категорий"),
-            (app_config.commands.reset_categories_stats, "[Админ] 🔄 Сброс статистики категорий"),
-        ]
+        admin_cmds = []
         for cmd, desc in admin_cmds:
             if cmd: bot_commands.append(BotCommand(cmd, desc))
         try:
+            # Устанавливаем команды по умолчанию
             await application_instance.bot.set_my_commands(bot_commands)
-            logger.info("Команды бота успешно установлены.")
+            # Приватные чаты
+            await application_instance.bot.set_my_commands(
+                bot_commands,
+                scope=BotCommandScopeAllPrivateChats()
+            )
+            # Группы и супергруппы
+            await application_instance.bot.set_my_commands(
+                bot_commands,
+                scope=BotCommandScopeAllGroupChats()
+            )
+            # Администраторские чаты (для completeness)
+            await application_instance.bot.set_my_commands(
+                bot_commands,
+                scope=BotCommandScopeAllChatAdministrators()
+            )
+            logger.info("Команды бота успешно установлены для всех скоупов.")
         except Exception as e_set_cmd:
             logger.error(f"Не удалось установить команды бота: {e_set_cmd}")
 
         await application_instance.initialize()
         await daily_quiz_scheduler.schedule_all_daily_quizzes_from_startup()
+        wisdom_scheduler.schedule_all_wisdoms_from_startup()
+        wisdom_scheduler.start()
+
+        # Добавляем планировщики в bot_data для доступа из команд
+        application_instance.bot_data['daily_quiz_scheduler'] = daily_quiz_scheduler
+        logger.info("Планировщик ежедневных викторин добавлен в bot_data")
+
+        application_instance.bot_data['wisdom_scheduler'] = wisdom_scheduler
+        logger.info("Планировщик мудрости дня добавлен в bot_data")
 
         if application_instance.updater:
             logger.info(f"Запуск бота (polling) с уровнем логирования: {logging.getLevelName(logger.getEffectiveLevel())}")
@@ -260,13 +429,55 @@ async def main() -> None:
                 logger.info("Application.shutdown() завершен в main().finally.")
             except Exception as e:
                 logger.warning(f"Ошибка при shutdown Application: {e}")
+
+            # Останавливаем планировщик мудрости дня
+            if 'wisdom_scheduler' in application_instance.bot_data:
+                try:
+                    wisdom_scheduler = application_instance.bot_data['wisdom_scheduler']
+                    wisdom_scheduler.shutdown()
+                    logger.info("✅ Планировщик мудрости дня остановлен")
+                except Exception as e:
+                    logger.warning(f"❌ Ошибка при остановке планировщика мудрости дня: {e}")
         else:
             logger.warning("Экземпляр Application не был создан, пропуск шагов остановки PTB в main().finally.")
 
         if data_manager_instance:
+            # Сохраняем активные викторины перед завершением работы
+            logger.info("💾 Сохранение активных викторин перед завершением...")
+            try:
+                if hasattr(data_manager_instance, 'save_active_quizzes'):
+                    data_manager_instance.save_active_quizzes()
+                    logger.info("✅ Активные викторины сохранены перед завершением")
+                else:
+                    logger.warning("Метод save_active_quizzes не найден в data_manager")
+            except Exception as e:
+                logger.warning(f"❌ Ошибка при сохранении активных викторин: {e}")
+
+            # Включаем режим обслуживания при остановке бота
+            logger.info("🔧 Включение режима обслуживания при остановке бота...")
+            try:
+                if hasattr(data_manager_instance, 'enable_maintenance_mode'):
+                    data_manager_instance.enable_maintenance_mode("Остановка бота")
+                    logger.info("✅ Режим обслуживания включен при остановке бота")
+                else:
+                    logger.warning("Метод enable_maintenance_mode не найден в data_manager")
+            except Exception as e:
+                logger.warning(f"❌ Ошибка при включении режима обслуживания: {e}")
+
             logger.info("Сохранение данных DataManager в main().finally...")
             data_manager_instance.save_all_data()
             logger.info("Данные DataManager сохранены в main().finally.")
+            
+            # Сохраняем статистику категорий
+            try:
+                if hasattr(data_manager_instance, 'category_manager'):
+                    logger.info("Сохранение статистики категорий в main().finally...")
+                    data_manager_instance.category_manager.force_save_all_stats()
+                    logger.info("Статистика категорий сохранена в main().finally.")
+                else:
+                    logger.debug("category_manager не доступен в data_manager")
+            except Exception as e:
+                logger.warning(f"Не удалось сохранить статистику категорий: {e}")
         else:
             logger.warning("Экземпляр DataManager не был создан, пропуск сохранения данных в main().finally.")
         logger.info("Блок finally в main() завершил выполнение.")
@@ -284,4 +495,5 @@ if __name__ == "__main__":
         logger.info("Программа прервана (KeyboardInterrupt/SystemExit на уровне __main__).")
     finally:
         logger.info("Программа завершена (блок finally в __main__).")
+
 

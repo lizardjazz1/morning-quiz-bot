@@ -251,7 +251,6 @@ class CommonHandlers:
             f"{md.section_header('Общие', '❓')}\n"
             f"{md.command_help(self.app_config.commands.help, 'показать эту справку')}\n"
             f"{md.command_help(self.app_config.commands.start, 'начать работу с ботом')}\n"
-            f"{md.command_help(self.app_config.commands.settings, 'личные настройки пользователя')}\n"
             f"{md.command_help(self.app_config.commands.cancel, 'отмена текущего диалога (например, настройки)')}\n\n"
             f"{md.section_header('Поддержка', '💬')}\n"
             f"{escape_markdown_v2('По всем вопросам обращайтесь к @mrlizardfromrussia').replace('@', '\\@')}"

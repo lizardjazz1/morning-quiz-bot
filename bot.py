@@ -9,13 +9,7 @@ from typing import Optional
 from pathlib import Path
 from datetime import datetime
 
-from telegram import (
-    Update,
-    BotCommand,
-    BotCommandScopeAllPrivateChats,
-    BotCommandScopeAllGroupChats,
-    BotCommandScopeAllChatAdministrators,
-)
+from telegram import Update
 from telegram.ext import (
     Application, CommandHandler, MessageHandler,
     CallbackQueryHandler, ContextTypes, PicklePersistence, ConversationHandler,
@@ -35,6 +29,7 @@ from utils import escape_markdown_v2
 from modules.category_manager import CategoryManager
 from modules.score_manager import ScoreManager
 from modules.photo_quiz_manager import PhotoQuizManager
+from modules.bot_commands_setup import setup_bot_commands
 from backup_manager import BackupManager
 
 # Обработчики команд и колбэков
@@ -328,58 +323,22 @@ async def main() -> None:
         application_instance.add_error_handler(error_handler)
         logger.debug("Все обработчики PTB зарегистрированы.")
 
-        bot_commands = [
-            BotCommand(app_config.commands.start, "🚀 Начать работу с ботом"),
-            BotCommand(app_config.commands.quiz, "🏁 Начать викторину"),
-            BotCommand("photo_quiz", "🖼️ Фото-викторина"),
-            BotCommand(app_config.commands.top, "🏆 Показать рейтинг"),
-            BotCommand(app_config.commands.global_top, "🏆 Показать глобальный рейтинг"),
-            BotCommand(app_config.commands.mystats, "📊 Показать вашу статистику"),
-            BotCommand(app_config.commands.categories, "📚 Список категорий"),
-            BotCommand(app_config.commands.category_stats, "📊 Статистика категорий"),
-            BotCommand(app_config.commands.chatcategories, "🎲 Очередь категорий с весами"),
-            BotCommand(app_config.commands.help, "ℹ️ Помощь по командам"),
-            BotCommand(app_config.commands.stop_quiz, "🛑 Остановить текущую викторину"),
-            BotCommand("stop_photo_quiz", "🛑 Остановить фото-викторину"),
-            BotCommand("photo_quiz_help", "ℹ️ Помощь по фото-викторине"),
-            BotCommand(app_config.commands.cancel, "↩️ Отменить текущее действие"),
-        ]
-        admin_cmds = []
-        for cmd, desc in admin_cmds:
-            if cmd: bot_commands.append(BotCommand(cmd, desc))
-        try:
-            # Устанавливаем команды по умолчанию
-            await application_instance.bot.set_my_commands(bot_commands)
-            # Приватные чаты
-            await application_instance.bot.set_my_commands(
-                bot_commands,
-                scope=BotCommandScopeAllPrivateChats()
-            )
-            # Группы и супергруппы
-            await application_instance.bot.set_my_commands(
-                bot_commands,
-                scope=BotCommandScopeAllGroupChats()
-            )
-            # Администраторские чаты (для completeness)
-            await application_instance.bot.set_my_commands(
-                bot_commands,
-                scope=BotCommandScopeAllChatAdministrators()
-            )
-            logger.info("Команды бота успешно установлены для всех скоупов.")
-        except Exception as e_set_cmd:
-            logger.error(f"Не удалось установить команды бота: {e_set_cmd}")
-
-        await application_instance.initialize()
-        await daily_quiz_scheduler.schedule_all_daily_quizzes_from_startup()
-        wisdom_scheduler.schedule_all_wisdoms_from_startup()
-        wisdom_scheduler.start()
-
-        # Добавляем планировщики в bot_data для доступа из команд
         application_instance.bot_data['daily_quiz_scheduler'] = daily_quiz_scheduler
         logger.info("Планировщик ежедневных викторин добавлен в bot_data")
 
         application_instance.bot_data['wisdom_scheduler'] = wisdom_scheduler
         logger.info("Планировщик мудрости дня добавлен в bot_data")
+
+        # Устанавливаем команды бота ДО запуска (правильный порядок для python-telegram-bot 21.7 и Telegram Bot API 9.2)
+        await setup_bot_commands(application_instance, app_config)
+
+        # Инициализируем Application перед запуском (требуется для python-telegram-bot 21.7)
+        await application_instance.initialize()
+        
+        # Запускаем планировщики после инициализации
+        await daily_quiz_scheduler.schedule_all_daily_quizzes_from_startup()
+        wisdom_scheduler.schedule_all_wisdoms_from_startup()
+        wisdom_scheduler.start()
 
         if application_instance.updater:
             logger.info(f"Запуск бота (polling) с уровнем логирования: {logging.getLevelName(logger.getEffectiveLevel())}")

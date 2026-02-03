@@ -2648,7 +2648,7 @@ async function viewChatStats(chatId) {
         
         const modalHtml = `
             <div class="modal-overlay active" id="chatStatsModal" onclick="if(event.target.id === 'chatStatsModal') closeModal('chatStatsModal')">
-                <div class="modal-content" style="max-width: 900px; max-height: 90vh;" onclick="event.stopPropagation()">
+                <div class="modal-content" style="max-width: 1200px; width: 95%; max-height: 90vh;" onclick="event.stopPropagation()">
                     <div class="modal-header">
                         <h3 class="modal-title">📊 ${escapeHtml(data.title || 'Чат ' + chatId)}</h3>
                         <button class="modal-close-btn" onclick="closeModal('chatStatsModal')">×</button>

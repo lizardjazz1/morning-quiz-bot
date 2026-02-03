@@ -3392,9 +3392,43 @@ async def get_chat_full_info(chat_id: str):
                         "last_used": cat_data.get("last_used", 0),
                         "total_questions": cat_data.get("total_questions", 0)
                     })
+
+                # Добавляем веса категорий
+                try:
+                    import sys
+                    sys.path.insert(0, str(BASE_DIR))
+                    from app_config import AppConfig
+                    from modules.category_manager import CategoryManager
+
+                    app_config = AppConfig()
+                    category_manager = CategoryManager(app_config)
+
+                    # Получаем веса категорий
+                    weights_info = category_manager.get_category_weights_for_chat(chat_id)
+
+                    # Создаем словарь для быстрого поиска весов
+                    weights_dict = {w["name"]: w for w in weights_info}
+
+                    # Обогащаем cat_list весами
+                    for cat in cat_list:
+                        cat_name = cat["name"]
+                        if cat_name in weights_dict:
+                            weight_data = weights_dict[cat_name]
+                            cat["weight"] = round(weight_data.get("weight", 0), 2)
+                            cat["excluded"] = weight_data.get("excluded", False)
+                            cat["days_since_use"] = round(weight_data.get("days_since_use", 0), 1)
+                        else:
+                            cat["weight"] = 0
+                            cat["excluded"] = False
+                            cat["days_since_use"] = 0
+
+                except Exception as e:
+                    logger.warning(f"Не удалось загрузить веса категорий для чата {chat_id}: {e}")
+                    # Продолжаем без весов
+
                 cat_list.sort(key=lambda x: x["chat_usage"], reverse=True)
                 result["categories_stats"] = cat_list
-        
+
         return result
     
     except HTTPException:

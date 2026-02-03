@@ -4,6 +4,7 @@
 """
 
 import logging
+import asyncio
 from typing import TYPE_CHECKING
 
 from telegram import (
@@ -12,6 +13,7 @@ from telegram import (
     BotCommandScopeAllGroupChats,
     BotCommandScopeAllChatAdministrators,
 )
+from telegram.error import TimedOut, NetworkError
 
 if TYPE_CHECKING:
     from telegram.ext import Application
@@ -29,6 +31,7 @@ async def setup_bot_commands(application: "Application", app_config: "AppConfig"
         application: Экземпляр Application из python-telegram-bot
         app_config: Конфигурация приложения с настройками команд
     """
+    # Команды для обычных пользователей и админов чатов
     bot_commands = [
         # Основные команды
         BotCommand(app_config.commands.start, "🚀 Начать работу с ботом"),
@@ -48,39 +51,57 @@ async def setup_bot_commands(application: "Application", app_config: "AppConfig"
         BotCommand("stop_photo_quiz", "🛑 Остановить фото-викторину"),
         BotCommand("photo_quiz_help", "ℹ️ Помощь по фото-викторине"),
         
-        # Админские команды
+        # Админские команды (безопасные для админов чатов)
         BotCommand(app_config.commands.admin_settings, "⚙️ Настройки бота (админ)"),
         BotCommand(app_config.commands.reset_categories_stats, "🔄 Сброс статистики категорий (админ)"),
         BotCommand(app_config.commands.chat_stats, "📊 Статистика викторин (админ)"),
         BotCommand("scheduler_status", "📅 Статус планировщика (админ)"),
-        BotCommand("maintenance", "🔧 Режим обслуживания (админ)"),
-        
-        # Команды бэкапов
-        BotCommand("backup", "💾 Создать бэкап (админ)"),
-        BotCommand("backups", "📋 Список бэкапов (админ)"),
-        BotCommand("restore", "🔄 Восстановить из бэкапа (админ)"),
-        BotCommand("deletebackup", "🗑️ Удалить бэкап (админ)"),
-        BotCommand("backupstats", "📊 Статистика бэкапов (админ)"),
     ]
+    
+    # Команды ТОЛЬКО для суперадминов (не показываются в меню)
+    # Эти команды работают, но не отображаются в списке команд
+    # Доступ к ним контролируется через проверку прав в обработчиках
+    superadmin_commands = [
+        # BotCommand("maintenance", "🔧 Режим обслуживания"),
+        # BotCommand("backup", "💾 Создать бэкап"),
+        # BotCommand("backups", "📋 Список бэкапов"),
+        # BotCommand("restore", "🔄 Восстановить из бэкапа"),
+        # BotCommand("deletebackup", "🗑️ Удалить бэкап"),
+        # BotCommand("backupstats", "📊 Статистика бэкапов"),
+    ]
+    
+    # Функция для установки команд с retry
+    async def set_commands_with_retry(scope=None, max_retries=3):
+        """Устанавливает команды с повторными попытками при таймаутах"""
+        for attempt in range(max_retries):
+            try:
+                if scope:
+                    await application.bot.set_my_commands(bot_commands, scope=scope)
+                else:
+                    await application.bot.set_my_commands(bot_commands)
+                return True
+            except (TimedOut, NetworkError) as e:
+                if attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 2  # 2, 4, 6 секунд
+                    logger.warning(f"Таймаут при установке команд (попытка {attempt + 1}/{max_retries}), повтор через {wait_time}с: {e}")
+                    await asyncio.sleep(wait_time)
+                else:
+                    logger.error(f"Не удалось установить команды после {max_retries} попыток: {e}")
+                    return False
+            except Exception as e:
+                logger.error(f"Ошибка при установке команд: {e}", exc_info=True)
+                return False
+        return False
     
     try:
         # Устанавливаем команды по умолчанию
-        await application.bot.set_my_commands(bot_commands)
+        await set_commands_with_retry()
         # Приватные чаты
-        await application.bot.set_my_commands(
-            bot_commands,
-            scope=BotCommandScopeAllPrivateChats()
-        )
+        await set_commands_with_retry(scope=BotCommandScopeAllPrivateChats())
         # Группы и супергруппы
-        await application.bot.set_my_commands(
-            bot_commands,
-            scope=BotCommandScopeAllGroupChats()
-        )
+        await set_commands_with_retry(scope=BotCommandScopeAllGroupChats())
         # Администраторские чаты
-        await application.bot.set_my_commands(
-            bot_commands,
-            scope=BotCommandScopeAllChatAdministrators()
-        )
+        await set_commands_with_retry(scope=BotCommandScopeAllChatAdministrators())
         logger.info(f"✅ Команды бота успешно установлены для всех скоупов ({len(bot_commands)} команд).")
     except Exception as e_set_cmd:
         logger.error(f"❌ Не удалось установить команды бота: {e_set_cmd}", exc_info=True)

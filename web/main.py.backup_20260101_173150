@@ -1,0 +1,1232 @@
+"""
+FastAPI веб-интерфейс для управления Morning Quiz Bot
+"""
+import os
+import json
+from pathlib import Path
+from typing import List, Dict, Any, Optional
+from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi.responses import HTMLResponse, StreamingResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
+import io
+import csv
+
+# Инициализация FastAPI
+app = FastAPI(
+    title="Morning Quiz Bot Admin",
+    description="Веб-интерфейс для управления вопросами и статистикой",
+    version="1.0.0"
+)
+
+# Пути
+# Определяем базовую директорию проекта
+# Если запускается из systemd, рабочая директория уже установлена в WorkingDirectory
+BASE_DIR = Path(__file__).parent.parent
+# Если BASE_DIR не существует, используем текущую рабочую директорию
+if not BASE_DIR.exists():
+    BASE_DIR = Path.cwd()
+DATA_DIR = BASE_DIR / "data"
+QUESTIONS_DIR = DATA_DIR / "questions"
+CATEGORIES_FILE = DATA_DIR / "global" / "categories.json"
+STATS_DIR = DATA_DIR / "statistics"
+CHATS_DIR = DATA_DIR / "chats"
+GLOBAL_DIR = DATA_DIR / "global"
+SYSTEM_DIR = DATA_DIR / "system"
+BOT_MODE_FILE = DATA_DIR / "bot_mode.json"
+IMAGES_DIR = DATA_DIR / "images"
+PHOTO_QUIZ_METADATA = DATA_DIR / "photo_quiz_metadata.json"
+
+# Templates directory
+TEMPLATES_DIR = BASE_DIR / "web" / "templates"
+
+# Подключение статических файлов
+STATIC_DIR = BASE_DIR / "web" / "static"
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+# Модели данных
+class Question(BaseModel):
+    question: str
+    options: List[str] = Field(..., min_items=2, max_items=10)
+    correct: str
+    explanation: Optional[str] = None
+    difficulty: Optional[str] = None
+    tags: Optional[List[str]] = None
+
+class QuestionUpdate(BaseModel):
+    question: Optional[str] = None
+    options: Optional[List[str]] = None
+    correct: Optional[str] = None
+    explanation: Optional[str] = None
+    difficulty: Optional[str] = None
+    tags: Optional[List[str]] = None
+
+class CategoryInfo(BaseModel):
+    name: str
+    question_count: int
+    file_path: str
+
+class DailyQuizSettings(BaseModel):
+    enabled: bool
+    times_msk: List[Dict[str, int]]
+    categories_mode: Optional[str] = "random"
+    num_random_categories: Optional[int] = 3
+    specific_categories: Optional[List[str]] = []
+    num_questions: Optional[int] = 10
+    interval_seconds: Optional[int] = 60
+    poll_open_seconds: Optional[int] = 600
+
+class ChatSettingsUpdate(BaseModel):
+    daily_quiz: Optional[DailyQuizSettings] = None
+    default_num_questions: Optional[int] = None
+    default_open_period_seconds: Optional[int] = None
+    enabled_categories: Optional[List[str]] = None
+    disabled_categories: Optional[List[str]] = None
+
+# Вспомогательные функции
+def load_category_questions(category_name: str) -> List[Dict[str, Any]]:
+    """Загружает вопросы категории"""
+    category_file = QUESTIONS_DIR / f"{category_name}.json"
+    if not category_file.exists():
+        return []
+    
+    try:
+        with open(category_file, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка загрузки категории: {str(e)}")
+
+def save_category_questions(category_name: str, questions: List[Dict[str, Any]]) -> bool:
+    """Сохраняет вопросы категории"""
+    category_file = QUESTIONS_DIR / f"{category_name}.json"
+    try:
+        with open(category_file, 'w', encoding='utf-8') as f:
+            json.dump(questions, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка сохранения: {str(e)}")
+
+def get_all_categories() -> List[str]:
+    """Получает список всех категорий"""
+    categories = []
+    if CATEGORIES_FILE.exists():
+        try:
+            with open(CATEGORIES_FILE, 'r', encoding='utf-8') as f:
+                cats_data = json.load(f)
+                categories = list(cats_data.keys())
+        except:
+            pass
+    
+    # Если файл категорий пуст, получаем из файлов
+    if not categories:
+        categories = [f.stem for f in QUESTIONS_DIR.glob("*.json")]
+    
+    return sorted(categories)
+
+# API Routes
+@app.get("/", response_class=HTMLResponse)
+async def index():
+    """Главная страница"""
+    html_file = TEMPLATES_DIR / "index.html"
+    with open(html_file, 'r', encoding='utf-8') as f:
+        return HTMLResponse(content=f.read())
+
+@app.get("/api/categories")
+async def get_categories():
+    """Получить список всех категорий"""
+    categories = get_all_categories()
+    result = []
+    
+    for cat_name in categories:
+        questions = load_category_questions(cat_name)
+        result.append({
+            "name": cat_name,
+            "question_count": len(questions),
+            "file_path": f"questions/{cat_name}.json"
+        })
+    
+    return {"categories": result}
+
+@app.get("/api/questions")
+async def get_all_questions():
+    """Получить все вопросы из всех категорий"""
+    categories = get_all_categories()
+    all_questions = []
+    
+    for cat_name in categories:
+        questions = load_category_questions(cat_name)
+        for q in questions:
+            all_questions.append({
+                "category": cat_name,
+                "question": q.get("question", ""),
+                "answers": q.get("answers", []),
+                "correct_answer": q.get("correct_answer", 0),
+                "explanation": q.get("explanation", "")
+            })
+    
+    return {"questions": all_questions, "total": len(all_questions)}
+
+@app.get("/api/categories/{category_name}/questions")
+async def get_questions(category_name: str):
+    """Получить все вопросы категории"""
+    questions = load_category_questions(category_name)
+    return {"category": category_name, "questions": questions, "count": len(questions)}
+
+@app.get("/api/categories/{category_name}/questions/{question_index}")
+async def get_question(category_name: str, question_index: int):
+    """Получить конкретный вопрос"""
+    questions = load_category_questions(category_name)
+    if question_index < 0 or question_index >= len(questions):
+        raise HTTPException(status_code=404, detail="Вопрос не найден")
+    return {"question": questions[question_index], "index": question_index}
+
+@app.post("/api/categories/{category_name}/questions")
+async def create_question(category_name: str, question: Question):
+    """Добавить новый вопрос в категорию"""
+    questions = load_category_questions(category_name)
+    
+    # Валидация
+    if question.correct not in question.options:
+        raise HTTPException(status_code=400, detail="Правильный ответ должен быть в списке вариантов")
+    
+    # Создаем вопрос
+    question_dict = question.dict(exclude_none=True)
+    questions.append(question_dict)
+    
+    # Сохраняем
+    save_category_questions(category_name, questions)
+    
+    return {"message": "Вопрос добавлен", "question": question_dict, "index": len(questions) - 1}
+
+@app.put("/api/categories/{category_name}/questions/{question_index}")
+async def update_question(category_name: str, question_index: int, question_update: QuestionUpdate):
+    """Обновить вопрос"""
+    questions = load_category_questions(category_name)
+    if question_index < 0 or question_index >= len(questions):
+        raise HTTPException(status_code=404, detail="Вопрос не найден")
+    
+    # Обновляем поля
+    current_question = questions[question_index]
+    update_data = question_update.dict(exclude_none=True)
+    
+    # Валидация правильного ответа
+    if "correct" in update_data and "options" in update_data:
+        if update_data["correct"] not in update_data["options"]:
+            raise HTTPException(status_code=400, detail="Правильный ответ должен быть в списке вариантов")
+    elif "correct" in update_data:
+        # Используем текущие options
+        current_options = update_data.get("options", current_question.get("options", []))
+        if update_data["correct"] not in current_options:
+            raise HTTPException(status_code=400, detail="Правильный ответ должен быть в списке вариантов")
+    
+    current_question.update(update_data)
+    
+    # Сохраняем
+    save_category_questions(category_name, questions)
+    
+    return {"message": "Вопрос обновлен", "question": current_question}
+
+@app.delete("/api/categories/{category_name}/questions/{question_index}")
+async def delete_question(category_name: str, question_index: int):
+    """Удалить вопрос"""
+    questions = load_category_questions(category_name)
+    if question_index < 0 or question_index >= len(questions):
+        raise HTTPException(status_code=404, detail="Вопрос не найден")
+    
+    deleted_question = questions.pop(question_index)
+    save_category_questions(category_name, questions)
+    
+    return {"message": "Вопрос удален", "question": deleted_question}
+
+@app.get("/api/statistics")
+async def get_statistics():
+    """Получить статистику"""
+    stats = {
+        "categories": {},
+        "total_questions": 0,
+        "total_categories": 0
+    }
+    
+    categories = get_all_categories()
+    stats["total_categories"] = len(categories)
+    
+    for cat_name in categories:
+        questions = load_category_questions(cat_name)
+        stats["categories"][cat_name] = {
+            "question_count": len(questions)
+        }
+        stats["total_questions"] += len(questions)
+    
+    return stats
+
+@app.post("/api/categories/{category_name}/import")
+async def import_questions(category_name: str, questions: List[Dict[str, Any]]):
+    """Импортировать вопросы в категорию"""
+    current_questions = load_category_questions(category_name)
+    
+    # Валидация
+    valid_questions = []
+    for q in questions:
+        if "question" in q and "options" in q and "correct" in q:
+            if q["correct"] in q["options"]:
+                valid_questions.append(q)
+    
+    current_questions.extend(valid_questions)
+    save_category_questions(category_name, current_questions)
+    
+    return {
+        "message": f"Импортировано {len(valid_questions)} вопросов",
+        "imported": len(valid_questions),
+        "total": len(current_questions)
+    }
+
+# ===== АНАЛИТИКА =====
+
+@app.get("/api/analytics/chats")
+async def get_chats_analytics():
+    """Получить аналитику по всем чатам"""
+    chats = []
+    for chat_dir in CHATS_DIR.iterdir():
+        if not chat_dir.is_dir():
+            continue
+        
+        chat_id = chat_dir.name
+        settings_file = chat_dir / "settings.json"
+        stats_file = chat_dir / "stats.json"
+        users_file = chat_dir / "users.json"
+        
+        chat_data = {"chat_id": chat_id}
+        
+        # Загружаем настройки
+        if settings_file.exists():
+            try:
+                with open(settings_file, 'r', encoding='utf-8') as f:
+                    settings = json.load(f)
+                    chat_data["settings"] = settings
+                    chat_data["daily_quiz_enabled"] = settings.get("daily_quiz", {}).get("enabled", False)
+            except:
+                pass
+        
+        # Загружаем статистику
+        if stats_file.exists():
+            try:
+                with open(stats_file, 'r', encoding='utf-8') as f:
+                    stats = json.load(f)
+                    chat_data["stats"] = stats
+            except:
+                pass
+        
+        # Загружаем пользователей
+        if users_file.exists():
+            try:
+                with open(users_file, 'r', encoding='utf-8') as f:
+                    users = json.load(f)
+                    chat_data["user_count"] = len(users)
+            except:
+                pass
+        
+        chats.append(chat_data)
+    
+    return {"chats": chats, "total": len(chats)}
+
+@app.get("/api/analytics/chats/{chat_id}")
+async def get_chat_analytics(chat_id: str):
+    """Получить детальную аналитику чата"""
+    chat_dir = CHATS_DIR / chat_id
+    if not chat_dir.exists():
+        raise HTTPException(status_code=404, detail="Чат не найден")
+    
+    result = {"chat_id": chat_id}
+    
+    # Настройки
+    settings_file = chat_dir / "settings.json"
+    if settings_file.exists():
+        with open(settings_file, 'r', encoding='utf-8') as f:
+            result["settings"] = json.load(f)
+    
+    # Статистика
+    stats_file = chat_dir / "stats.json"
+    if stats_file.exists():
+        with open(stats_file, 'r', encoding='utf-8') as f:
+            result["stats"] = json.load(f)
+    
+    # Пользователи
+    users_file = chat_dir / "users.json"
+    if users_file.exists():
+        with open(users_file, 'r', encoding='utf-8') as f:
+            users = json.load(f)
+            result["users"] = users
+            result["user_count"] = len(users)
+    
+    # Статистика категорий
+    cat_stats_file = chat_dir / "categories_stats.json"
+    if cat_stats_file.exists():
+        with open(cat_stats_file, 'r', encoding='utf-8') as f:
+            result["categories_stats"] = json.load(f)
+    
+    return result
+
+@app.get("/api/analytics/global")
+async def get_global_analytics():
+    """Получить глобальную аналитику"""
+    result = {}
+    
+    # Глобальная статистика
+    global_stats_file = STATS_DIR / "global_stats.json"
+    if global_stats_file.exists():
+        with open(global_stats_file, 'r', encoding='utf-8') as f:
+            result["global_stats"] = json.load(f)
+    
+    # Статистика категорий
+    cat_stats_file = STATS_DIR / "categories_stats.json"
+    if cat_stats_file.exists():
+        with open(cat_stats_file, 'r', encoding='utf-8') as f:
+            result["categories_stats"] = json.load(f)
+    
+    # Глобальные пользователи
+    global_users_file = GLOBAL_DIR / "users.json"
+    if global_users_file.exists():
+        with open(global_users_file, 'r', encoding='utf-8') as f:
+            users = json.load(f)
+            result["global_users"] = users
+            result["total_global_users"] = len(users)
+    
+    return result
+
+# ===== УПРАВЛЕНИЕ ПОДПИСКАМИ И НАСТРОЙКАМИ =====
+
+@app.get("/api/chats")
+async def get_all_chats():
+    """Получить список всех чатов с подробной информацией"""
+    chats = []
+    for chat_dir in CHATS_DIR.iterdir():
+        if not chat_dir.is_dir():
+            continue
+        
+        chat_id = chat_dir.name
+        settings_file = chat_dir / "settings.json"
+        users_file = chat_dir / "users.json"
+        stats_file = STATS_DIR / f"{chat_id}.json"
+        
+        chat_info = {
+            "id": int(chat_id) if chat_id.lstrip('-').isdigit() else chat_id,
+            "title": None,
+            "daily_quiz_enabled": False,
+            "daily_quiz_times": [],
+            "users_count": 0,
+            "total_quizzes": 0
+        }
+        
+        # Settings
+        if settings_file.exists():
+            try:
+                with open(settings_file, 'r', encoding='utf-8') as f:
+                    settings = json.load(f)
+                    chat_info["title"] = settings.get("title")
+                    daily_quiz = settings.get("daily_quiz", {})
+                    chat_info["daily_quiz_enabled"] = daily_quiz.get("enabled", False)
+                    chat_info["daily_quiz_times"] = daily_quiz.get("times", [])
+            except:
+                pass
+        
+        # Users count
+        if users_file.exists():
+            try:
+                with open(users_file, 'r', encoding='utf-8') as f:
+                    users = json.load(f)
+                    chat_info["users_count"] = len(users)
+            except:
+                pass
+        
+        # Total quizzes
+        if stats_file.exists():
+            try:
+                with open(stats_file, 'r', encoding='utf-8') as f:
+                    stats = json.load(f)
+                    chat_info["total_quizzes"] = stats.get("total_quizzes", 0)
+            except:
+                pass
+        
+        chats.append(chat_info)
+    
+    return chats
+
+@app.get("/api/chats/{chat_id}/settings")
+async def get_chat_settings(chat_id: str):
+    """Получить настройки чата"""
+    settings_file = CHATS_DIR / chat_id / "settings.json"
+    if not settings_file.exists():
+        raise HTTPException(status_code=404, detail="Настройки чата не найдены")
+    
+    with open(settings_file, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+@app.put("/api/chats/{chat_id}/settings")
+async def update_chat_settings(chat_id: str, settings_update: ChatSettingsUpdate):
+    """Обновить настройки чата"""
+    settings_file = CHATS_DIR / chat_id / "settings.json"
+    
+    # Загружаем текущие настройки
+    if settings_file.exists():
+        with open(settings_file, 'r', encoding='utf-8') as f:
+            current_settings = json.load(f)
+    else:
+        current_settings = {}
+    
+    # Обновляем настройки
+    update_data = settings_update.dict(exclude_none=True)
+    
+    if "daily_quiz" in update_data:
+        if "daily_quiz" not in current_settings:
+            current_settings["daily_quiz"] = {}
+        current_settings["daily_quiz"].update(update_data["daily_quiz"])
+    
+    if "default_num_questions" in update_data:
+        current_settings["default_num_questions"] = update_data["default_num_questions"]
+    
+    if "default_open_period_seconds" in update_data:
+        current_settings["default_open_period_seconds"] = update_data["default_open_period_seconds"]
+    
+    if "enabled_categories" in update_data:
+        current_settings["enabled_categories"] = update_data["enabled_categories"]
+    
+    if "disabled_categories" in update_data:
+        current_settings["disabled_categories"] = update_data["disabled_categories"]
+    
+    # Сохраняем
+    settings_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(settings_file, 'w', encoding='utf-8') as f:
+        json.dump(current_settings, f, ensure_ascii=False, indent=2)
+    
+    return {"message": "Настройки обновлены", "settings": current_settings}
+
+@app.post("/api/chats/{chat_id}/daily-quiz/toggle")
+async def toggle_daily_quiz(chat_id: str, enabled: bool):
+    """Включить/выключить ежедневную викторину для чата"""
+    settings_file = CHATS_DIR / chat_id / "settings.json"
+    
+    if settings_file.exists():
+        with open(settings_file, 'r', encoding='utf-8') as f:
+            settings = json.load(f)
+    else:
+        settings = {}
+    
+    if "daily_quiz" not in settings:
+        settings["daily_quiz"] = {}
+    
+    settings["daily_quiz"]["enabled"] = enabled
+    
+    settings_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(settings_file, 'w', encoding='utf-8') as f:
+        json.dump(settings, f, ensure_ascii=False, indent=2)
+    
+    return {"message": f"Ежедневная викторина {'включена' if enabled else 'выключена'}", "enabled": enabled}
+
+@app.put("/api/chats/{chat_id}/subscription")
+async def update_chat_subscription(chat_id: str, data: dict):
+    """Обновить расписание викторин для чата"""
+    settings_file = CHATS_DIR / chat_id / "settings.json"
+    
+    if settings_file.exists():
+        with open(settings_file, 'r', encoding='utf-8') as f:
+            settings = json.load(f)
+    else:
+        settings = {}
+    
+    if "daily_quiz" not in settings:
+        settings["daily_quiz"] = {}
+    
+    # Обновляем времена запуска
+    if "times" in data:
+        settings["daily_quiz"]["times"] = data["times"]
+    
+    settings_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(settings_file, 'w', encoding='utf-8') as f:
+        json.dump(settings, f, ensure_ascii=False, indent=2)
+    
+    return {"message": "Расписание обновлено", "times": settings["daily_quiz"].get("times", [])}
+
+@app.post("/api/chats/{chat_id}/subscription/toggle")
+async def toggle_chat_subscription(chat_id: str, data: dict):
+    """Включить/выключить подписку на ежедневные викторины"""
+    settings_file = CHATS_DIR / chat_id / "settings.json"
+    
+    if settings_file.exists():
+        with open(settings_file, 'r', encoding='utf-8') as f:
+            settings = json.load(f)
+    else:
+        settings = {}
+    
+    if "daily_quiz" not in settings:
+        settings["daily_quiz"] = {}
+    
+    enabled = data.get("enabled", False)
+    settings["daily_quiz"]["enabled"] = enabled
+    
+    settings_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(settings_file, 'w', encoding='utf-8') as f:
+        json.dump(settings, f, ensure_ascii=False, indent=2)
+    
+    return {"message": f"Подписка {'включена' if enabled else 'выключена'}", "enabled": enabled}
+
+# ===== РЕЖИМ ОБСЛУЖИВАНИЯ =====
+
+@app.get("/api/maintenance")
+async def get_maintenance_mode():
+    """Получить статус режима обслуживания"""
+    if BOT_MODE_FILE.exists():
+        with open(BOT_MODE_FILE, 'r', encoding='utf-8') as f:
+            mode_data = json.load(f)
+            return {
+                "mode": mode_data.get("mode", "main"),
+                "maintenance_mode": mode_data.get("mode") == "maintenance",
+                "reason": mode_data.get("reason", "")
+            }
+    return {"mode": "main", "maintenance_mode": False, "reason": ""}
+
+@app.post("/api/maintenance/toggle")
+async def toggle_maintenance_mode(enabled: bool, reason: Optional[str] = None):
+    """Включить/выключить режим обслуживания"""
+    mode_data = {
+        "mode": "maintenance" if enabled else "main",
+        "reason": reason or ("Техническое обслуживание" if enabled else "Работа основного бота"),
+        "timestamp": "now"
+    }
+    
+    with open(BOT_MODE_FILE, 'w', encoding='utf-8') as f:
+        json.dump(mode_data, f, ensure_ascii=False, indent=2)
+    
+    return {
+        "message": f"Режим обслуживания {'включен' if enabled else 'выключен'}",
+        "maintenance_mode": enabled
+    }
+
+# ===== ЭКСПОРТ/ИМПОРТ =====
+
+@app.get("/api/export/questions")
+async def export_questions(format: str = "json"):
+    """Экспортировать все вопросы в JSON или CSV"""
+    try:
+        all_questions = []
+        
+        # Собираем все вопросы
+        for category_file in QUESTIONS_DIR.glob("*.json"):
+            with open(category_file, 'r', encoding='utf-8') as f:
+                questions = json.load(f)
+                category = category_file.stem
+                
+                for q in questions:
+                    all_questions.append({
+                        "category": category,
+                        "question": q.get("question", ""),
+                        "answers": q.get("answers", []),
+                        "correct_answer": q.get("correct_answer", 0),
+                        "explanation": q.get("explanation", "")
+                    })
+        
+        if format.lower() == "json":
+            # Экспорт в JSON
+            json_str = json.dumps(all_questions, ensure_ascii=False, indent=2)
+            return StreamingResponse(
+                io.BytesIO(json_str.encode('utf-8')),
+                media_type="application/json",
+                headers={"Content-Disposition": "attachment; filename=questions_export.json"}
+            )
+        
+        elif format.lower() == "csv":
+            # Экспорт в CSV
+            output = io.StringIO()
+            if all_questions:
+                writer = csv.DictWriter(output, fieldnames=["category", "question", "answers", "correct_answer", "explanation"])
+                writer.writeheader()
+                
+                for q in all_questions:
+                    writer.writerow({
+                        "category": q["category"],
+                        "question": q["question"],
+                        "answers": "; ".join(q["answers"]),
+                        "correct_answer": q["correct_answer"],
+                        "explanation": q.get("explanation", "")
+                    })
+            
+            return StreamingResponse(
+                io.BytesIO(output.getvalue().encode('utf-8')),
+                media_type="text/csv",
+                headers={"Content-Disposition": "attachment; filename=questions_export.csv"}
+            )
+        
+        else:
+            raise HTTPException(status_code=400, detail="Неподдерживаемый формат. Используйте 'json' или 'csv'")
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка экспорта: {str(e)}")
+
+@app.post("/api/import/questions")
+async def import_questions(file: UploadFile = File(...)):
+    """Импортировать вопросы из JSON файла"""
+    try:
+        contents = await file.read()
+        data = json.loads(contents.decode('utf-8'))
+        
+        if not isinstance(data, list):
+            raise HTTPException(status_code=400, detail="Файл должен содержать массив вопросов")
+        
+        imported_count = 0
+        
+        # Группируем вопросы по категориям
+        questions_by_category = {}
+        for q in data:
+            category = q.get("category")
+            if not category:
+                continue
+            
+            if category not in questions_by_category:
+                questions_by_category[category] = []
+            
+            questions_by_category[category].append({
+                "question": q.get("question", ""),
+                "answers": q.get("answers", []),
+                "correct_answer": q.get("correct_answer", 0),
+                "explanation": q.get("explanation", "")
+            })
+        
+        # Сохраняем вопросы
+        for category, questions in questions_by_category.items():
+            category_file = QUESTIONS_DIR / f"{category}.json"
+            
+            # Если категория уже существует, добавляем вопросы
+            if category_file.exists():
+                with open(category_file, 'r', encoding='utf-8') as f:
+                    existing_questions = json.load(f)
+                existing_questions.extend(questions)
+                questions_to_save = existing_questions
+            else:
+                questions_to_save = questions
+            
+            with open(category_file, 'w', encoding='utf-8') as f:
+                json.dump(questions_to_save, f, ensure_ascii=False, indent=2)
+            
+            imported_count += len(questions)
+        
+        return {"message": f"Импортировано {imported_count} вопросов", "imported": imported_count}
+    
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Некорректный JSON файл")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка импорта: {str(e)}")
+
+# ===== ПРОДВИНУТАЯ АНАЛИТИКА =====
+
+@app.get("/api/analytics/categories/detailed")
+async def get_categories_detailed_stats():
+    """Детальная статистика по категориям"""
+    try:
+        categories_stats_file = STATS_DIR / "categories_stats.json"
+        
+        if not categories_stats_file.exists():
+            return {"categories": []}
+        
+        with open(categories_stats_file, 'r', encoding='utf-8') as f:
+            stats = json.load(f)
+        
+        result = []
+        for category, data in stats.items():
+            result.append({
+                "name": category,
+                "total_questions": data.get("total_questions", 0),
+                "global_usage": data.get("global_usage", 0),
+                "chats_count": len(data.get("chats_used_in", [])),
+                "last_used": data.get("last_used", 0),
+                "chat_usage": data.get("chat_usage", {})
+            })
+        
+        # Сортируем по использованию
+        result.sort(key=lambda x: x["global_usage"], reverse=True)
+        
+        return {"categories": result}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+
+@app.get("/api/analytics/users/leaderboard")
+async def get_users_leaderboard(limit: int = 20):
+    """Рейтинг пользователей"""
+    try:
+        global_stats_file = STATS_DIR / "global_stats.json"
+        
+        if not global_stats_file.exists():
+            return {"users": []}
+        
+        with open(global_stats_file, 'r', encoding='utf-8') as f:
+            stats = json.load(f)
+        
+        top_users = stats.get("top_users", [])[:limit]
+        
+        # Обогащаем данными из чатов
+        enriched_users = []
+        for user in top_users:
+            user_data = {
+                "user_id": user["user_id"],
+                "name": user["name"],
+                "global_score": user["global_score"],
+                "total_answers": 0,
+                "chats_participated": []
+            }
+            
+            # Ищем пользователя в чатах
+            for chat_dir in CHATS_DIR.iterdir():
+                if not chat_dir.is_dir():
+                    continue
+                
+                users_file = chat_dir / "users.json"
+                if users_file.exists():
+                    with open(users_file, 'r', encoding='utf-8') as f:
+                        chat_users = json.load(f)
+                    
+                    if user["user_id"] in chat_users:
+                        user_info = chat_users[user["user_id"]]
+                        user_data["total_answers"] += len(user_info.get("answered_polls", []))
+                        user_data["chats_participated"].append(chat_dir.name)
+            
+            enriched_users.append(user_data)
+        
+        return {"users": enriched_users, "total_count": stats.get("total_users", 0)}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+
+@app.get("/api/analytics/activity/overview")
+async def get_activity_overview():
+    """Обзор активности"""
+    try:
+        # Глобальная статистика
+        global_stats_file = STATS_DIR / "global_stats.json"
+        if global_stats_file.exists():
+            with open(global_stats_file, 'r', encoding='utf-8') as f:
+                global_stats = json.load(f)
+        else:
+            global_stats = {}
+        
+        # Статистика по чатам
+        chat_stats = []
+        total_messages = 0
+        
+        for chat_dir in CHATS_DIR.iterdir():
+            if not chat_dir.is_dir():
+                continue
+            
+            stats_file = chat_dir / "stats.json"
+            if stats_file.exists():
+                with open(stats_file, 'r', encoding='utf-8') as f:
+                    chat_data = json.load(f)
+                
+                total_answered = chat_data.get("total_answered", 0)
+                total_messages += total_answered
+                
+                chat_stats.append({
+                    "chat_id": chat_data.get("chat_id", chat_dir.name),
+                    "users": chat_data.get("total_users", 0),
+                    "score": chat_data.get("total_score", 0),
+                    "answered": total_answered
+                })
+        
+        # Сортируем чаты по активности
+        chat_stats.sort(key=lambda x: x["answered"], reverse=True)
+        
+        return {
+            "global": {
+                "total_users": global_stats.get("total_users", 0),
+                "active_users": global_stats.get("active_users", 0),
+                "total_score": global_stats.get("total_score", 0),
+                "total_answered": global_stats.get("total_answered_polls", 0),
+                "average_score": global_stats.get("average_score", 0)
+            },
+            "chats": chat_stats[:10],  # Топ-10 активных чатов
+            "total_chats": len(chat_stats),
+            "total_messages": total_messages
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+
+@app.get("/api/analytics/categories/top")
+async def get_top_categories(limit: int = 10):
+    """Топ категорий по использованию"""
+    try:
+        categories_stats_file = STATS_DIR / "categories_stats.json"
+        
+        if not categories_stats_file.exists():
+            return {"categories": []}
+        
+        with open(categories_stats_file, 'r', encoding='utf-8') as f:
+            stats = json.load(f)
+        
+        categories = []
+        for name, data in stats.items():
+            categories.append({
+                "name": name,
+                "usage": data.get("global_usage", 0),
+                "questions": data.get("total_questions", 0),
+                "chats": len(data.get("chats_used_in", []))
+            })
+        
+        categories.sort(key=lambda x: x["usage"], reverse=True)
+        
+        return {"categories": categories[:limit], "total": len(categories)}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+
+@app.get("/api/analytics/distribution/scores")
+async def get_score_distribution():
+    """Распределение баллов пользователей"""
+    try:
+        global_stats_file = STATS_DIR / "global_stats.json"
+        
+        if not global_stats_file.exists():
+            return {"distribution": {}}
+        
+        with open(global_stats_file, 'r', encoding='utf-8') as f:
+            stats = json.load(f)
+        
+        distribution = stats.get("score_distribution", {})
+        
+        # Преобразуем в формат для графика
+        labels = []
+        values = []
+        for key in sorted(distribution.keys()):
+            labels.append(key)
+            values.append(distribution[key])
+        
+        return {
+            "distribution": distribution,
+            "chart_data": {
+                "labels": labels,
+                "values": values
+            }
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+
+@app.get("/api/analytics/chat/{chat_id}/detailed")
+async def get_chat_detailed_stats(chat_id: str):
+    """Детальная статистика чата"""
+    try:
+        chat_dir = CHATS_DIR / chat_id
+        
+        if not chat_dir.exists():
+            raise HTTPException(status_code=404, detail="Чат не найден")
+        
+        # Основная статистика
+        stats_file = chat_dir / "stats.json"
+        users_file = chat_dir / "users.json"
+        categories_file = chat_dir / "categories_stats.json"
+        settings_file = chat_dir / "settings.json"
+        
+        result = {"chat_id": chat_id}
+        
+        if stats_file.exists():
+            with open(stats_file, 'r', encoding='utf-8') as f:
+                result["stats"] = json.load(f)
+        
+        if users_file.exists():
+            with open(users_file, 'r', encoding='utf-8') as f:
+                users = json.load(f)
+                result["users_count"] = len(users)
+                result["users"] = users
+        
+        if categories_file.exists():
+            with open(categories_file, 'r', encoding='utf-8') as f:
+                result["categories"] = json.load(f)
+        
+        if settings_file.exists():
+            with open(settings_file, 'r', encoding='utf-8') as f:
+                result["settings"] = json.load(f)
+        
+        return result
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+
+# ================== ИЗОБРАЖЕНИЯ И PHOTO QUIZ ==================
+
+@app.get("/api/photo-quiz")
+async def get_photo_quiz():
+    """Получить список всех photo quiz вопросов"""
+    try:
+        if not PHOTO_QUIZ_METADATA.exists():
+            return {"photos": [], "total": 0}
+        
+        with open(PHOTO_QUIZ_METADATA, 'r', encoding='utf-8') as f:
+            metadata = json.load(f)
+        
+        photos = []
+        for name, data in metadata.items():
+            image_path = IMAGES_DIR / f"{name}.webp"
+            photos.append({
+                "name": name,
+                "correct_answer": data.get("correct_answer", ""),
+                "hints": data.get("hints", {}),
+                "has_image": image_path.exists(),
+                "image_url": f"/api/images/{name}.webp" if image_path.exists() else None
+            })
+        
+        return {"photos": photos, "total": len(photos)}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+
+@app.get("/api/images/{filename}")
+async def get_image(filename: str):
+    """Получить изображение"""
+    try:
+        image_path = IMAGES_DIR / filename
+        if not image_path.exists():
+            raise HTTPException(status_code=404, detail="Изображение не найдено")
+        
+        return FileResponse(image_path, media_type="image/webp")
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+
+@app.put("/api/photo-quiz/{name}")
+async def update_photo_quiz(name: str, data: Dict[str, Any]):
+    """Обновить метаданные photo quiz"""
+    try:
+        if not PHOTO_QUIZ_METADATA.exists():
+            raise HTTPException(status_code=404, detail="Файл метаданных не найден")
+        
+        with open(PHOTO_QUIZ_METADATA, 'r', encoding='utf-8') as f:
+            metadata = json.load(f)
+        
+        if name not in metadata:
+            raise HTTPException(status_code=404, detail="Photo quiz не найден")
+        
+        metadata[name] = data
+        
+        with open(PHOTO_QUIZ_METADATA, 'w', encoding='utf-8') as f:
+            json.dump(metadata, f, ensure_ascii=False, indent=2)
+        
+        return {"success": True, "message": "Обновлено"}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+
+# ================== ПРОДВИНУТАЯ АНАЛИТИКА ==================
+
+@app.get("/api/analytics/dashboard")
+async def get_dashboard_data():
+    """Получить данные для главного dashboard"""
+    try:
+        # Глобальная статистика
+        global_stats_file = STATS_DIR / "global_statistics.json"
+        global_stats = {}
+        if global_stats_file.exists():
+            with open(global_stats_file, 'r', encoding='utf-8') as f:
+                global_stats = json.load(f)
+        
+        # Статистика по чатам
+        chats = []
+        total_users = 0
+        total_quizzes = 0
+        total_questions = 0
+        
+        for chat_dir in CHATS_DIR.iterdir():
+            if chat_dir.is_dir():
+                stats_file = chat_dir / "statistics.json"
+                users_file = chat_dir / "users.json"
+                
+                if stats_file.exists():
+                    with open(stats_file, 'r', encoding='utf-8') as f:
+                        stats = json.load(f)
+                        total_quizzes += stats.get("total_quizzes_launched", 0)
+                        total_questions += stats.get("total_questions_asked", 0)
+                
+                if users_file.exists():
+                    with open(users_file, 'r', encoding='utf-8') as f:
+                        users = json.load(f)
+                        total_users += len(users)
+                        chats.append({
+                            "chat_id": chat_dir.name,
+                            "users_count": len(users)
+                        })
+        
+        # Категории
+        categories = get_all_categories()
+        total_questions_db = 0
+        for cat in categories:
+            questions = load_category_questions(cat)
+            total_questions_db += len(questions)
+        
+        # Photo quiz
+        photo_count = 0
+        if PHOTO_QUIZ_METADATA.exists():
+            with open(PHOTO_QUIZ_METADATA, 'r', encoding='utf-8') as f:
+                photo_count = len(json.load(f))
+        
+        return {
+            "total_users": total_users,
+            "total_chats": len(chats),
+            "total_quizzes": total_quizzes,
+            "total_questions_asked": total_questions,
+            "total_categories": len(categories),
+            "total_questions_db": total_questions_db,
+            "total_photo_quiz": photo_count,
+            "global_stats": global_stats,
+            "chats_overview": chats
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+
+@app.get("/api/analytics/charts/activity")
+async def get_activity_chart():
+    """Получить данные для графика активности по времени"""
+    try:
+        # Собираем данные по дням (последние 30 дней)
+        activity_data = {
+            "labels": [],
+            "quizzes": [],
+            "questions": [],
+            "users": []
+        }
+        
+        # В реальности здесь нужно парсить логи или иметь временные метки
+        # Для примера создадим моковые данные на основе существующих статистик
+        import datetime
+        for i in range(30, 0, -1):
+            date = datetime.datetime.now() - datetime.timedelta(days=i)
+            activity_data["labels"].append(date.strftime("%d.%m"))
+            # Моковые данные - в реальности нужно брать из логов
+            activity_data["quizzes"].append(0)
+            activity_data["questions"].append(0)
+            activity_data["users"].append(0)
+        
+        return activity_data
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+
+@app.get("/api/analytics/charts/categories")
+async def get_categories_chart():
+    """Получить данные для графика категорий"""
+    try:
+        categories = get_all_categories()
+        
+        # Получаем статистику использования категорий
+        category_stats = []
+        labels = []
+        question_counts = []
+        usage_counts = []
+        
+        # Собираем глобальную статистику категорий
+        global_stats_file = STATS_DIR / "global_statistics.json"
+        global_cat_stats = {}
+        if global_stats_file.exists():
+            with open(global_stats_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                global_cat_stats = data.get("category_stats", {})
+        
+        for cat in categories[:10]:  # Топ 10 категорий
+            questions = load_category_questions(cat)
+            usage = global_cat_stats.get(cat, {}).get("times_used", 0)
+            
+            labels.append(cat)
+            question_counts.append(len(questions))
+            usage_counts.append(usage)
+        
+        return {
+            "labels": labels,
+            "question_counts": question_counts,
+            "usage_counts": usage_counts
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+
+@app.get("/api/analytics/charts/users")
+async def get_users_chart():
+    """Получить данные для графика топ пользователей"""
+    try:
+        all_users = []
+        
+        # Собираем всех пользователей из всех чатов
+        for chat_dir in CHATS_DIR.iterdir():
+            if chat_dir.is_dir():
+                users_file = chat_dir / "users.json"
+                if users_file.exists():
+                    with open(users_file, 'r', encoding='utf-8') as f:
+                        users = json.load(f)
+                        for user_id, user_data in users.items():
+                            all_users.append({
+                                "name": user_data.get("username", user_data.get("first_name", f"User {user_id}")),
+                                "total_score": user_data.get("total_score", 0),
+                                "correct_answers": user_data.get("correct_answers", 0),
+                                "incorrect_answers": user_data.get("incorrect_answers", 0)
+                            })
+        
+        # Сортируем по баллам
+        all_users.sort(key=lambda x: x["total_score"], reverse=True)
+        top_users = all_users[:10]
+        
+        return {
+            "labels": [u["name"] for u in top_users],
+            "scores": [u["total_score"] for u in top_users],
+            "correct": [u["correct_answers"] for u in top_users],
+            "incorrect": [u["incorrect_answers"] for u in top_users]
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+
+@app.get("/api/analytics/charts/score-distribution")
+async def get_score_distribution_chart():
+    """Получить данные для графика распределения баллов"""
+    try:
+        score_ranges = {
+            "0-100": 0,
+            "101-500": 0,
+            "501-1000": 0,
+            "1001-2000": 0,
+            "2001+": 0
+        }
+        
+        # Собираем всех пользователей
+        for chat_dir in CHATS_DIR.iterdir():
+            if chat_dir.is_dir():
+                users_file = chat_dir / "users.json"
+                if users_file.exists():
+                    with open(users_file, 'r', encoding='utf-8') as f:
+                        users = json.load(f)
+                        for user_data in users.values():
+                            score = user_data.get("total_score", 0)
+                            if score <= 100:
+                                score_ranges["0-100"] += 1
+                            elif score <= 500:
+                                score_ranges["101-500"] += 1
+                            elif score <= 1000:
+                                score_ranges["501-1000"] += 1
+                            elif score <= 2000:
+                                score_ranges["1001-2000"] += 1
+                            else:
+                                score_ranges["2001+"] += 1
+        
+        return {
+            "labels": list(score_ranges.keys()),
+            "values": list(score_ranges.values())
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка: {str(e)}")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

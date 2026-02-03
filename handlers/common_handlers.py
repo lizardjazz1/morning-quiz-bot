@@ -1,5 +1,6 @@
 #handlers/common_handlers.py
 import logging
+import asyncio
 from typing import List, Optional, TYPE_CHECKING
 
 from telegram import Update
@@ -76,6 +77,11 @@ class CommonHandlers:
             bot_state = context.bot_data.get('bot_state')
             if bot_state:
                 bot_state.add_message_for_deletion(update.effective_chat.id, sent_msg.message_id)
+            
+            # Обновляем метаданные чата (название, тип) в фоновом режиме
+            data_manager = context.bot_data.get('data_manager')
+            if data_manager:
+                asyncio.create_task(data_manager.update_chat_metadata(update.effective_chat.id, context.bot))
         except Exception as e:
             logger.error(f"Ошибка при отправке start_command: {e}")
 
@@ -88,9 +94,15 @@ class CommonHandlers:
             return
 
         try:
-            await query.answer()  # Подтверждаем получение callback
-
             callback_data = query.data
+            logger.info(f"🔘 START MENU: Получен callback '{callback_data}' от пользователя {query.from_user.id if query.from_user else 'Unknown'}")
+            
+            # ВАЖНО: Отвечаем на callback СРАЗУ, до всех обработок
+            try:
+                await query.answer(timeout=10)  # Подтверждаем получение callback с таймаутом
+            except Exception as e:
+                logger.warning(f"Не удалось ответить на callback сразу: {e}")
+
             chat_id = query.message.chat_id
             user = query.from_user
 
@@ -158,18 +170,20 @@ class CommonHandlers:
                     'message': type('FakeMessage', (), {
                         'chat_id': chat_id,
                         'from_user': user,
-                        'text': f"/{self.app_config.commands.settings}"
+                        'text': f"/{self.app_config.commands.mystats}"
                     })(),
                     'effective_chat': query.message.chat,
                     'effective_user': user
                 })()
 
-                await self.settings_command(fake_update, context)
+                await self.mystats_command(fake_update, context)
 
             elif callback_data == "start_help":
                 # Вызываем команду help
                 # Создаем более совместимый fake update
-                async def fake_reply_text(text, **kwargs):
+                async def fake_reply_text(*args, **kwargs):
+                    # args[0] может быть 'self' если вызывается как метод, или text если как функция
+                    text = args[-1] if len(args) > 0 else kwargs.get('text', '')
                     return await query.message.reply_text(text, **kwargs)
 
                 fake_message = type('FakeMessage', (), {
@@ -190,16 +204,22 @@ class CommonHandlers:
 
             elif callback_data == "start_categories":
                 # Вызываем команду categories
-                async def fake_reply_text(text, **kwargs):
-                    return await query.message.reply_text(text, **kwargs)
+                class FakeMessage:
+                    def __init__(self, real_message, user, text):
+                        self.chat_id = real_message.chat_id
+                        self.from_user = user
+                        self.text = text
+                        self.message_id = real_message.message_id
+                        self.chat = real_message.chat
+                        self._real_message = real_message
+                    
+                    async def reply_text(self, *args, **kwargs):
+                        return await self._real_message.reply_text(*args, **kwargs)
 
+                fake_message = FakeMessage(query.message, user, f"/{self.app_config.commands.categories}")
+                
                 fake_update = type('FakeUpdate', (), {
-                    'message': type('FakeMessage', (), {
-                        'chat_id': chat_id,
-                        'from_user': user,
-                        'text': f"/{self.app_config.commands.categories}",
-                        'reply_text': fake_reply_text
-                    })(),
+                    'message': fake_message,
                     'effective_chat': query.message.chat,
                     'effective_user': user
                 })()
@@ -223,6 +243,10 @@ class CommonHandlers:
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not update.message:
             return
+        
+        import time
+        start_time = time.time()
+        logger.info(f"Команда /help получена в {start_time:.3f}")
 
         help_full_text = (
             f"{md.section_header('Справка по командам бота:', '📖')}\n\n"
@@ -253,16 +277,27 @@ class CommonHandlers:
             f"{md.command_help(self.app_config.commands.start, 'начать работу с ботом')}\n"
             f"{md.command_help(self.app_config.commands.cancel, 'отмена текущего диалога (например, настройки)')}\n\n"
             f"{md.section_header('Поддержка', '💬')}\n"
-            f"{escape_markdown_v2('По всем вопросам обращайтесь к @mrlizardfromrussia').replace('@', '\\@')}"
+            f"{escape_markdown_v2(f'По всем вопросам обращайтесь к {self.app_config.support_contact}').replace('@', '\\@')}"
         )
         try:
-            sent_msg = await update.message.reply_text(help_full_text, parse_mode=ParseMode.MARKDOWN_V2)
+            from modules.telegram_utils import safe_send_message
+            sent_msg = await safe_send_message(
+                context.bot,
+                update.effective_chat.id,
+                help_full_text,
+                parse_mode=ParseMode.MARKDOWN_V2
+            )
             # Добавляем сообщение в список для удаления
             bot_state = context.bot_data.get('bot_state')
             if bot_state:
                 bot_state.add_message_for_deletion(update.effective_chat.id, sent_msg.message_id)
+            
+            elapsed = time.time() - start_time
+            logger.info(f"Команда /help обработана за {elapsed:.3f}с (подготовка текста + отправка)")
         except Exception as e:
-            logger.error(f"Ошибка при отправке help_command: {e}")
+            logger.error(f"Ошибка при отправке help_command: {e}", exc_info=True)
+            elapsed = time.time() - start_time
+            logger.error(f"Команда /help завершилась с ошибкой за {elapsed:.3f}с")
 
     async def categories_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not update.message: return
@@ -274,7 +309,8 @@ class CommonHandlers:
 
         if not categories_data:
             try:
-                sent_msg = await update.message.reply_text(escape_markdown_v2("Категории вопросов еще не загружены или отсутствуют."), parse_mode=ParseMode.MARKDOWN_V2)
+                from modules.telegram_utils import safe_send_message
+                sent_msg = await safe_send_message(context.bot, update.effective_chat.id, escape_markdown_v2("Категории вопросов еще не загружены или отсутствуют."), parse_mode=ParseMode.MARKDOWN_V2)
                 # Добавляем сообщение в список для удаления
                 bot_state = context.bot_data.get('bot_state')
                 if bot_state:
@@ -299,12 +335,13 @@ class CommonHandlers:
         full_message = "\n".join(response_lines)
 
         try:
+            from modules.telegram_utils import safe_send_message
             if len(full_message) > 4096:
                 logger.warning("Список категорий слишком длинный, будет отправлен частями.")
                 part_buffer = response_lines[0] + "\n"
                 for line_idx, line_content in enumerate(response_lines[1:], 1):
                     if len(part_buffer) + len(line_content) + 1 > 4000:
-                        sent_msg = await update.message.reply_text(part_buffer.strip(), parse_mode=ParseMode.MARKDOWN_V2)
+                        sent_msg = await safe_send_message(context.bot, update.effective_chat.id, part_buffer.strip(), parse_mode=ParseMode.MARKDOWN_V2)
                         # Добавляем сообщение в список для удаления
                         bot_state = context.bot_data.get('bot_state')
                         if bot_state:
@@ -313,13 +350,13 @@ class CommonHandlers:
                     else:
                         part_buffer += "\n" + line_content
                 if part_buffer.strip():
-                    sent_msg = await update.message.reply_text(part_buffer.strip(), parse_mode=ParseMode.MARKDOWN_V2)
+                    sent_msg = await safe_send_message(context.bot, update.effective_chat.id, part_buffer.strip(), parse_mode=ParseMode.MARKDOWN_V2)
                     # Добавляем сообщение в список для удаления
                     bot_state = context.bot_data.get('bot_state')
                     if bot_state:
                         bot_state.add_message_for_deletion(update.effective_chat.id, sent_msg.message_id)
             else:
-                sent_msg = await update.message.reply_text(full_message, parse_mode=ParseMode.MARKDOWN_V2)
+                sent_msg = await safe_send_message(context.bot, update.effective_chat.id, full_message, parse_mode=ParseMode.MARKDOWN_V2)
                 # Добавляем сообщение в список для удаления
                 bot_state = context.bot_data.get('bot_state')
                 if bot_state:
@@ -360,14 +397,18 @@ class CommonHandlers:
                 return
             
             # Сортируем по общему количеству использований
-            sorted_stats = sorted(global_stats.items(), key=lambda x: x[1].get('total_usage', 0), reverse=True)
-            
+            # Поддержка обоих форматов: global_usage (новый) и total_usage (старый)
+            sorted_stats = sorted(global_stats.items(),
+                                key=lambda x: x[1].get('global_usage', x[1].get('total_usage', 0)),
+                                reverse=True)
+
             response_lines = [f"*{escape_markdown_v2('📊 Глобальная статистика использования категорий:')}*"]
-            
+
             for category_name, stats in sorted_stats[:20]:  # Показываем топ-20
                 cat_name_escaped = escape_markdown_v2(category_name)
-                total_usage = stats.get('total_usage', 0)
-                chat_count = stats.get('chat_count', 0)
+                # Поддержка обоих форматов: global_usage (новый) или total_usage (старый)
+                total_usage = stats.get('global_usage', stats.get('total_usage', 0))
+                chat_count = len(stats.get('chats_used_in', [])) if 'chats_used_in' in stats else stats.get('chat_count', 0)
                 last_used = stats.get('last_used', 0)
                 
                 # Форматируем время последнего использования
@@ -394,17 +435,34 @@ class CommonHandlers:
                 chat_stats = self.category_manager.get_chat_category_stats(chat_id)
                 if chat_stats:
                     response_lines.append(f"\n*{escape_markdown_v2(f'📱 Статистика в этом чате ({chat_id}):')}*")
-                    
+
+                    # Функция для получения chat_usage с поддержкой обоих форматов
+                    def get_chat_usage_value(stats_data, chat_id_str):
+                        chat_usage_data = stats_data.get('chat_usage', 0)
+                        if isinstance(chat_usage_data, dict):
+                            # Глобальный формат: словарь с ID чатов
+                            return chat_usage_data.get(chat_id_str, 0)
+                        elif isinstance(chat_usage_data, (int, float)):
+                            # Формат файла чата: просто число использований в этом чате
+                            return int(chat_usage_data)
+                        return 0
+
                     # Сортируем по использованию в чате
-                    sorted_chat_stats = sorted(chat_stats.items(), key=lambda x: x[1].get('chat_usage', 0), reverse=True)
-                    
+                    sorted_chat_stats = sorted(chat_stats.items(),
+                                             key=lambda x: get_chat_usage_value(x[1], str(chat_id)),
+                                             reverse=True)
+
                     for category_name, stats in sorted_chat_stats[:10]:  # Показываем топ-10
                         cat_name_escaped = escape_markdown_v2(category_name)
-                        chat_usage = stats.get('chat_usage', 0)
-                        total_usage = stats.get('total_usage', 0)
-                        
+                        chat_usage = get_chat_usage_value(stats, str(chat_id))
+
+                        # Берём глобальное использование из глобальной статистики
+                        global_usage = 0
+                        if category_name in global_stats:
+                            global_usage = global_stats[category_name].get('global_usage', global_stats[category_name].get('total_usage', 0))
+
                         response_lines.append(
-                            f"{escape_markdown_v2('-')} `{cat_name_escaped}`: {escape_markdown_v2(f'{chat_usage} использований (всего: {total_usage})')}"
+                            f"{escape_markdown_v2('-')} `{cat_name_escaped}`: {escape_markdown_v2(f'{chat_usage} использований (глобально: {global_usage})')}"
                         )
             
             full_message = "\n".join(response_lines)
@@ -762,7 +820,7 @@ _Спасибо за ожидание\\!_"""
             self.app_config.commands.mystats,
             self.app_config.commands.categories,
             self.app_config.commands.category_stats,
-            self.app_config.commands.settings,  # Личные настройки пользователя
+            self.app_config.commands.mystats,  # Личная статистика пользователя
             self.app_config.commands.cancel,
             "maintenance",  # Команда управления обслуживанием (исключаем из перехвата)
         ]
@@ -789,10 +847,16 @@ _Спасибо за ожидание\\!_"""
             await update.message.reply_text("❌ Система управления обслуживанием недоступна")
             return
 
-        # Проверяем, является ли пользователь администратором
-        # В реальной системе здесь должна быть проверка прав администратора
+        # КРИТИЧЕСКАЯ КОМАНДА: Только для создателя бота!
         user_id = update.effective_user.id
-        # Для теста разрешим любому пользователю (в продакшене добавить проверку)
+        developer_id = self.app_config.global_settings.get("developer_notifications", {}).get("developer_user_id")
+
+        if user_id != developer_id:
+            await update.message.reply_text(
+                escape_markdown_v2("❌ У вас нет прав для выполнения этой команды. Требуются права администратора."),
+                parse_mode=ParseMode.MARKDOWN_V2
+            )
+            return
 
         args = context.args if context.args else []
 

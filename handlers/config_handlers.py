@@ -240,13 +240,29 @@ class ConfigHandlers:
     async def admin_settings_entry(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> Optional[str]:
         if not update.message or not update.effective_chat or not update.effective_user:
             return ConversationHandler.END
+        
+        import time
+        start_time = time.time()
+        logger.info(f"Команда /adminsettings получена в {start_time:.3f}")
+        
         if not await self._is_admin(update, context):
             await update.message.reply_text(escape_markdown_v2("Эта команда доступна только администраторам чата."), parse_mode=ParseMode.MARKDOWN_V2)
+            elapsed = time.time() - start_time
+            logger.info(f"Команда /adminsettings завершена (не админ) за {elapsed:.3f}с")
             return ConversationHandler.END
 
+        chat_id = update.effective_chat.id
         context.chat_data.clear()
-        context.chat_data[CTX_ADMIN_CFG_CHAT_ID] = update.effective_chat.id
+        context.chat_data[CTX_ADMIN_CFG_CHAT_ID] = chat_id
+        
+        # Обновляем метаданные чата (название, тип) в фоновом режиме
+        import asyncio
+        asyncio.create_task(self.data_manager.update_chat_metadata(chat_id, context.bot))
+        
         await self._send_main_cfg_menu(update, context)
+        
+        elapsed = time.time() - start_time
+        logger.info(f"Команда /adminsettings обработана за {elapsed:.3f}с")
         return CFG_MAIN_MENU
 
     async def _send_main_cfg_menu(self, query_or_update: Optional[Union[Update, CallbackQuery]], context: ContextTypes.DEFAULT_TYPE):
@@ -430,7 +446,28 @@ class ConfigHandlers:
         context.chat_data[CTX_INPUT_CANCEL_CB_DATA] = CB_ADM_BACK_TO_MAIN
 
         if action == CB_ADM_FINISH_CONFIG:
-            await self._update_config_message(query, context, escape_markdown_v2("Настройки сохранены. Завершение."), None)
+            # Удаляем меню настроек
+            target_msg_id = context.chat_data.get(CTX_ADMIN_CFG_MSG_ID)
+            if target_msg_id:
+                try:
+                    await context.bot.delete_message(chat_id=chat_id, message_id=target_msg_id)
+                except Exception as e:
+                    logger.debug(f"Не удалось удалить сообщение меню: {e}")
+            
+            # Отправляем финальное сообщение
+            await safe_send_message(
+                context.bot,
+                chat_id,
+                escape_markdown_v2("✅ Настройки сохранены и применены!"),
+                parse_mode=ParseMode.MARKDOWN_V2
+            )
+            
+            # Отвечаем на callback query
+            try:
+                await query.answer("Настройки сохранены")
+            except Exception:
+                pass
+            
             context.chat_data.clear()
             return ConversationHandler.END
         elif action == CB_ADM_BACK_TO_MAIN:
@@ -1255,7 +1292,24 @@ class ConfigHandlers:
 
         settings = self.data_manager.get_chat_settings(chat_id)
         daily_settings = settings.setdefault("daily_quiz", {})
-        times_list: List[Dict[str, int]] = daily_settings.setdefault("times_msk", [])
+        times_list_raw = daily_settings.setdefault("times_msk", [])
+        
+        # Исправляем данные, если times_msk сохранено как строка вместо массива
+        if isinstance(times_list_raw, str):
+            # Парсим строку типа "09:00" в объект {"hour": 9, "minute": 0}
+            try:
+                hour, minute = times_list_raw.split(":")
+                times_list = [{"hour": int(hour), "minute": int(minute)}]
+                # Сохраняем исправленные данные
+                daily_settings["times_msk"] = times_list
+                self.data_manager.update_chat_setting(chat_id, ["daily_quiz", "times_msk"], times_list)
+            except:
+                times_list = []
+        elif not isinstance(times_list_raw, list):
+            times_list = []
+        else:
+            times_list: List[Dict[str, int]] = times_list_raw
+        
         times_list.sort(key=lambda t: (t.get("hour",0), t.get("minute",0)))
 
         # Получаем текущий timezone и его отображаемое название

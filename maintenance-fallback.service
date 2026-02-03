@@ -1,0 +1,24 @@
+[Unit]
+Description=Morning Quiz Bot Maintenance Fallback
+After=network.target
+# Останавливаем основной бот при запуске fallback
+Conflicts=quiz-bot.service
+
+[Service]
+Type=simple
+User=lizard
+Group=lizard
+WorkingDirectory=/home/lizard/morning-quiz-bot
+Environment=PATH=/usr/local/bin:/usr/bin:/bin:/home/lizard/morning-quiz-bot/venv/bin
+EnvironmentFile=/home/lizard/morning-quiz-bot/.env
+# Загружаем переменные из .env файла (включая BOT_TOKEN)
+
+# Запускаем fallback бота
+ExecStart=/home/lizard/morning-quiz-bot/venv/bin/python maintenance_fallback.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

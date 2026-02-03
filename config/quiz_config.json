@@ -87,19 +87,10 @@
             "stop_quiz": "stopquiz",
             "cancel": "cancel",
             "admin_settings": "adminsettings",
-            "view_chat_config": "viewchatconfig",
-            "config": "config",
-            "adddailyquiz": "adddailyquiz",
-            "removedailyquiz": "removedailyquiz",
-            "listdailyquizzes": "listdailyquizzes",
-            "reloadcfg": "reloadcfg",
-            "test_categories": "test_categories",
             "reset_categories_stats": "reset_categories_stats",
             "chat_stats": "chat_stats",
             "category_stats": "category_stats",
-            "test_notifications": "test_notifications",
-            "chatcategories": "chatcategories",
-            "daily_wisdom": "dailywisdom"
+            "chatcategories": "chatcategories"
         },
         "developer_notifications": {
             "enabled": true,
@@ -201,6 +192,7 @@
             "base_multiplier": 0.2,
             "max_multiplier": 3.0,
             "min_streak_for_bonus": 5
-        }
+        },
+        "support_contact": "@Ilzrd"
     }
 }

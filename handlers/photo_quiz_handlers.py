@@ -7,6 +7,7 @@ import logging
 from typing import Dict, Optional
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, Message, CallbackQuery
+from telegram.error import BadRequest
 from telegram.ext import (
     CallbackQueryHandler,
     CommandHandler,
@@ -17,6 +18,7 @@ from telegram.ext import (
 )
 
 from modules.photo_quiz_manager import PhotoQuizManager
+from modules.telegram_utils import safe_send_message
 from utils import escape_markdown_v2
 
 logger = logging.getLogger(__name__)
@@ -36,8 +38,8 @@ CB_PQCFG_NOOP = f"{CB_PQCFG_PREFIX}noop"
 PHOTO_CFG_STORE_KEY = "photo_quiz_cfg"
 PHOTO_CFG_MENU_MSG_KEY = "_photo_quiz_cfg_msg_id"
 
-DEFAULT_TIME_LIMIT = 45
-TIME_PRESETS = [30, 45, 60]
+DEFAULT_TIME_LIMIT = 60
+TIME_PRESETS = [60, 90, 120, 180]
 DEFAULT_QUESTION_COUNT = 3
 QUESTION_COUNT_MIN = 1
 QUESTION_COUNT_MAX = 10
@@ -100,31 +102,49 @@ class PhotoQuizHandlers:
 
     async def photo_quiz_help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик команды /photo_quiz_help"""
+        if not update.message:
+            return
+        
         try:
+            # Формируем текст справки с правильным экранированием для MarkdownV2
             help_text = (
-                "🖼️ **Фото-викторина - Помощь**\n\n"
-                "**Команды:**\n"
-                "• `/photo_quiz` - Настроить и запустить фото-викторину\n"
-                "• `/stop_photo_quiz` - Остановить активную фото-викторину\n"
-                "• `/photo_quiz_help` - Эта справка\n\n"
-                "**Как играть:**\n"
-                "1. Запустите `/photo_quiz`\n"
-                "2. Выберите время ответа и нажмите «Запустить фото-викторину»\n"
-                "3. Угадайте слово по изображению до окончания таймера\n"
-                "4. Подсказки появятся автоматически, если это потребуется\n\n"
-                "**Очки:**\n"
-                "• Правильный ответ: 5 очков\n"
-                "• Быстрый ответ (до первой подсказки): +1 очко\n"
-                "• Каждая ошибка: -0.5 очка (но минимум 1 очко за победу)\n\n"
-                "**Удачи!** 🎯"
+                f"🖼️ {escape_markdown_v2('Фото-викторина - Помощь')}\n\n"
+                f"{escape_markdown_v2('Команды:')}\n"
+                f"• {escape_markdown_v2('/photo_quiz')} \\- {escape_markdown_v2('Настроить и запустить фото-викторину')}\n"
+                f"• {escape_markdown_v2('/stop_photo_quiz')} \\- {escape_markdown_v2('Остановить активную фото-викторину')}\n"
+                f"• {escape_markdown_v2('/photo_quiz_help')} \\- {escape_markdown_v2('Эта справка')}\n\n"
+                f"{escape_markdown_v2('Как играть:')}\n"
+                f"1\\. {escape_markdown_v2('Запустите')} {escape_markdown_v2('/photo_quiz')}\n"
+                f"2\\. {escape_markdown_v2('Выберите время ответа и нажмите «Запустить фото-викторину»')}\n"
+                f"3\\. {escape_markdown_v2('Угадайте слово по изображению до окончания таймера')}\n"
+                f"4\\. {escape_markdown_v2('Подсказки появятся автоматически, если это потребуется')}\n\n"
+                f"{escape_markdown_v2('Очки:')}\n"
+                f"• {escape_markdown_v2('Правильный ответ: 5 очков')}\n"
+                f"• {escape_markdown_v2('Быстрый ответ (до первой подсказки): +1 очко')}\n"
+                f"• {escape_markdown_v2('Каждая ошибка: -0.5 очка (но минимум 1 очко за победу)')}\n\n"
+                f"{escape_markdown_v2('Удачи!')} 🎯"
             )
 
-            await update.message.reply_text(help_text, parse_mode="Markdown")
+            await safe_send_message(
+                bot=context.bot,
+                chat_id=update.message.chat_id,
+                text=help_text,
+                reply_to_message_id=update.message.message_id,
+                parse_mode="MarkdownV2",
+            )
 
         except Exception as e:
-            logger.error(f"Ошибка в команде /photo_quiz_help: {e}")
-            if update.message:
-                await update.message.reply_text(escape_markdown_v2("❌ Ошибка отображения справки."))
+            logger.error(f"Ошибка в команде /photo_quiz_help: {e}", exc_info=True)
+            try:
+                await safe_send_message(
+                    bot=context.bot,
+                    chat_id=update.message.chat_id,
+                    text=escape_markdown_v2("❌ Ошибка отображения справки."),
+                    reply_to_message_id=update.message.message_id,
+                    parse_mode="MarkdownV2",
+                )
+            except Exception as e2:
+                logger.error(f"Не удалось отправить сообщение об ошибке: {e2}")
 
     async def handle_photo_quiz_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик сообщений в фото-викторине"""
@@ -327,6 +347,11 @@ class PhotoQuizHandlers:
                     parse_mode="MarkdownV2",
                 )
                 return
+            except BadRequest as e_br:
+                # Если сообщение не изменилось - это нормальная ситуация
+                if "Message is not modified" not in str(e_br).lower():
+                    logger.debug(f"Ошибка BadRequest при редактировании сообщения фото-викторины: {e_br}")
+                return
             except Exception:
                 pass
 
@@ -337,22 +362,32 @@ class PhotoQuizHandlers:
             target_message = update_or_query.message
 
         if target_message:
-            sent = await target_message.reply_text(
-                status_text,
-                reply_markup=markup,
-                parse_mode="MarkdownV2",
-            )
-            context.chat_data[PHOTO_CFG_MENU_MSG_KEY] = sent.message_id
-        else:
-            chat_id = cfg_chat_id
-            if chat_id:
-                sent = await context.bot.send_message(
-                    chat_id=chat_id,
+            try:
+                sent = await safe_send_message(
+                    bot=context.bot,
+                    chat_id=target_message.chat_id,
                     text=status_text,
                     reply_markup=markup,
+                    reply_to_message_id=target_message.message_id,
                     parse_mode="MarkdownV2",
                 )
                 context.chat_data[PHOTO_CFG_MENU_MSG_KEY] = sent.message_id
+            except Exception as e:
+                logger.error(f"Ошибка отправки сообщения конфигурации фото-квиза: {e}", exc_info=True)
+        else:
+            chat_id = cfg_chat_id
+            if chat_id:
+                try:
+                    sent = await safe_send_message(
+                        bot=context.bot,
+                        chat_id=chat_id,
+                        text=status_text,
+                        reply_markup=markup,
+                        parse_mode="MarkdownV2",
+                    )
+                    context.chat_data[PHOTO_CFG_MENU_MSG_KEY] = sent.message_id
+                except Exception as e:
+                    logger.error(f"Ошибка отправки сообщения конфигурации фото-квиза: {e}", exc_info=True)
 
     async def _cleanup_cfg_message(
         self,
@@ -495,6 +530,11 @@ class PhotoQuizHandlers:
                     parse_mode=parse_mode,
                 )
                 return True
+            except BadRequest as e_br:
+                # Если сообщение не изменилось - это нормальная ситуация (например, двойной клик)
+                if "Message is not modified" not in str(e_br).lower():
+                    logger.debug(f"Ошибка BadRequest при редактировании меню фото-викторины: {e_br}")
+                return True  # Считаем успешным, так как сообщение уже имеет нужное содержимое
             except Exception as e:
                 logger.debug(f"Не удалось отредактировать сообщение меню фото-викторины: {e}")
         return False

@@ -144,12 +144,15 @@ class BackupHandlers:
             )
     
     async def restore_backup_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Команда для восстановления системы из бекапа"""
+        """Команда для восстановления системы из бекапа - ТОЛЬКО ДЛЯ СОЗДАТЕЛЯ!"""
         if not update.message or not update.effective_chat:
             return
-        
-        # Проверяем права администратора
-        if not await is_user_admin_in_update(update, context):
+
+        # КРИТИЧЕСКАЯ КОМАНДА: Только для создателя бота!
+        user_id = update.effective_user.id if update.effective_user else None
+        developer_id = self.app_config.global_settings.get("developer_notifications", {}).get("developer_user_id")
+
+        if user_id != developer_id:
             await update.message.reply_text(
                 escape_markdown_v2("❌ У вас нет прав для выполнения этой команды. Требуются права администратора.")
             )
@@ -200,12 +203,15 @@ class BackupHandlers:
             )
     
     async def delete_backup_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Команда для удаления бекапа"""
+        """Команда для удаления бекапа - ТОЛЬКО ДЛЯ СОЗДАТЕЛЯ!"""
         if not update.message or not update.effective_chat:
             return
-        
-        # Проверяем права администратора
-        if not await is_user_admin_in_update(update, context):
+
+        # КРИТИЧЕСКАЯ КОМАНДА: Только для создателя бота!
+        user_id = update.effective_user.id if update.effective_user else None
+        developer_id = self.app_config.global_settings.get("developer_notifications", {}).get("developer_user_id")
+
+        if user_id != developer_id:
             await update.message.reply_text(
                 escape_markdown_v2("❌ У вас нет прав для выполнения этой команды. Требуются права администратора.")
             )

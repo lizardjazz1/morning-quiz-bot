@@ -126,11 +126,11 @@
     "checksum": "d27bf827a0fe1423aec6e99629ff239f"
   },
   "Интересные факты": {
-    "question_count": 133,
+    "question_count": 143,
     "file_path": "questions/Интересные факты.json",
     "last_updated": null,
-    "file_size": 47737,
-    "checksum": "aec2636de6de94042c522e7ee4e4242f"
+    "file_size": 53167,
+    "checksum": "08d74cdc934bff9d361258954c631bd3"
   },
   "Английский язык": {
     "question_count": 109,
@@ -154,11 +154,11 @@
     "checksum": "abf9ef281e385a885e4329d28781292a"
   },
   "Животные": {
-    "question_count": 133,
+    "question_count": 141,
     "file_path": "questions/Животные.json",
     "last_updated": null,
-    "file_size": 31582,
-    "checksum": "1f9319b853c0bbdd1d483c6beaafe14d"
+    "file_size": 33960,
+    "checksum": "8acc939e27b7df10f96dfaf90a6fc123"
   },
   "Еда и напитки": {
     "question_count": 136,
@@ -168,11 +168,11 @@
     "checksum": "a80e11606e5871a41e9b2cc5a04370a6"
   },
   "Искусство": {
-    "question_count": 84,
+    "question_count": 156,
     "file_path": "questions/Искусство.json",
     "last_updated": null,
-    "file_size": 22161,
-    "checksum": "c44fd4020513fbb2c4f85e657f0199ca"
+    "file_size": 53656,
+    "checksum": "3e4466d1aef8c17e33bf62fbe2e316af"
   },
   "Немецкий язык": {
     "question_count": 122,
@@ -285,5 +285,159 @@
     "last_updated": null,
     "file_size": 64257,
     "checksum": "8dcc831906ed6131d9c1073602af20aa"
+  },
+  "Новый год и Рождество": {
+    "question_count": 104,
+    "file_path": "questions/Новый год и Рождество.json",
+    "last_updated": null,
+    "file_size": 55546,
+    "checksum": "0e6cdab40ec807fc8c8648b14acc6282"
+  },
+  "Этикет и манеры": {
+    "question_count": 113,
+    "file_path": "questions/Этикет и манеры.json",
+    "last_updated": null,
+    "file_size": 55636,
+    "checksum": "5888be877fc49ae844b2bf7de49c7abd"
+  },
+  "Кибербезопасность": {
+    "question_count": 69,
+    "file_path": "questions/Кибербезопасность.json",
+    "last_updated": null,
+    "file_size": 46372,
+    "checksum": "37c9379f7297247b3fc3a887eb4e5735"
+  },
+  "Сериалы и телевидение": {
+    "question_count": 101,
+    "file_path": "questions/Сериалы и телевидение.json",
+    "last_updated": null,
+    "file_size": 50010,
+    "checksum": "6017081ce4e001a637ac561cdb242032"
+  },
+  "Химия": {
+    "question_count": 36,
+    "file_path": "questions/Химия.json",
+    "last_updated": null,
+    "file_size": 16167,
+    "checksum": "6b74db92d1dc8f550002da5749558554"
+  },
+  "Коктейльная культура": {
+    "question_count": 60,
+    "file_path": "questions/Коктейльная культура.json",
+    "last_updated": null,
+    "file_size": 19686,
+    "checksum": "bf6fc5f82cdb63a81b4175f051d72399"
+  },
+  "Оружие и доспехи мира": {
+    "question_count": 60,
+    "file_path": "questions/Оружие и доспехи мира.json",
+    "last_updated": null,
+    "file_size": 18886,
+    "checksum": "892e6376c39001b63da44256d914d712"
+  },
+  "Микробиология и вирусология": {
+    "question_count": 60,
+    "file_path": "questions/Микробиология и вирусология.json",
+    "last_updated": null,
+    "file_size": 21479,
+    "checksum": "bfebf502bd16e35c5308fe8b443d8ab7"
+  },
+  "Знаменитые речи и цитаты": {
+    "question_count": 60,
+    "file_path": "questions/Знаменитые речи и цитаты.json",
+    "last_updated": null,
+    "file_size": 21660,
+    "checksum": "5e1d877b5d3a5763882a5d722cad2143"
+  },
+  "Геральдика и флаги": {
+    "question_count": 60,
+    "file_path": "questions/Геральдика и флаги.json",
+    "last_updated": null,
+    "file_size": 17515,
+    "checksum": "421b433cb8f38ec7bfa8f3dcea4a2fde"
+  },
+  "Теории заговора": {
+    "question_count": 60,
+    "file_path": "questions/Теории заговора.json",
+    "last_updated": null,
+    "file_size": 26174,
+    "checksum": "c96a6591c24315090d2e8ee30ed686ad"
+  },
+  "Классическая музыка": {
+    "question_count": 60,
+    "file_path": "questions/Классическая музыка.json",
+    "last_updated": null,
+    "file_size": 18700,
+    "checksum": "fece1f1c6c62ad4dfd1bf37ac0bf6181"
+  },
+  "Философия": {
+    "question_count": 90,
+    "file_path": "questions/Философия.json",
+    "last_updated": null,
+    "file_size": 29213,
+    "checksum": "513e3331791d3fabdbdcaa6c90b1a05a"
+  },
+  "Мир handmade и ремёсел": {
+    "question_count": 59,
+    "file_path": "questions/Мир handmade и ремёсел.json",
+    "last_updated": null,
+    "file_size": 23289,
+    "checksum": "b73eb1e5132efd0c96eb34009e970155"
+  },
+  "Фольклор и сказки народов мира": {
+    "question_count": 62,
+    "file_path": "questions/Фольклор и сказки народов мира.json",
+    "last_updated": null,
+    "file_size": 22934,
+    "checksum": "90bdec3ef38de83547a33f42bfedf82c"
+  },
+  "Минералогия и геология": {
+    "question_count": 90,
+    "file_path": "questions/Минералогия и геология.json",
+    "last_updated": null,
+    "file_size": 26441,
+    "checksum": "8a50338b13ea049aa246f30a3192f8ce"
+  },
+  "Настольные игры": {
+    "question_count": 89,
+    "file_path": "questions/Настольные игры.json",
+    "last_updated": null,
+    "file_size": 30884,
+    "checksum": "98c13cadfc475d2285ccaaef1ba91698"
+  },
+  "Городские легенды и конспирология": {
+    "question_count": 59,
+    "file_path": "questions/Городские легенды и конспирология.json",
+    "last_updated": null,
+    "file_size": 31699,
+    "checksum": "6039ff257a627d40b12e3ee2042e24c8"
+  },
+  "Мир комиксов": {
+    "question_count": 113,
+    "file_path": "questions/Мир комиксов.json",
+    "last_updated": null,
+    "file_size": 39480,
+    "checksum": "28fad16d3ef77e33b27019f4bcd88588"
+  },
+  "Языки и лингвистика": {
+    "question_count": 59,
+    "file_path": "questions/Языки и лингвистика.json",
+    "last_updated": null,
+    "file_size": 25932,
+    "checksum": "5c5e525d5ffb8966125f7c2b95c7a542"
+  },
+  "Криптовалюты и блокчейн": {
+    "question_count": 60,
+    "file_path": "questions/Криптовалюты и блокчейн.json",
+    "last_updated": null,
+    "file_size": 22916,
+    "checksum": "7c22f266e00a8924edf7ed9b9364033b"
+  },
+  "Робототехника и дроны": {
+    "question_count": 62,
+    "file_path": "questions/Робототехника и дроны.json",
+    "last_updated": null,
+    "file_size": 27436,
+    "checksum": "648928d8b4f99f052361a3bc39af7607"
   }
 }

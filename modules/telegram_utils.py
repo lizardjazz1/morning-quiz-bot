@@ -38,10 +38,10 @@ class ChatNotFoundError(TelegramMessageError):
     pass
 
 def safe_telegram_call(
-    max_retries: int = 2,  # Уменьшаем количество попыток
-    base_delay: float = 0.2,  # Уменьшаем базовую задержку с 1.0 до 0.1
-    max_delay: float = 1.0,  # Уменьшаем максимальную задержку с 30.0 до 1.0
-    exponential_base: float = 1.5  # Уменьшаем экспоненту с 2.0 до 1.5
+    max_retries: int = 1,  # Уменьшено с 2 до 1 (всего 2 попытки) - сеть работает быстро
+    base_delay: float = 0.1,  # Уменьшено с 0.2 - быстрый retry
+    max_delay: float = 0.5,  # Уменьшено с 1.0 - быстрый retry
+    exponential_base: float = 1.5  # База для экспоненциального backoff
 ):
     """
     Декоратор для безопасного вызова Telegram API с retry

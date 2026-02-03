@@ -41,6 +41,7 @@ setup(
         "APScheduler>=3.9.0",
         "pytz>=2022.1",
         "aiofiles>=0.23.0",
+        "openai>=1.0.0",  # Для работы с OpenRouter API (qwen/qwen3-max)
     ],
     extras_require={
         "dev": [

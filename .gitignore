@@ -87,3 +87,8 @@ ARCHITECTURE/
 # Temporary/artifact files
 tatus*
 *new data structure*
+
+# AI/Neural networks related
+AVATARS/
+.claude/
+modules/openrouter_client.py

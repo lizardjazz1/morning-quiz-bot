@@ -1,0 +1,24 @@
+[Unit]
+Description=Morning Quiz Bot
+After=network.target
+# Останавливаем maintenance-fallback при запуске
+Conflicts=maintenance-fallback.service
+
+[Service]
+Type=simple
+User=lizard
+Group=lizard
+WorkingDirectory=/home/lizard/morning-quiz-bot
+Environment=PATH=/usr/local/bin:/usr/bin:/bin:/home/lizard/morning-quiz-bot/venv/bin
+
+# Удаляем файл режима обслуживания перед запуском (бот сам управляет этим файлом)
+ExecStartPre=/bin/bash -c 'rm -f /home/lizard/morning-quiz-bot/config/maintenance_status.json'
+
+ExecStart=/home/lizard/morning-quiz-bot/venv/bin/python bot.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

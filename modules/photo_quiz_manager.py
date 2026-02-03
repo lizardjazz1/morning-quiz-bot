@@ -642,13 +642,16 @@ class PhotoQuizManager:
                 base_text_lines.append("")
                 base_text_lines.append(f"✅ Ответ: {escape(current_question['display_answer'])}")
                 if attempts > 0:
+                    # Экранируем каждую часть отдельно, включая скобки
+                    penalty_text = escape(f"(штраф -{penalty_display})")
                     base_text_lines.append(
-                        f"🏆 Очки: {escape('+')}{escape(points_display)} (штраф {escape('-')}{escape(penalty_display)})"
+                        f"🏆 Очки: {escape('+')}{escape(points_display)} {penalty_text}"
                     )
                 else:
                     base_text_lines.append(f"🏆 Очки: {escape('+')}{escape(points_display)}")
+                time_seconds = int((datetime.now() - quiz_state.start_time).total_seconds())
                 base_text_lines.append(
-                    f"⏱️ Время: {escape(str(int((datetime.now() - quiz_state.start_time).total_seconds())))} сек"
+                    f"⏱️ Время: {escape(str(time_seconds))} {escape('сек')}"
                 )
             elif timeout:
                 header = escape("⏰ Время истекло! 🕒")
@@ -674,7 +677,9 @@ class PhotoQuizManager:
             )
 
             try:
-                result_message_obj = await context.bot.send_message(
+                from modules.telegram_utils import safe_send_message
+                result_message_obj = await safe_send_message(
+                    bot=context.bot,
                     chat_id=chat_id,
                     text=result_text,
                     parse_mode=ParseMode.MARKDOWN_V2,
@@ -848,9 +853,10 @@ class PhotoQuizManager:
             if question_index >= 0 and question_index < len(quiz_state.questions):
                 answer = quiz_state.questions[question_index]["display_answer"]
 
-            message_text = escape_markdown_v2(
-                f"🛑 Фото-викторина остановлена!\n\n✅ Правильный ответ: {answer}"
-            )
+            # Формируем текст сообщения, экранируя только ответ, чтобы избежать проблем с парсингом entities
+            # Статический текст уже безопасен (не содержит специальных символов Markdown), ответ экранируем отдельно
+            escaped_answer = escape_markdown_v2(str(answer))
+            message_text = f"🛑 Фото-викторина остановлена!\n\n✅ Правильный ответ: {escaped_answer}"
 
             await update.message.reply_text(
                 message_text,

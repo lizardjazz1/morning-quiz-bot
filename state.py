@@ -2,7 +2,7 @@
 import copy
 from typing import Dict, Any, Set, Optional, List, TYPE_CHECKING
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from modules.logger_config import get_logger
 
 from utils import get_current_utc_time # utils.py должен быть доступен
@@ -138,20 +138,51 @@ class BotState:
     def update_chat_settings(self, chat_id: int, new_settings: Dict[str, Any]) -> None:
         self.chat_settings[chat_id] = new_settings
 
-    def add_message_for_deletion(self, chat_id: int, message_id: int) -> None:
-        """Добавляет сообщение в список для периодического удаления"""
+    def add_message_for_deletion(self, chat_id: int, message_id: int, delay_seconds: int = 300) -> None:
+        """
+        Добавляет сообщение и планирует его удаление через delay_seconds (по умолчанию 5 минут).
+        """
         self.generic_messages_to_delete[chat_id].add(message_id)
-        logger.info(f"✅ Сообщение {message_id} добавлено в список для удаления в чате {chat_id}. Всего в чате: {len(self.generic_messages_to_delete[chat_id])}")
-        
-        # Автоматически сохраняем данные при добавлении сообщения
+        logger.debug(f"Сообщение {message_id} добавлено для удаления в чате {chat_id}")
+
+        # Планируем удаление через N секунд если есть application
+        if self.application and hasattr(self.application, "job_queue") and self.application.job_queue:
+            job_name = f"del_msg_{chat_id}_{message_id}"
+            # Удаляем старый job если есть
+            existing = self.application.job_queue.get_jobs_by_name(job_name)
+            for job in existing:
+                job.schedule_removal()
+            # Планируем новый
+            self.application.job_queue.run_once(
+                self._delete_message_job,
+                when=timedelta(seconds=delay_seconds),
+                name=job_name,
+                data={"chat_id": chat_id, "message_id": message_id}
+            )
+            logger.debug(f"Запланировано удаление сообщения {message_id} через {delay_seconds} сек")
+
+    async def _delete_message_job(self, context) -> None:
+        """Job для удаления одного сообщения через запланированное время"""
+        data = context.job.data
+        chat_id = data["chat_id"]
+        message_id = data["message_id"]
+
         try:
-            if self.data_manager:
-                self.data_manager.save_messages_to_delete()
-                logger.info(f"💾 Данные сообщений для удаления автоматически сохранены")
-            else:
-                logger.warning(f"⚠️ data_manager не доступен в BotState")
+            await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+            logger.debug(f"Удалено сообщение {message_id} из чата {chat_id}")
         except Exception as e:
-            logger.error(f"❌ Не удалось автоматически сохранить сообщения для удаления: {e}")
+            error_str = str(e).lower()
+            if "not found" in error_str or "cant be deleted" in error_str:
+                logger.debug(f"Сообщение {message_id} уже удалено или недоступно")
+            else:
+                logger.warning(f"Не удалось удалить сообщение {message_id}: {e}")
+
+        # Удаляем из списка
+        if chat_id in self.generic_messages_to_delete:
+            self.generic_messages_to_delete[chat_id].discard(message_id)
+            if not self.generic_messages_to_delete[chat_id]:
+                del self.generic_messages_to_delete[chat_id]
+
 
     def remove_message_from_deletion(self, chat_id: int, message_id: int) -> None:
         """Удаляет сообщение из списка для периодического удаления"""

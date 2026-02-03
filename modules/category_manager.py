@@ -319,7 +319,7 @@ class CategoryManager:
                 if category in self._category_usage_stats:
                     stats = self._category_usage_stats[category]
 
-                    # Проверяем целостность структуры данных (total_questions не влияет на веса)
+                    # Проверяем целостность структуры данных
                     if "total_questions" not in stats:
                         total_questions = self._get_total_questions_for_category(category)
                         stats["total_questions"] = total_questions
@@ -328,45 +328,42 @@ class CategoryManager:
                     if "chat_usage" not in stats:
                         stats["chat_usage"] = {}
 
-                    # Базовый вес для всех категорий одинаковый (количество вопросов не влияет)
-                    base_weight = 1.0
+                    # Получаем число использований в этом чате
+                    chat_usage = 0
+                    if chat_id is not None:
+                        chat_id_str = str(chat_id)
+                        chat_usage_data = stats.get("chat_usage", {})
+                        if not isinstance(chat_usage_data, dict):
+                            chat_usage_data = {}
+                        chat_usage = chat_usage_data.get(chat_id_str, 0)
 
-                    # Бонус за давность использования (категории, которые давно не использовались, получают приоритет)
+                    # Исключаем категории, использованные менее 2 дней назад (для максимального разнообразия)
                     time_since_last_use = current_time - stats["last_used"]
-                    time_bonus = min(time_since_last_use / 86400.0, 7.0)  # Максимум 7 дней
+                    days_since_use = time_since_last_use / 86400.0
 
-                    # Бонус для категорий, которые не использовались в этом чате
-                    new_in_chat_bonus = 0.0
-                    if chat_id is not None:
-                        chat_id_str = str(chat_id)
-                        chat_usage_data = stats.get("chat_usage", {})
-                        if not isinstance(chat_usage_data, dict):
-                            chat_usage_data = {}
-                        chat_usage = chat_usage_data.get(chat_id_str, 0)
-                        if chat_usage == 0:
-                            # Категория не использовалась в этом чате - даем значительный бонус
-                            new_in_chat_bonus = 3.0
+                    if days_since_use < 2.0:
+                        # Пропускаем недавно использованные категории
+                        logger.debug(f"Категория '{category}' пропущена: использовалась {days_since_use:.1f} дней назад")
+                        continue
 
-                    # Штраф за частое использование в конкретном чате
-                    chat_penalty = 0.0
-                    if chat_id is not None:
-                        chat_id_str = str(chat_id)
-                        chat_usage_data = stats.get("chat_usage", {})
-                        if not isinstance(chat_usage_data, dict):
-                            chat_usage_data = {}
-                        chat_usage = chat_usage_data.get(chat_id_str, 0)
-                        # Чем больше использований в чате, тем больше штраф
-                        chat_penalty = min(chat_usage * 0.3, 3.0)  # Максимум 3.0 штрафа
+                    # СТРАТЕГИЯ МАКСИМАЛЬНОГО РАЗНООБРАЗИЯ:
+                    # Вес обратно пропорционален числу использований в чате
+                    if chat_usage == 0:
+                        # Новая категория для этого чата - максимальный приоритет
+                        final_weight = 100.0
+                    else:
+                        # Чем меньше использований, тем выше вес
+                        final_weight = 100.0 / chat_usage
 
-                    # Финальный вес с учетом всех факторов
-                    final_weight = base_weight + time_bonus + new_in_chat_bonus - chat_penalty
-                    # Не допускаем отрицательных весов
-                    final_weight = max(final_weight, 0.1)
+                    # Линейный бонус за давность (+2 балла за каждый день)
+                    final_weight += days_since_use * 2.0
 
                     category_weights.append((category, final_weight))
+                    logger.debug(f"Категория '{category}': usage={chat_usage}, days={days_since_use:.1f}, weight={final_weight:.2f}")
                 else:
                     # Категории, которых нет в статистике, получают максимальный приоритет
-                    category_weights.append((category, 15.0))
+                    category_weights.append((category, 100.0))
+                    logger.debug(f"Категория '{category}': новая, weight=100.0")
             
             # Сортируем по весам (по убыванию)
             category_weights.sort(key=lambda x: x[1], reverse=True)
@@ -413,15 +410,7 @@ class CategoryManager:
                     if "chat_usage" not in stats:
                         stats["chat_usage"] = {}
 
-                    # Рассчитываем вес точно так же, как в _get_weighted_random_categories
-                    base_weight = 1.0
-
-                    # Бонус за давность использования
-                    time_since_last_use = current_time - stats["last_used"]
-                    time_bonus = min(time_since_last_use / 86400.0, 7.0)
-
-                    # Бонус для категорий, которые не использовались в этом чате
-                    new_in_chat_bonus = 0.0
+                    # Получаем число использований в этом чате
                     chat_usage = 0
                     if chat_id is not None:
                         chat_id_str = str(chat_id)
@@ -429,15 +418,24 @@ class CategoryManager:
                         if not isinstance(chat_usage_data, dict):
                             chat_usage_data = {}
                         chat_usage = chat_usage_data.get(chat_id_str, 0)
-                        if chat_usage == 0:
-                            new_in_chat_bonus = 3.0
 
-                    # Штраф за частое использование в конкретном чате
-                    chat_penalty = min(chat_usage * 0.3, 3.0)
+                    # Время с последнего использования
+                    time_since_last_use = current_time - stats["last_used"]
+                    days_since_use = time_since_last_use / 86400.0
 
-                    # Финальный вес
-                    final_weight = base_weight + time_bonus + new_in_chat_bonus - chat_penalty
-                    final_weight = max(final_weight, 0.1)
+                    # СТРАТЕГИЯ МАКСИМАЛЬНОГО РАЗНООБРАЗИЯ (та же, что в _get_weighted_random_categories)
+                    # Вес обратно пропорционален числу использований
+                    if chat_usage == 0:
+                        final_weight = 100.0
+                    else:
+                        final_weight = 100.0 / chat_usage
+
+                    # Линейный бонус за давность (+2 балла за каждый день)
+                    time_bonus = days_since_use * 2.0
+                    final_weight += time_bonus
+
+                    # Отмечаем исключённые категории (использованные менее 2 дней назад)
+                    excluded = days_since_use < 2.0
 
                     # Получаем количество вопросов
                     question_count = self._get_total_questions_for_category(category_name)
@@ -445,7 +443,7 @@ class CategoryManager:
                     # Форматируем время последнего использования
                     last_used_str = "никогда"
                     if stats["last_used"] > 0:
-                        days_ago = int((current_time - stats["last_used"]) / 86400)
+                        days_ago = int(days_since_use)
                         if days_ago == 0:
                             last_used_str = "сегодня"
                         elif days_ago == 1:
@@ -456,28 +454,26 @@ class CategoryManager:
                     category_info = {
                         "name": category_name,
                         "weight": final_weight,
-                        "base_weight": base_weight,
                         "time_bonus": time_bonus,
-                        "new_in_chat_bonus": new_in_chat_bonus,
-                        "chat_penalty": chat_penalty,
                         "chat_usage": chat_usage,
                         "question_count": question_count,
-                        "last_used": last_used_str
+                        "last_used": last_used_str,
+                        "excluded": excluded,
+                        "days_since_use": days_since_use
                     }
 
                 else:
-                    # Категории, которых нет в статистике
+                    # Категории, которых нет в статистике - максимальный приоритет
                     question_count = self._get_total_questions_for_category(category_name)
                     category_info = {
                         "name": category_name,
-                        "weight": 15.0,
-                        "base_weight": 15.0,
+                        "weight": 100.0,
                         "time_bonus": 0.0,
-                        "new_in_chat_bonus": 0.0,
-                        "chat_penalty": 0.0,
                         "chat_usage": 0,
                         "question_count": question_count,
-                        "last_used": "никогда"
+                        "last_used": "никогда",
+                        "excluded": False,
+                        "days_since_use": float('inf')
                     }
 
                 category_weights.append(category_info)

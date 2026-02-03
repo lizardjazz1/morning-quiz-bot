@@ -1771,5 +1771,13 @@
       "partial": "Ч_йка",
       "fifth_letter": "Ч"
     }
+  },
+  "MrLizard": {
+    "correct_answer": "MrLizard",
+    "hints": {
+      "length": 8,
+      "first_letter": "M",
+      "partial": "M_______"
+    }
   }
 }

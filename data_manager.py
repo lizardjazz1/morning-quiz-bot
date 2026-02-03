@@ -1156,6 +1156,111 @@ class DataManager:
             else:
                 base_dict[key] = value
 
+    async def update_chat_metadata(self, chat_id: int, bot=None) -> bool:
+        """
+        Обновляет метаданные чата (название, тип) через Telegram API.
+        Вызывается при первом взаимодействии с чатом или периодически для обновления.
+        
+        Args:
+            chat_id: ID чата
+            bot: Экземпляр Bot для запросов к API (если None, попытается получить из application)
+            
+        Returns:
+            bool: True если метаданные обновлены, False при ошибке
+        """
+        try:
+            # Если бот не передан, пытаемся получить из application
+            if bot is None:
+                if self.state.application:
+                    bot = self.state.application.bot
+                else:
+                    logger.debug(f"Не удалось получить bot для обновления метаданных чата {chat_id}")
+                    return False
+            
+            if not bot:
+                return False
+            
+            # Получаем информацию о чате через Telegram API
+            chat = await bot.get_chat(chat_id)
+            
+            # Определяем название и тип
+            chat_title = None
+            if chat.title:
+                chat_title = chat.title
+            elif chat.first_name:
+                chat_title = chat.first_name
+                if chat.last_name:
+                    chat_title += f" {chat.last_name}"
+            
+            chat_type = chat.type if hasattr(chat, 'type') else None
+            
+            # Получаем текущие настройки
+            if chat_id not in self.state.chat_settings:
+                self.state.chat_settings[chat_id] = {}
+            
+            current_title = self.state.chat_settings[chat_id].get("title")
+            current_type = self.state.chat_settings[chat_id].get("chat_type")
+            
+            # Обновляем только если данные изменились или отсутствуют
+            updated = False
+            if chat_title and (current_title is None or current_title != chat_title):
+                self.state.chat_settings[chat_id]["title"] = chat_title
+                updated = True
+                logger.info(f"Обновлено название чата {chat_id}: {chat_title}")
+            
+            if chat_type and (current_type is None or current_type != chat_type):
+                self.state.chat_settings[chat_id]["chat_type"] = chat_type
+                updated = True
+                logger.debug(f"Обновлен тип чата {chat_id}: {chat_type}")
+            
+            # Сохраняем настройки если были изменения
+            if updated:
+                self.save_chat_settings()
+            
+            return updated
+            
+        except Exception as e:
+            error_msg = str(e).lower()
+            # Не логируем ошибки для чатов, где бот не состоит или недоступен
+            if "chat not found" in error_msg or "not found" in error_msg:
+                logger.debug(f"Чат {chat_id} не найден в Telegram (возможно, бот удален из чата)")
+            else:
+                logger.debug(f"Не удалось обновить метаданные чата {chat_id}: {e}")
+            return False
+
+    def disable_daily_quiz_for_chat(self, chat_id: int, reason: str = "blocked") -> bool:
+        """
+        Автоматически отключает ежедневную рассылку викторин для чата.
+        Используется когда бот заблокирован или чат недоступен.
+
+        Args:
+            chat_id: ID чата
+            reason: Причина отключения (blocked, not_found, etc)
+
+        Returns:
+            bool: True если успешно отключено, False при ошибке
+        """
+        try:
+            # Получаем текущие настройки чата
+            if chat_id not in self.state.chat_settings:
+                self.state.chat_settings[chat_id] = {}
+
+            # Отключаем ежедневную рассылку
+            if "daily_quiz" not in self.state.chat_settings[chat_id]:
+                self.state.chat_settings[chat_id]["daily_quiz"] = {}
+
+            self.state.chat_settings[chat_id]["daily_quiz"]["enabled"] = False
+
+            # Сохраняем настройки
+            self.save_chat_settings()
+
+            logger.warning(f"🔕 Автоматически отключена ежедневная рассылка для чата {chat_id}. Причина: {reason}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Ошибка при отключении рассылки для чата {chat_id}: {e}")
+            return False
+
     def get_all_questions(self) -> Dict[str, List[Dict[str, Any]]]:
         """Получает все вопросы"""
         return self.state.quiz_data
@@ -1549,6 +1654,20 @@ class DataManager:
         """Возвращает путь к файлу активных викторин"""
         return Path(self.app_config.data_dir) / "active_quizzes.json"
 
+    def _convert_sets_to_lists(self, obj):
+        """
+        Рекурсивно конвертирует set() в list() для JSON сериализации.
+        Обрабатывает вложенные словари и списки.
+        """
+        if isinstance(obj, set):
+            return list(obj)
+        elif isinstance(obj, dict):
+            return {key: self._convert_sets_to_lists(value) for key, value in obj.items()}
+        elif isinstance(obj, list):
+            return [self._convert_sets_to_lists(item) for item in obj]
+        else:
+            return obj
+
     def save_active_quizzes(self) -> None:
         """
         Сохраняет активные викторины для восстановления после перезапуска.
@@ -1580,7 +1699,7 @@ class DataManager:
                         "interval_seconds": quiz_state.interval_seconds,
                         "quiz_start_time": quiz_state.quiz_start_time.isoformat() if quiz_state.quiz_start_time else None,
                         "current_question_index": quiz_state.current_question_index,
-                        "scores": dict(quiz_state.scores),  # Копируем словарь очков
+                        "scores": self._convert_sets_to_lists(dict(quiz_state.scores)),  # Конвертируем set() в list()
                         "active_poll_ids_in_session": list(quiz_state.active_poll_ids_in_session),
                         "latest_poll_id_sent": quiz_state.latest_poll_id_sent,
                         "progression_triggered_for_poll": dict(quiz_state.progression_triggered_for_poll),
@@ -1641,7 +1760,9 @@ class DataManager:
             logger.info(f"Загружено {len(quizzes_data)} активных викторин (сохранено: {saved_timestamp})")
 
             # Очищаем устаревшие викторины (старше 2 часов)
-            current_time = datetime.now()
+            # ИСПРАВЛЕНИЕ: Используем UTC для совместимости с quiz_start_time (который сохраняется как UTC через get_current_utc_time())
+            from datetime import timezone
+            current_time = datetime.now(timezone.utc)
             valid_quizzes = {}
 
             for chat_id_str, quiz_data in quizzes_data.items():
@@ -1652,6 +1773,12 @@ class DataManager:
                     quiz_start_time_str = quiz_data.get("quiz_start_time")
                     if quiz_start_time_str:
                         quiz_start_time = datetime.fromisoformat(quiz_start_time_str)
+                        # Нормализуем quiz_start_time к UTC, если он timezone-aware
+                        if quiz_start_time.tzinfo is not None:
+                            quiz_start_time = quiz_start_time.astimezone(timezone.utc)
+                        # Если quiz_start_time timezone-naive, считаем его UTC и делаем aware
+                        else:
+                            quiz_start_time = quiz_start_time.replace(tzinfo=timezone.utc)
                         time_diff = current_time - quiz_start_time
 
                         # Если викторина старше 2 часов, пропускаем
@@ -1719,7 +1846,7 @@ class DataManager:
 
     def get_maintenance_file_path(self) -> Path:
         """Возвращает путь к файлу состояния технического обслуживания"""
-        return Path(self.app_config.data_dir) / "maintenance_status.json"
+        return Path(self.app_config.paths.config_dir) / "maintenance_status.json"
 
     def enable_maintenance_mode(self, reason: str = "Техническое обслуживание") -> None:
         """

@@ -74,6 +74,8 @@ class QuizManager:
         self.application = application
         self.quiz_engine = QuizEngine(state=self.state, app_config=self.app_config, data_manager=self.data_manager)
         self.moscow_tz = pytz.timezone('Europe/Moscow')
+        # Защита от параллельных вызовов _send_next_question для одного чата
+        self._send_question_locks: Dict[int, asyncio.Lock] = {}
         logger.debug(f"QuizManager initialized. Command for quiz: '/{self.app_config.commands.quiz}'")
 
     def _get_effective_quiz_params(self, chat_id: int, num_questions_override: Optional[int] = None) -> Dict[str, Any]:
@@ -283,6 +285,15 @@ class QuizManager:
                     self.state.add_message_for_deletion(chat_id, msg.message_id)
                 except Exception as e_announce:
                     logger.error(f"Ошибка отправки анонса (delay: {announce_delay_seconds > 0}) в чат {chat_id}: {e_announce}")
+
+                    # Автоматическое отключение рассылки при блокировке или недоступности чата
+                    error_message = str(e_announce).lower()
+                    if quiz_type == "daily" and ("blocked" in error_message or "not found" in error_message or "forbidden" in error_message):
+                        logger.warning(f"⚠️ Обнаружена блокировка/недоступность чата {chat_id}. Автоматически отключаю ежедневную рассылку.")
+                        self.data_manager.disable_daily_quiz_for_chat(
+                            chat_id,
+                            reason="blocked" if "blocked" in error_message else "not_found"
+                        )
             else:
                 logger.debug(f"Текст анонса пуст для чата {chat_id}, отправка пропущена.")
 
@@ -308,99 +319,113 @@ class QuizManager:
         await self._send_next_question(context, chat_id)
 
     async def _send_next_question(self, context: ContextTypes.DEFAULT_TYPE, chat_id: int):
-        logger.debug(f"НАЧАЛО _send_next_question для чата {chat_id}.")
-        quiz_state = self.state.get_active_quiz(chat_id)
+        # Защита от параллельных вызовов для одного чата
+        if chat_id not in self._send_question_locks:
+            self._send_question_locks[chat_id] = asyncio.Lock()
+        
+        async with self._send_question_locks[chat_id]:
+            logger.debug(f"НАЧАЛО _send_next_question для чата {chat_id}.")
+            quiz_state = self.state.get_active_quiz(chat_id)
 
-        if not quiz_state or quiz_state.is_stopping:
-            logger.warning(f"_send_next_question: Викторина неактивна или останавливается для чата {chat_id}.")
-            return
-
-        if quiz_state.current_question_index >= quiz_state.num_questions_to_ask:
-            logger.info(f"_send_next_question: Все {quiz_state.num_questions_to_ask} вопросов для чата {chat_id} уже отправлены.")
-            return
-
-        question_data = quiz_state.get_current_question_data()
-        if not question_data:
-            error_msg_text = "Ошибка получения данных вопроса."
-            logger.error(f"_send_next_question: {error_msg_text} Индекс: {quiz_state.current_question_index}, чат: {chat_id}. Завершение.")
-            await self._finalize_quiz_session(context, chat_id, error_occurred=True, error_message=error_msg_text)
-            return
-
-        logger.info(f"_send_next_question: Отправка вопроса {quiz_state.current_question_index + 1}/{quiz_state.num_questions_to_ask} в чате {chat_id}.")
-
-        is_last_q_in_this_session = (quiz_state.current_question_index == quiz_state.num_questions_to_ask - 1)
-        q_num_display = quiz_state.current_question_index + 1
-        title_prefix_for_poll_unescaped: str
-        if quiz_state.quiz_type == "single": title_prefix_for_poll_unescaped = "Вопрос"
-        elif quiz_state.quiz_type == "daily": title_prefix_for_poll_unescaped = f"Ежедневный вопрос {q_num_display}/{quiz_state.num_questions_to_ask}"
-        else: title_prefix_for_poll_unescaped = f"Вопрос {q_num_display}/{quiz_state.num_questions_to_ask}"
-
-        current_category_name_display_unescaped = question_data.get('current_category_name_for_quiz', question_data.get('original_category'))
-
-        sent_poll_id = await self.quiz_engine.send_quiz_poll(
-            context, chat_id, question_data,
-            poll_title_prefix=title_prefix_for_poll_unescaped,
-            open_period_seconds=quiz_state.open_period_seconds,
-            quiz_type=quiz_state.quiz_type,
-            is_last_question=is_last_q_in_this_session,
-            question_session_index=quiz_state.current_question_index,
-            current_category_name=current_category_name_display_unescaped if current_category_name_display_unescaped else None
-        )
-
-        if sent_poll_id:
-            quiz_state_after_poll_send = self.state.get_active_quiz(chat_id)
-            if not quiz_state_after_poll_send or quiz_state_after_poll_send.is_stopping or quiz_state_after_poll_send != quiz_state:
-                logger.warning(f"_send_next_question: Викторина для чата {chat_id} изменилась/остановилась во время отправки опроса. Отмена дальнейших действий для этого вызова.")
+            if not quiz_state or quiz_state.is_stopping:
+                logger.warning(f"_send_next_question: Викторина неактивна или останавливается для чата {chat_id}.")
                 return
 
-            quiz_state.active_poll_ids_in_session.add(sent_poll_id)
-            quiz_state.latest_poll_id_sent = sent_poll_id
-            quiz_state.progression_triggered_for_poll[sent_poll_id] = False
-
-            poll_data_from_bot_state = self.state.get_current_poll_data(sent_poll_id)
-            if not poll_data_from_bot_state:
-                error_msg_poll_data = "Внутренняя ошибка: потеряны данные опроса при создании (сразу после send_quiz_poll)."
-                logger.error(f"_send_next_question: {error_msg_poll_data} Poll ID: {sent_poll_id}, чат: {chat_id}.")
-                await self._finalize_quiz_session(context, chat_id, error_occurred=True, error_message=error_msg_poll_data)
+            if quiz_state.current_question_index >= quiz_state.num_questions_to_ask:
+                logger.info(f"_send_next_question: Все {quiz_state.num_questions_to_ask} вопросов для чата {chat_id} уже отправлены.")
                 return
 
-            job_name_for_this_poll_end = f"poll_end_chat_{chat_id}_poll_{sent_poll_id}"
-            poll_data_from_bot_state["job_poll_end_name"] = job_name_for_this_poll_end
+            # Дополнительная проверка: убеждаемся, что вопрос с этим индексом еще не отправлялся
+            # Проверяем по poll_id для текущего индекса
+            expected_q_index = quiz_state.current_question_index
+            for poll_id in list(quiz_state.active_poll_ids_in_session):
+                poll_data = self.state.get_current_poll_data(poll_id)
+                if poll_data and poll_data.get("question_session_index") == expected_q_index:
+                    logger.warning(f"_send_next_question: Вопрос с индексом {expected_q_index} уже был отправлен (poll_id: {poll_id}). Пропуск дубликата.")
+                    return
 
-            schedule_job_unique(
-                self.application.job_queue,
-                job_name=job_name_for_this_poll_end,
-                callback=self._handle_poll_end_job,
-                when=timedelta(seconds=quiz_state.open_period_seconds + self.app_config.job_grace_period_seconds),
-                data={"chat_id": chat_id, "ended_poll_id": sent_poll_id}
+            question_data = quiz_state.get_current_question_data()
+            if not question_data:
+                error_msg_text = "Ошибка получения данных вопроса."
+                logger.error(f"_send_next_question: {error_msg_text} Индекс: {quiz_state.current_question_index}, чат: {chat_id}. Завершение.")
+                await self._finalize_quiz_session(context, chat_id, error_occurred=True, error_message=error_msg_text)
+                return
+
+            logger.info(f"_send_next_question: Отправка вопроса {quiz_state.current_question_index + 1}/{quiz_state.num_questions_to_ask} в чате {chat_id}.")
+
+            is_last_q_in_this_session = (quiz_state.current_question_index == quiz_state.num_questions_to_ask - 1)
+            q_num_display = quiz_state.current_question_index + 1
+            title_prefix_for_poll_unescaped: str
+            if quiz_state.quiz_type == "single": title_prefix_for_poll_unescaped = "Вопрос"
+            elif quiz_state.quiz_type == "daily": title_prefix_for_poll_unescaped = f"Ежедневный вопрос {q_num_display}/{quiz_state.num_questions_to_ask}"
+            else: title_prefix_for_poll_unescaped = f"Вопрос {q_num_display}/{quiz_state.num_questions_to_ask}"
+
+            current_category_name_display_unescaped = question_data.get('current_category_name_for_quiz', question_data.get('original_category'))
+
+            sent_poll_id = await self.quiz_engine.send_quiz_poll(
+                context, chat_id, question_data,
+                poll_title_prefix=title_prefix_for_poll_unescaped,
+                open_period_seconds=quiz_state.open_period_seconds,
+                quiz_type=quiz_state.quiz_type,
+                is_last_question=is_last_q_in_this_session,
+                question_session_index=quiz_state.current_question_index,
+                current_category_name=current_category_name_display_unescaped if current_category_name_display_unescaped else None
             )
 
-            quiz_state.current_question_index += 1
-            logger.debug(f"_send_next_question: Индекс вопроса в чате {chat_id} увеличен до {quiz_state.current_question_index}.")
-            
-            # Планируем следующий вопрос, если есть интервал и это не последний вопрос
-            if (quiz_state.quiz_mode == "serial_interval" and 
-                quiz_state.interval_seconds is not None and 
-                quiz_state.interval_seconds > 0 and
-                quiz_state.current_question_index < quiz_state.num_questions_to_ask):
-                
-                delay_seconds = quiz_state.interval_seconds
-                job_name = f"delayed_next_q_after_send_chat_{chat_id}_qidx_{quiz_state.current_question_index}"
-                quiz_state.next_question_job_name = job_name
+            if sent_poll_id:
+                quiz_state_after_poll_send = self.state.get_active_quiz(chat_id)
+                if not quiz_state_after_poll_send or quiz_state_after_poll_send.is_stopping or quiz_state_after_poll_send != quiz_state:
+                    logger.warning(f"_send_next_question: Викторина для чата {chat_id} изменилась/остановилась во время отправки опроса. Отмена дальнейших действий для этого вызова.")
+                    return
+
+                quiz_state.active_poll_ids_in_session.add(sent_poll_id)
+                quiz_state.latest_poll_id_sent = sent_poll_id
+                quiz_state.progression_triggered_for_poll[sent_poll_id] = False
+
+                poll_data_from_bot_state = self.state.get_current_poll_data(sent_poll_id)
+                if not poll_data_from_bot_state:
+                    error_msg_poll_data = "Внутренняя ошибка: потеряны данные опроса при создании (сразу после send_quiz_poll)."
+                    logger.error(f"_send_next_question: {error_msg_poll_data} Poll ID: {sent_poll_id}, чат: {chat_id}.")
+                    await self._finalize_quiz_session(context, chat_id, error_occurred=True, error_message=error_msg_poll_data)
+                    return
+
+                job_name_for_this_poll_end = f"poll_end_chat_{chat_id}_poll_{sent_poll_id}"
+                poll_data_from_bot_state["job_poll_end_name"] = job_name_for_this_poll_end
+
                 schedule_job_unique(
                     self.application.job_queue,
-                    job_name=job_name,
-                    callback=self._trigger_next_question_job_after_interval,
-                    when=timedelta(seconds=delay_seconds),
-                    data={"chat_id": chat_id, "expected_q_index_at_trigger": quiz_state.current_question_index}
+                    job_name=job_name_for_this_poll_end,
+                    callback=self._handle_poll_end_job,
+                    when=timedelta(seconds=quiz_state.open_period_seconds + self.app_config.job_grace_period_seconds),
+                    data={"chat_id": chat_id, "ended_poll_id": sent_poll_id}
                 )
-                logger.info(f"Следующий вопрос (индекс {quiz_state.current_question_index}) будет отправлен через {delay_seconds} сек (режим serial_interval).")
-        else:
-            error_msg_text_send_poll = "Ошибка отправки опроса через Telegram API (QuizEngine.send_quiz_poll вернул None)."
-            logger.error(f"_send_next_question: {error_msg_text_send_poll} Вопрос: {quiz_state.current_question_index}, чат: {chat_id}.")
-            await self._finalize_quiz_session(context, chat_id, error_occurred=True, error_message=error_msg_text_send_poll)
 
-        logger.debug(f"ЗАВЕРШЕНИЕ _send_next_question для чата {chat_id} (вопрос {quiz_state.current_question_index-1 if quiz_state else 'N/A'} отправлен).")
+                quiz_state.current_question_index += 1
+                logger.debug(f"_send_next_question: Индекс вопроса в чате {chat_id} увеличен до {quiz_state.current_question_index}.")
+
+                # Планируем следующий вопрос, если есть интервал и это не последний вопрос
+                if (quiz_state.quiz_mode == "serial_interval" and
+                    quiz_state.interval_seconds is not None and
+                    quiz_state.interval_seconds > 0 and
+                    quiz_state.current_question_index < quiz_state.num_questions_to_ask):
+
+                    delay_seconds = quiz_state.interval_seconds
+                    job_name = f"delayed_next_q_after_send_chat_{chat_id}_qidx_{quiz_state.current_question_index}"
+                    quiz_state.next_question_job_name = job_name
+                    schedule_job_unique(
+                        self.application.job_queue,
+                        job_name=job_name,
+                        callback=self._trigger_next_question_job_after_interval,
+                        when=timedelta(seconds=delay_seconds),
+                        data={"chat_id": chat_id, "expected_q_index_at_trigger": quiz_state.current_question_index}
+                    )
+                    logger.info(f"Следующий вопрос (индекс {quiz_state.current_question_index}) будет отправлен через {delay_seconds} сек (режим serial_interval).")
+            else:
+                error_msg_text_send_poll = "Ошибка отправки опроса через Telegram API (QuizEngine.send_quiz_poll вернул None)."
+                logger.error(f"_send_next_question: {error_msg_text_send_poll} Вопрос: {quiz_state.current_question_index}, чат: {chat_id}.")
+                await self._finalize_quiz_session(context, chat_id, error_occurred=True, error_message=error_msg_text_send_poll)
+
+            logger.debug(f"ЗАВЕРШЕНИЕ _send_next_question для чата {chat_id} (вопрос {quiz_state.current_question_index-1 if quiz_state else 'N/A'} отправлен).")
 
     async def _handle_early_answer_for_session(self, context: ContextTypes.DEFAULT_TYPE, chat_id: int, answered_poll_id: str):
         logger.info(f"Обработка ответа на опрос {answered_poll_id} в чате {chat_id}.")
@@ -491,6 +516,13 @@ class QuizManager:
         logger.info(f"Сработал таймаут для poll_id {ended_poll_id} в чате {chat_id}. Job: {context.job.name}")
 
         poll_info_before_removal = self.state.get_current_poll_data(ended_poll_id)
+        
+        # Защита от повторной обработки: проверяем, что опрос еще существует в state
+        # Если его нет, значит он уже был обработан
+        if not poll_info_before_removal:
+            logger.debug(f"_handle_poll_end_job: Опрос {ended_poll_id} уже был обработан или удален. Пропускаем повторную обработку.")
+            return
+        
         sent_solution_msg_id = await self.quiz_engine.send_solution_if_available(context, chat_id, ended_poll_id)
         quiz_state = self.state.get_active_quiz(chat_id) 
 
@@ -630,10 +662,15 @@ class QuizManager:
         quiz_state = self.state.remove_active_quiz(chat_id)
         if not quiz_state:
             logger.warning(f"Попытка финализировать викторину для чата {chat_id}, но активной сессии QuizState не найдено.")
+            # Очищаем блокировку даже если викторина не найдена
+            self._send_question_locks.pop(chat_id, None)
             return
 
         escaped_error_message = escape_markdown_v2(error_message) if error_message else None
         logger.info(f"Завершение викторины (тип: {quiz_state.quiz_type}, режим: {quiz_state.quiz_mode}) в чате {chat_id}. Остановлена: {was_stopped}, Ошибка: {error_occurred}, Сообщение: {error_message}")
+        
+        # Очищаем блокировку отправки вопросов для этого чата
+        self._send_question_locks.pop(chat_id, None)
 
         job_queue = self.application.job_queue
 
@@ -652,27 +689,56 @@ class QuizManager:
                     for job in jobs: job.schedule_removal()
 
                 message_id_of_poll = poll_data.get("message_id")
-                if message_id_of_poll and was_stopped: 
-                    try:
-                        await context.bot.stop_poll(chat_id=chat_id, message_id=message_id_of_poll)
-                        logger.info(f"Активный опрос {poll_id_to_stop} (msg_id: {message_id_of_poll}) остановлен из-за принудительной остановки викторины.")
-                    except BadRequest as e_stop_poll:
-                        if "poll has already been closed" not in str(e_stop_poll).lower():
-                            logger.warning(f"Не удалось остановить опрос {poll_id_to_stop} при финализации (was_stopped): {e_stop_poll}")
-                    except Exception as e_gen_stop_poll:
-                        logger.error(f"Общая ошибка при остановке опроса {poll_id_to_stop} (was_stopped): {e_gen_stop_poll}")
+                if message_id_of_poll:
+                    # Останавливаем опрос только при принудительной остановке (was_stopped)
+                    if was_stopped:
+                        try:
+                            await context.bot.stop_poll(chat_id=chat_id, message_id=message_id_of_poll)
+                            logger.info(f"Активный опрос {poll_id_to_stop} (msg_id: {message_id_of_poll}) остановлен из-за принудительной остановки викторины.")
+                        except BadRequest as e_stop_poll:
+                            if "poll has already been closed" not in str(e_stop_poll).lower():
+                                logger.warning(f"Не удалось остановить опрос {poll_id_to_stop} при финализации (was_stopped): {e_stop_poll}")
+                        except Exception as e_gen_stop_poll:
+                            logger.error(f"Общая ошибка при остановке опроса {poll_id_to_stop} (was_stopped): {e_gen_stop_poll}")
                     
+                    # ИСПРАВЛЕНИЕ: Проверяем, есть ли placeholder сообщение "💡", которое нужно удалить
+                    # Если solution еще не был отправлен (job был отменен), placeholder все равно нужно удалить
+                    solution_placeholder_id = poll_data.get("solution_placeholder_message_id")
+                    solution_msg_id_for_deletion = None
+                    
+                    # Если есть placeholder, но solution еще не отправлен, используем placeholder ID для удаления
+                    if solution_placeholder_id:
+                        solution_msg_id_for_deletion = solution_placeholder_id
+                        logger.debug(f"Placeholder сообщение {solution_placeholder_id} для poll {poll_id_to_stop} будет удалено (solution не был отправлен)")
+                    
+                    # Добавляем опрос в список на удаление при остановке ИЛИ при ошибке
+                    # Это важно: при ошибке (например, таймаут) уже отправленные опросы нужно удалить
                     quiz_state.poll_and_solution_message_ids.append({
                         "poll_msg_id": message_id_of_poll,
-                        "solution_msg_id": None 
+                        "solution_msg_id": solution_msg_id_for_deletion
                     })
-                    logger.debug(f"Остановленный poll msg {message_id_of_poll} (poll_id: {poll_id_to_stop}) добавлен в список на отложенное удаление.")
+                    logger.debug(f"Poll msg {message_id_of_poll} (poll_id: {poll_id_to_stop}) добавлен в список на отложенное удаление (was_stopped={was_stopped}, error_occurred={error_occurred}, solution_msg_id={solution_msg_id_for_deletion}).")
 
                 self.state.remove_current_poll(poll_id_to_stop)
             quiz_state.active_poll_ids_in_session.discard(poll_id_to_stop)
 
         if error_occurred and not quiz_state.scores:
-            msg_text_to_send = f"Викторина завершена с ошибкой: {escaped_error_message}" if escaped_error_message else escape_markdown_v2("Викторина завершена из-за непредвиденной ошибки.")
+            # Формируем понятное сообщение об ошибке для пользователя
+            user_friendly_error = None
+            if error_message:
+                error_lower = error_message.lower()
+                if "timed out" in error_lower or "timeout" in error_lower:
+                    user_friendly_error = "Произошла задержка при отправке вопроса. Попробуйте начать викторину заново."
+                elif "blocked" in error_lower or "not found" in error_lower or "forbidden" in error_lower:
+                    user_friendly_error = "Бот не может отправить сообщение в этот чат. Проверьте настройки чата."
+                elif "quizengine.send_quiz_poll вернул none" in error_lower:
+                    user_friendly_error = "Произошла техническая ошибка при отправке вопроса. Попробуйте позже."
+                else:
+                    user_friendly_error = "Произошла ошибка при отправке вопроса. Попробуйте начать викторину заново."
+            else:
+                user_friendly_error = "Произошла непредвиденная ошибка. Попробуйте начать викторину заново."
+            
+            msg_text_to_send = f"⚠️ Викторина прервана\\.\n\n{escape_markdown_v2(user_friendly_error)}"
             try: 
                 error_msg = await safe_send_message(
             bot=context.bot,
@@ -866,6 +932,9 @@ class QuizManager:
         chat_id = update.effective_chat.id
         user = update.effective_user
         logger.info(f"Команда /quiz ({self.app_config.commands.quiz}) вызвана пользователем {user.id} ({user.full_name}) в чате {chat_id}. Аргументы: {context.args}")
+
+        # Обновляем метаданные чата (название, тип) в фоновом режиме
+        asyncio.create_task(self.data_manager.update_chat_metadata(chat_id, context.bot))
 
         active_quiz = self.state.get_active_quiz(chat_id)
         if active_quiz and not active_quiz.is_stopping:
@@ -1951,9 +2020,10 @@ class QuizManager:
         try:
             await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.MARKDOWN_V2)
         except BadRequest as e_br:
+            # Если сообщение не изменилось - это нормальная ситуация (например, двойной клик)
             if "Message is not modified" not in str(e_br).lower():
                 logger.warning(f"Ошибка BadRequest при редактировании меню выбора категорий: {e_br}")
-            # Если сообщение не изменилось, просто отвечаем на callback
+            # В любом случае отвечаем на callback
             await query.answer()
         except Exception as e_edit:
             logger.error(f"Не удалось обновить меню выбора категорий: {e_edit}")

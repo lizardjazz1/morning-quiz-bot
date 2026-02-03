@@ -260,6 +260,12 @@ class ScoreManager:
             # НОВОЕ: Также добавляем в общую историю (для статистики)
             current_user_data_global.setdefault("answered_polls", set()).add(poll_id)
             
+            # ИСПРАВЛЕНО: Обновляем first_answer_time и last_answer_time при каждом ответе
+            now_utc = datetime.now(timezone.utc)
+            if current_user_data_global.get("first_answer_time") is None:
+                current_user_data_global["first_answer_time"] = now_utc.isoformat()
+            current_user_data_global["last_answer_time"] = now_utc.isoformat()
+            
             # ОТЛАДКА: Логируем обновление
             logger.info(f"ОТЛАДКА: Пользователь {user_id_str} в чате {chat_id} ответил на опрос {poll_id}. Ежедневных ответов: {len(current_user_data_global.get('daily_answered_polls', set()))}, всего ответов: {len(current_user_data_global.get('answered_polls', set()))}")
             
@@ -308,11 +314,15 @@ class ScoreManager:
                                 logger.info(f"Пользователь {user_id_str} ({user_name_for_state}) получил АЧИВКУ ЗА СЕРИЮ {threshold} в чате {chat_id_str} (серия: {new_consecutive} правильных ответов подряд).")
         else:
             logger.debug(f"Пользователь {user_id_str} уже отвечал на опрос {poll_id} сегодня")
-
+            # Не обновляем очки, но обновляем время последней активности
             now_utc = datetime.now(timezone.utc)
-            if current_user_data_global["first_answer_time"] is None:
+            if current_user_data_global.get("first_answer_time") is None:
                 current_user_data_global["first_answer_time"] = now_utc.isoformat()
-            current_user_data_global["last_answer_time"] = now_utc.isoformat()
+                score_updated_in_global_state = True  # Сохраняем, если обновили first_answer_time
+            # last_answer_time обновляется всегда при любом ответе (даже повторном)
+            if current_user_data_global.get("last_answer_time") != now_utc.isoformat():
+                current_user_data_global["last_answer_time"] = now_utc.isoformat()
+                score_updated_in_global_state = True  # Сохраняем при обновлении времени
 
         if score_updated_in_global_state:
             # Сохраняем данные для конкретного чата

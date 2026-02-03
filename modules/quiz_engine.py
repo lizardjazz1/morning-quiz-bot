@@ -4,6 +4,7 @@ import logging
 from typing import List, Dict, Any, Tuple, Optional, TYPE_CHECKING
 
 from utils import escape_markdown_v2
+from modules.rate_limiter import TelegramRateLimiter
 from modules.telegram_utils import safe_send_message
 
 if TYPE_CHECKING:
@@ -14,7 +15,8 @@ if TYPE_CHECKING:
 from telegram import Poll, Message
 from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
-from telegram.error import BadRequest
+from telegram.error import BadRequest, TimedOut, NetworkError
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +26,12 @@ class QuizEngine:
         self.app_config = app_config
         self.data_manager = data_manager
         logger.debug("QuizEngine initialized.")
+        
+        # Инициализируем rate limiter для соблюдения лимитов Telegram API
+        self.rate_limiter = TelegramRateLimiter(
+            max_requests_per_second=25,  # Консервативное значение (Telegram ~30)
+            max_requests_per_minute_per_chat=18  # Консервативное значение (Telegram ~20)
+        )
 
     def _prepare_poll_options(self, question_details: Dict[str, Any]) -> Tuple[str, List[str], int, str]:
         q_text: str = question_details["question"]
@@ -90,27 +98,85 @@ class QuizEngine:
         question_for_api = escape_markdown_v2(truncated_full_question_text_plain)
         options_for_api = [escape_markdown_v2(opt) for opt in plain_truncated_shuffled_options]
 
-        try:
-            sent_poll_msg: Message = await context.bot.send_poll(
-                chat_id=chat_id,
-                question=question_for_api,
-                options=options_for_api,
-                type=Poll.QUIZ,
-                correct_option_id=correct_option_idx_shuffled,
-                open_period=open_period_seconds,
-                is_anonymous=False
-            )
-        except Exception as e:
-            logger.error(f"Ошибка при отправке опроса (тип: {quiz_type}) в чате {chat_id}: {e}", exc_info=True)
-            logger.error(f"Текст вопроса (экранированный), который вызвал ошибку: {question_for_api}")
-            logger.error(f"Опции (экранированные), которые вызвали ошибку: {options_for_api}")
+        # Retry механизм для отправки опроса (важно для таймаутов в России)
+        max_retries = 4  # 1 основная попытка + 4 повтора = всего 5 попыток (best practice 2025)
+        base_delay = 2.0  # Увеличенная начальная задержка для нестабильных сетей
+        max_delay = 15.0  # Максимальная задержка 15 секунд (рекомендация для RU→EU)
+        
+        sent_poll_msg: Optional[Message] = None
+        last_exception = None
+        
+        for attempt in range(max_retries + 1):
+            # Применяем rate limiting перед каждой попыткой
+            await self.rate_limiter.acquire(chat_id)
+            try:
+                sent_poll_msg = await context.bot.send_poll(
+                    chat_id=chat_id,
+                    question=question_for_api,
+                    options=options_for_api,
+                    type=Poll.QUIZ,
+                    correct_option_id=correct_option_idx_shuffled,
+                    open_period=open_period_seconds,
+                    is_anonymous=False
+                )
+                # Успешно отправлено, выходим из цикла retry
+                break
+            except Exception as e:
+                last_exception = e
+                error_message = str(e).lower()
+                error_type = type(e).__name__
+                
+                # Не повторяем для ошибок блокировки/недоступности чата
+                if "blocked" in error_message or "not found" in error_message or "forbidden" in error_message:
+                    logger.error(f"Ошибка при отправке опроса (тип: {quiz_type}) в чате {chat_id}: {e}", exc_info=True)
+                    logger.error(f"Текст вопроса (экранированный), который вызвал ошибку: {question_for_api}")
+                    logger.error(f"Опции (экранированные), которые вызвали ошибку: {options_for_api}")
+                    
+                    # Автоматическое отключение рассылки при блокировке или недоступности чата
+                    if quiz_type == "daily":
+                        logger.warning(f"⚠️ Обнаружена блокировка/недоступность чата {chat_id} при отправке опроса. Автоматически отключаю ежедневную рассылку.")
+                        self.data_manager.disable_daily_quiz_for_chat(
+                            chat_id,
+                            reason="blocked" if "blocked" in error_message else "not_found"
+                        )
+                    return None
+                
+                # Повторяем только для таймаутов и сетевых ошибок
+                if isinstance(e, (TimedOut, NetworkError)) and attempt < max_retries:
+                    # Exponential backoff с коэффициентом 2.0 (best practice)
+                    base_delay_calc = min(base_delay * (2.0 ** attempt), max_delay)
+                    # Добавляем jitter (±30%) для избежания синхронных повторов
+                    jitter = random.uniform(-0.3 * base_delay_calc, 0.3 * base_delay_calc)
+                    delay = max(0.5, base_delay_calc + jitter)  # Минимум 0.5 секунды
+                    logger.warning(f"Таймаут/сетевая ошибка при отправке опроса в чате {chat_id}, повтор через {delay:.1f}с (попытка {attempt + 1}/{max_retries + 1}): {e}")
+                    await asyncio.sleep(delay)
+                    continue  # Повторяем попытку
+                
+                # Для других ошибок или исчерпания попыток - логируем и возвращаем None
+                logger.error(f"Ошибка при отправке опроса (тип: {quiz_type}) в чате {chat_id} (попытка {attempt + 1}/{max_retries + 1}): {e}", exc_info=True)
+                logger.error(f"Текст вопроса (экранированный), который вызвал ошибку: {question_for_api}")
+                logger.error(f"Опции (экранированные), которые вызвали ошибку: {options_for_api}")
+                
+                # Для других ошибок (не TimedOut/NetworkError) не повторяем
+                return None
+        
+        # Проверяем, была ли успешная отправка
+        if sent_poll_msg is None:
+            logger.error(f"Все попытки отправки опроса исчерпаны для чата {chat_id}: {last_exception}")
             return None
 
-        if not sent_poll_msg or not sent_poll_msg.poll:
+        if not sent_poll_msg.poll:
             logger.error(f"Сообщение с опросом не было отправлено или не содержит опрос (чат: {chat_id}).")
             return None
 
         poll_id_str: str = sent_poll_msg.poll.id
+        
+        # Защита от дубликатов: проверяем, не был ли уже отправлен опрос с таким же poll_id
+        existing_poll = self.state.get_current_poll_data(poll_id_str)
+        if existing_poll:
+            logger.warning(f"Опрос с poll_id {poll_id_str} уже существует в state. Это дубликат, пропускаем повторную отправку для чата {chat_id}.")
+            return poll_id_str
+        
         current_poll_entry_data = {
             "chat_id": chat_id,
             "message_id": sent_poll_msg.message_id,
@@ -128,18 +194,25 @@ class QuizEngine:
         self.state.add_current_poll(poll_id_str, current_poll_entry_data)
         logger.info(f"Отправлен опрос (тип: {quiz_type}, ID опроса: {poll_id_str}, ID сообщения: {sent_poll_msg.message_id}) в чат {chat_id}.")
 
+        # Отправляем placeholder для решения только если его еще нет
         if question_data.get("solution"):
-            try:
-                placeholder_msg = await safe_send_message(
-                bot=context.bot,
-                chat_id=chat_id,
-                text="💡",
-                parse_mode=None
-            )
-                if poll_id_str in self.state.current_polls:
-                     self.state.current_polls[poll_id_str]["solution_placeholder_message_id"] = placeholder_msg.message_id
-            except Exception as e_placeholder:
-                logger.error(f"Не удалось отправить сообщение-заглушку '💡' для решения: {e_placeholder}")
+            # Проверяем, не был ли уже отправлен placeholder для этого опроса
+            poll_data_after_add = self.state.get_current_poll_data(poll_id_str)
+            if poll_data_after_add and not poll_data_after_add.get("solution_placeholder_message_id"):
+                try:
+                    placeholder_msg = await safe_send_message(
+                        bot=context.bot,
+                        chat_id=chat_id,
+                        text="💡",
+                        parse_mode=None
+                    )
+                    if poll_id_str in self.state.current_polls:
+                        self.state.current_polls[poll_id_str]["solution_placeholder_message_id"] = placeholder_msg.message_id
+                        logger.debug(f"Отправлен placeholder сообщение 💡 для poll_id {poll_id_str} в чате {chat_id}.")
+                except Exception as e_placeholder:
+                    logger.error(f"Не удалось отправить сообщение-заглушку '💡' для решения: {e_placeholder}")
+            else:
+                logger.debug(f"Placeholder сообщение для poll_id {poll_id_str} уже существует, пропускаем повторную отправку.")
         return poll_id_str
 
     async def send_solution_if_available(self, context: ContextTypes.DEFAULT_TYPE, chat_id: int, poll_id: str) -> Optional[int]:
@@ -149,6 +222,11 @@ class QuizEngine:
         if not poll_info:
             logger.warning(f"send_solution_if_available: Информация для poll_id {poll_id} не найдена.")
             return None
+
+        # Защита от повторной отправки решения: проверяем, не было ли уже отправлено решение
+        if poll_info.get("solution_sent", False):
+            logger.debug(f"Решение для poll_id {poll_id} уже было отправлено ранее. Пропускаем повторную отправку.")
+            return poll_info.get("solution_message_id")
 
         solution_text_raw = poll_info.get("question_details", {}).get("solution")
         if not solution_text_raw:
@@ -203,6 +281,12 @@ class QuizEngine:
                     parse_mode=None
                 )
                 solution_sent_or_edited_msg_id = new_solution_msg.message_id
+            
+            # Помечаем, что решение было отправлено, чтобы избежать дубликатов
+            if poll_id in self.state.current_polls:
+                self.state.current_polls[poll_id]["solution_sent"] = True
+                self.state.current_polls[poll_id]["solution_message_id"] = solution_sent_or_edited_msg_id
+            
             logger.info(f"Отправлено/обновлено пояснение для {log_q_ref_text_plain} в чате {chat_id} (parse_mode=None). ID: {solution_sent_or_edited_msg_id}")
         except Exception as e:
             logger.error(f"Ошибка отправки/редактирования пояснения (parse_mode=None) для {log_q_ref_text_plain} в чате {chat_id}: {e}", exc_info=True)

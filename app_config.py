@@ -195,6 +195,9 @@ class AppConfig:
 
         self.data_dir: Path = self.paths.data_dir
         self.persistence_file_name: str = self.paths.persistence_file_name
+        
+        # Контакт поддержки
+        self.support_contact: str = self.global_settings.get("support_contact", "@Ilzrd")
 
         if not self.bot_token:
             logger.critical("AppConfig: Токен BOT_TOKEN не найден! Проверьте .env файл.")
@@ -305,7 +308,9 @@ class AppConfig:
                     "base_multiplier": 0.2,
                     "max_multiplier": 3.0,
                     "min_streak_for_bonus": 5
-                }
+                },
+                # Контакт поддержки
+                "support_contact": "@Ilzrd"
             }
         }
         try:

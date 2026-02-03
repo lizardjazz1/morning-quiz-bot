@@ -1,4 +1,4 @@
-﻿#bot.py
+#bot.py
 import logging
 import logging.handlers
 import asyncio
@@ -107,41 +107,116 @@ def update_logging_level(app_config):
     logger.info(f"🔧 Уровень логирования обновлен: {app_config.log_level_str} (режим: {app_config.debug_mode and 'TESTING' or 'PRODUCTION'})")
 
 def check_and_kill_duplicate_bots() -> None:
-    """Проверяет и завершает дублирующие процессы бота"""
+    """Проверяет и завершает дублирующие процессы бота (кроссплатформенная версия)"""
     try:
         # Получаем текущий PID
         current_pid = os.getpid()
         logger.info(f"Текущий PID бота: {current_pid}")
 
-        # Ищем все процессы Python, содержащие bot.py
-        result = subprocess.run(
-            ['pgrep', '-f', 'python.*bot.py'],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-
-        if result.returncode == 0:
-            pids = result.stdout.strip().split('\n')
-            pids = [pid for pid in pids if pid and pid != str(current_pid)]
-
+        # Пытаемся использовать psutil (более надежный кроссплатформенный способ)
+        try:
+            import psutil
+            pids = []
+            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                try:
+                    cmdline = proc.info.get('cmdline', [])
+                    if cmdline and any('bot.py' in str(arg) for arg in cmdline):
+                        pid = proc.info['pid']
+                        if pid != current_pid:
+                            pids.append(str(pid))
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
+            
             if pids:
-                logger.warning(f"Найдены дублирующие процессы бота: {pids}")
+                logger.warning(f"Найдены дублирующие процессы бота (через psutil): {pids}")
                 for pid in pids:
                     try:
                         logger.info(f"Завершение дублирующего процесса: {pid}")
+                        proc = psutil.Process(int(pid))
+                        proc.terminate()
+                        proc.wait(timeout=5)
+                        logger.info(f"Процесс {pid} завершен")
+                    except psutil.TimeoutExpired:
+                        logger.warning(f"Не удалось завершить процесс {pid} за отведенное время, принудительное завершение")
+                        try:
+                            proc.kill()
+                        except:
+                            pass
+                    except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
+                        logger.warning(f"Не удалось завершить процесс {pid}: {e}")
+            else:
+                logger.info("Дублирующие процессы бота не найдены (проверка через psutil)")
+            return
+        except ImportError:
+            logger.debug("psutil не установлен, используем системные команды")
+        except Exception as e:
+            logger.debug(f"Ошибка при использовании psutil: {e}, переходим к системным командам")
+
+        # Fallback: используем системные команды
+        pids = []
+        is_windows = os.name == 'nt'
+        
+        if is_windows:
+            # Windows: используем tasklist
+            try:
+                result = subprocess.run(
+                    ['tasklist', '/FI', 'IMAGENAME eq python.exe', '/FO', 'CSV', '/NH'],
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+                if result.returncode == 0:
+                    for line in result.stdout.strip().split('\n'):
+                        if line and 'bot.py' in line:
+                            # Извлекаем PID из CSV (второе поле)
+                            parts = line.split(',')
+                            if len(parts) > 1:
+                                pid = parts[1].strip('"')
+                                if pid and pid != str(current_pid):
+                                    pids.append(pid)
+            except (subprocess.CalledProcessError, FileNotFoundError) as e:
+                logger.warning(f"Не удалось использовать tasklist: {e}")
+        else:
+            # Linux/Unix: используем pgrep
+            try:
+                # Проверяем доступность команды pgrep
+                subprocess.run(['which', 'pgrep'], capture_output=True, check=True, timeout=5)
+                
+                # Ищем все процессы Python, содержащие bot.py
+                result = subprocess.run(
+                    ['pgrep', '-f', 'python.*bot.py'],
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+
+                if result.returncode == 0:
+                    pids = result.stdout.strip().split('\n')
+                    pids = [pid for pid in pids if pid and pid != str(current_pid)]
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                logger.warning("Команда 'pgrep' недоступна. Пропускаем проверку дублирующих процессов.")
+                return
+
+        # Завершаем найденные процессы
+        if pids:
+            logger.warning(f"Найдены дублирующие процессы бота: {pids}")
+            for pid in pids:
+                try:
+                    logger.info(f"Завершение дублирующего процесса: {pid}")
+                    if is_windows:
+                        subprocess.run(['taskkill', '/F', '/PID', pid], timeout=5, capture_output=True)
+                    else:
                         subprocess.run(['kill', '-TERM', pid], timeout=5)
                         # Ждем завершения процесса
-                        subprocess.run(['sleep', '2'], timeout=5)
-                        logger.info(f"Процесс {pid} завершен")
-                    except subprocess.TimeoutExpired:
-                        logger.warning(f"Не удалось завершить процесс {pid} за отведенное время")
-                    except Exception as e:
-                        logger.error(f"Ошибка при завершении процесса {pid}: {e}")
-            else:
-                logger.info("Дублирующие процессы бота не найдены")
+                        import time
+                        time.sleep(2)
+                    logger.info(f"Процесс {pid} завершен")
+                except subprocess.TimeoutExpired:
+                    logger.warning(f"Не удалось завершить процесс {pid} за отведенное время")
+                except Exception as e:
+                    logger.error(f"Ошибка при завершении процесса {pid}: {e}")
         else:
-            logger.info("Процессы бота не найдены (это нормально при первом запуске)")
+            logger.info("Дублирующие процессы бота не найдены")
 
     except subprocess.TimeoutExpired:
         logger.warning("Таймаут при проверке дублирующих процессов")
@@ -155,6 +230,16 @@ async def main() -> None:
     check_and_kill_duplicate_bots()
 
     logger.info("Запуск бота...")
+    
+    # Создаем PID файл для мониторинга статуса бота
+    pid_file = Path("bot.pid")
+    try:
+        with open(pid_file, 'w') as f:
+            f.write(str(os.getpid()))
+        logger.info(f"📝 PID файл создан: {pid_file.absolute()} (PID: {os.getpid()})")
+    except Exception as e:
+        logger.warning(f"Не удалось создать PID файл: {e}")
+    
     application_instance: Optional[Application] = None # Переименовано для ясности
     data_manager_instance: Optional[DataManager] = None
 
@@ -195,16 +280,27 @@ async def main() -> None:
         persistence = PicklePersistence(filepath=persistence_path)
         defaults = Defaults(parse_mode=ParseMode.MARKDOWN_V2)
 
+        # HTTPXRequest с таймаутами под RU→EU маршруты (СПб → Amsterdam Telegram DC)
+        # С 30.12.2025 маршрутизация стала критически медленной для send_poll()
+        # send_poll() обработка: +8-15с + Peak нагрузка: +3-7с = нужны 60с таймауты
+        from telegram.request import HTTPXRequest
+        
+        request = HTTPXRequest(
+            read_timeout=60.0,       # Восстановлено: критично для send_poll() при RU→EU маршрутизации
+            write_timeout=45.0,      # Восстановлено: для больших запросов (polls с опциями)
+            connect_timeout=20.0,    # Восстановлено: подключение через VPN/прокси может быть медленным
+            pool_timeout=30.0,       # Восстановлено: ожидание свободного соединения из пула
+            media_write_timeout=60.0,  # Для отправки медиа файлов (фото-викторины)
+            connection_pool_size=8   # Увеличен пул соединений для параллельных запросов (default=1)
+        )
+        
         application_builder = (
             Application.builder()
             .token(app_config.bot_token)
             .persistence(persistence)
             .defaults(defaults)
             .concurrent_updates(True)
-            .read_timeout(30)
-            .connect_timeout(30)
-            .write_timeout(30)
-            .pool_timeout(20)
+            .request(request)
         )
         application_instance = application_builder.build() # Присваиваем созданный application
         logger.info("Объект Application создан.")
@@ -241,7 +337,8 @@ async def main() -> None:
 
         # Инициализируем WisdomScheduler
         wisdom_scheduler = WisdomScheduler(
-            app_config=app_config, data_manager=data_manager, bot_state=bot_state, application=application_instance
+            app_config=app_config, data_manager=data_manager, bot_state=bot_state, 
+            application=application_instance, category_manager=category_manager
         )
         if hasattr(config_handlers, 'set_wisdom_scheduler'):
             config_handlers.set_wisdom_scheduler(wisdom_scheduler)
@@ -343,7 +440,10 @@ async def main() -> None:
         if application_instance.updater:
             logger.info(f"Запуск бота (polling) с уровнем логирования: {logging.getLevelName(logger.getEffectiveLevel())}")
             await application_instance.updater.start_polling(
-                allowed_updates=Update.ALL_TYPES
+                allowed_updates=Update.ALL_TYPES,
+                poll_interval=1.0,  # 1 секунда между запросами (снижает нагрузку на CPU)
+                timeout=30,  # Long polling таймаут (30 секунд)
+                drop_pending_updates=False  # Не пропускаем накопленные обновления
             )
             await application_instance.start()
             
@@ -439,6 +539,16 @@ async def main() -> None:
                 logger.warning(f"Не удалось сохранить статистику категорий: {e}")
         else:
             logger.warning("Экземпляр DataManager не был создан, пропуск сохранения данных в main().finally.")
+        
+        # Удаляем PID файл при завершении
+        pid_file = Path("bot.pid")
+        try:
+            if pid_file.exists():
+                pid_file.unlink()
+                logger.info(f"🗑️ PID файл удален: {pid_file.absolute()}")
+        except Exception as e:
+            logger.warning(f"Не удалось удалить PID файл: {e}")
+        
         logger.info("Блок finally в main() завершил выполнение.")
 
 

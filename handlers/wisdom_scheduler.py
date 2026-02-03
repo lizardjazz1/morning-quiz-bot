@@ -24,15 +24,24 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Импортируем OpenRouter клиент для генерации фактов
+try:
+    from modules.openrouter_client import get_openrouter_client
+    OPENROUTER_AVAILABLE = True
+except ImportError:
+    OPENROUTER_AVAILABLE = False
+    logger.debug("OpenRouter клиент недоступен")
+
 class WisdomScheduler:
     """Планировщик ежедневной отправки мудрости дня"""
 
-    def __init__(self, app_config: AppConfig, data_manager: DataManager, bot_state: BotState, application=None):
+    def __init__(self, app_config: AppConfig, data_manager: DataManager, bot_state: BotState, application=None, category_manager=None):
         logger.debug("WisdomScheduler.__init__ начат.")
         self.app_config = app_config
         self.data_manager = data_manager
         self.bot_state = bot_state
         self.application = application
+        self.category_manager = category_manager  # Для получения списка категорий
 
         # Инициализируем планировщик
         self.scheduler = AsyncIOScheduler(
@@ -47,6 +56,15 @@ class WisdomScheduler:
 
         # Загружаем мудрости
         self.wisdoms = self._load_wisdoms()
+        
+        # Инициализируем OpenRouter клиент для генерации фактов
+        self.openrouter_client = None
+        if OPENROUTER_AVAILABLE:
+            self.openrouter_client = get_openrouter_client()
+            if self.openrouter_client and self.openrouter_client.api_key:
+                logger.info("✅ OpenRouter доступен для генерации фактов Совы Филиныча")
+            else:
+                logger.debug("OpenRouter API ключ не установлен, будут использоваться только статичные мудрости")
 
         logger.debug(f"WisdomScheduler.__init__ завершен. Загружено {len(self.wisdoms)} мудростей.")
 
@@ -93,18 +111,45 @@ class WisdomScheduler:
         return selected_wisdom
 
     async def _send_daily_wisdom(self, chat_id: str, context=None) -> None:
-        """Отправляет мудрость дня в указанный чат"""
+        """Отправляет мудрость дня или занимательный факт от Совы Филиныча в указанный чат"""
         try:
-            logger.debug(f"Отправка мудрости дня в чат {chat_id}")
+            logger.debug(f"Отправка мудрости/факта в чат {chat_id}")
 
-            # Получаем случайную мудрость
-            wisdom = self._get_random_wisdom(chat_id)
-            if not wisdom:
-                logger.warning(f"Нет доступных мудростей для чата {chat_id}")
-                return
-
-            # Формируем сообщение
-            message_text = f"🧠 Мудрость дня: {escape_markdown_v2(wisdom)}"
+            # Случайно выбираем тип контента: True - факт от AI, False - старая мудрость
+            use_ai_fact = random.choice([True, False])
+            
+            fact_text = None
+            # Если выбран факт от AI, пытаемся сгенерировать
+            if use_ai_fact and self.openrouter_client and self.openrouter_client.client:
+                try:
+                    # Получаем список категорий для использования как тем
+                    categories = None
+                    if self.category_manager:
+                        try:
+                            categories = self.category_manager.get_all_category_names()
+                            if not categories:
+                                categories = None
+                        except Exception as e:
+                            logger.debug(f"Не удалось получить категории для факта: {e}")
+                    
+                    fact_text = await self.openrouter_client.generate_fun_fact(categories=categories)
+                    if fact_text:
+                        logger.info(f"✅ Сгенерирован факт от Совы Филиныча для чата {chat_id}")
+                except Exception as e:
+                    logger.warning(f"Ошибка генерации факта через OpenRouter: {e}, используем статичную мудрость")
+            
+            # Если факт не удалось сгенерировать (или изначально выбрана старая мудрость), используем статичную мудрость
+            if not fact_text:
+                wisdom = self._get_random_wisdom(chat_id)
+                if not wisdom:
+                    logger.warning(f"Нет доступных мудростей для чата {chat_id}")
+                    return
+                
+                # Формируем сообщение со старой мудростью
+                message_text = f"🧠 Мудрость дня:\n\n{escape_markdown_v2(wisdom)}"
+            else:
+                # Формируем сообщение с фактом от Совы Филиныча
+                message_text = f"🦉 *Сов Филиныч рассказывает:*\n\n{escape_markdown_v2(fact_text)}"
 
             # Отправляем сообщение
             if self.application:
@@ -112,17 +157,17 @@ class WisdomScheduler:
                     chat_id=chat_id,
                     text=message_text,
                     parse_mode=ParseMode.MARKDOWN_V2,
-                    disable_notification=False  # Уведомление включено для мудрости дня
+                    disable_notification=False  # Уведомление включено
                 )
             else:
-                logger.error(f"Application не доступен для отправки мудрости дня в чат {chat_id}")
+                logger.error(f"Application не доступен для отправки в чат {chat_id}")
 
-            logger.info(f"Мудрость дня отправлена в чат {chat_id}")
+            logger.info(f"Мудрость/факт отправлен в чат {chat_id}")
 
         except BadRequest as e:
-            logger.error(f"Ошибка при отправке мудрости дня в чат {chat_id}: {e}")
+            logger.error(f"Ошибка при отправке мудрости/факта в чат {chat_id}: {e}")
         except Exception as e:
-            logger.error(f"Неожиданная ошибка при отправке мудрости дня в чат {chat_id}: {e}")
+            logger.error(f"Неожиданная ошибка при отправке мудрости/факта в чат {chat_id}: {e}")
 
     def schedule_wisdom_for_chat(self, chat_id: str, wisdom_time: str, timezone_str: str) -> bool:
         """Планирует отправку мудрости дня для конкретного чата"""

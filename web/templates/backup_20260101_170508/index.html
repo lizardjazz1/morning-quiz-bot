@@ -1,0 +1,1429 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz Bot - Панель управления</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --primary-light: #818cf8;
+            --secondary: #8b5cf6;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --info: #3b82f6;
+            --dark: #1f2937;
+            --gray: #6b7280;
+            --light-gray: #f3f4f6;
+            --white: #ffffff;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: var(--dark);
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: var(--white);
+            border-radius: 24px;
+            box-shadow: var(--shadow-lg);
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            padding: 40px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="1"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
+            opacity: 0.5;
+        }
+
+        .header-content {
+            position: relative;
+            z-index: 1;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+
+        .header p {
+            color: rgba(255,255,255,0.9);
+            font-size: 1.1em;
+            font-weight: 400;
+        }
+
+        /* Navigation */
+        .nav {
+            background: var(--white);
+            padding: 24px;
+            border-bottom: 1px solid var(--light-gray);
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+        }
+
+        .nav button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 12px;
+            background: var(--light-gray);
+            color: var(--dark);
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .nav button::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(99, 102, 241, 0.1);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .nav button:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        .nav button:hover {
+            background: var(--light-gray);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        .nav button.active {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
+
+        /* Content */
+        .content {
+            padding: 32px;
+        }
+
+        .section {
+            display: none;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        .section.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Cards Grid */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 24px;
+            margin-top: 24px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid var(--light-gray);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            transform: scaleX(0);
+            transition: transform 0.3s;
+        }
+
+        .card:hover::before {
+            transform: scaleX(1);
+        }
+
+        .card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 12px 24px -10px rgba(99, 102, 241, 0.3);
+            border-color: var(--primary-light);
+        }
+
+        .card h3 {
+            font-size: 1.25em;
+            font-weight: 600;
+            color: var(--dark);
+            margin-bottom: 12px;
+        }
+
+        .card .count {
+            color: var(--gray);
+            font-size: 0.95em;
+            margin-bottom: 16px;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(99, 102, 241, 0.3);
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+            transform: translateY(-2px);
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: var(--light-gray);
+            color: var(--dark);
+        }
+
+        .btn-secondary:hover {
+            background: #e5e7eb;
+        }
+
+        /* Stats Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 24px;
+            margin-top: 24px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            color: white;
+            padding: 32px;
+            border-radius: 20px;
+            text-align: center;
+            box-shadow: 0 10px 30px -10px rgba(99, 102, 241, 0.4);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            animation: pulse 3s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.1); opacity: 0.8; }
+        }
+
+        .stat-card h3 {
+            font-size: 3em;
+            font-weight: 700;
+            margin-bottom: 8px;
+            position: relative;
+        }
+
+        .stat-card p {
+            opacity: 0.95;
+            font-size: 1em;
+            font-weight: 500;
+            position: relative;
+        }
+
+        /* Search Bar */
+        .search-bar {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+
+        .search-bar input,
+        .search-bar select {
+            padding: 14px 20px;
+            border: 2px solid var(--light-gray);
+            border-radius: 12px;
+            font-size: 14px;
+            font-family: inherit;
+            flex: 1;
+            min-width: 200px;
+            transition: all 0.2s;
+        }
+
+        .search-bar input:focus,
+        .search-bar select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+        }
+
+        /* Question Item */
+        .question-item {
+            background: white;
+            border: 1px solid var(--light-gray);
+            border-left: 4px solid var(--primary);
+            padding: 24px;
+            margin-bottom: 16px;
+            border-radius: 12px;
+            transition: all 0.2s;
+        }
+
+        .question-item:hover {
+            box-shadow: var(--shadow);
+            border-left-color: var(--secondary);
+        }
+
+        .question-text {
+            font-weight: 600;
+            font-size: 1.1em;
+            color: var(--dark);
+            margin-bottom: 16px;
+            line-height: 1.5;
+        }
+
+        .question-answers {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            margin: 16px 0;
+        }
+
+        .answer-option {
+            padding: 12px 16px;
+            background: var(--light-gray);
+            border-radius: 10px;
+            font-size: 0.95em;
+            transition: all 0.2s;
+        }
+
+        .answer-option.correct {
+            background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+            border: 2px solid var(--success);
+            color: #065f46;
+            font-weight: 600;
+        }
+
+        /* Badge */
+        .badge {
+            display: inline-block;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+            margin: 4px;
+        }
+
+        .badge.primary {
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--primary);
+        }
+
+        .badge.success {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+        }
+
+        .badge.danger {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger);
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            animation: fadeIn 0.2s;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 32px;
+            border-radius: 20px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: slideUp 0.3s ease-out;
+        }
+
+        @keyframes slideUp {
+            from { transform: translateY(30px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .modal-content h2 {
+            color: var(--dark);
+            margin-bottom: 24px;
+            font-size: 1.75em;
+        }
+
+        /* Form */
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: var(--dark);
+            font-size: 0.95em;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 14px 16px;
+            border: 2px solid var(--light-gray);
+            border-radius: 10px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            padding: 16px 24px;
+            border-radius: 12px;
+            color: white;
+            font-weight: 600;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            z-index: 2000;
+            animation: slideInRight 0.3s ease-out;
+            backdrop-filter: blur(10px);
+        }
+
+        @keyframes slideInRight {
+            from { transform: translateX(400px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .toast.success {
+            background: linear-gradient(135deg, var(--success) 0%, #059669 100%);
+        }
+
+        .toast.error {
+            background: linear-gradient(135deg, var(--danger) 0%, #dc2626 100%);
+        }
+
+        .toast.info {
+            background: linear-gradient(135deg, var(--info) 0%, #2563eb 100%);
+        }
+
+        /* Pagination */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 32px;
+        }
+
+        .pagination button {
+            padding: 10px 16px;
+            border: 2px solid var(--light-gray);
+            background: white;
+            color: var(--dark);
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+            min-width: 44px;
+        }
+
+        .pagination button:hover:not(:disabled) {
+            border-color: var(--primary);
+            color: var(--primary);
+            transform: translateY(-2px);
+        }
+
+        .pagination button.active {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+            border-color: transparent;
+        }
+
+        .pagination button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 60px;
+            color: var(--gray);
+            font-size: 1.1em;
+        }
+
+        .loading::after {
+            content: '';
+            display: block;
+            margin: 24px auto 0;
+            width: 48px;
+            height: 48px;
+            border: 4px solid var(--light-gray);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Error/Success Messages */
+        .error, .success {
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .error {
+            background: rgba(239, 68, 68, 0.1);
+            color: #991b1b;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+
+        .success {
+            background: rgba(16, 185, 129, 0.1);
+            color: #065f46;
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+
+        /* Actions */
+        .actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 16px;
+            flex-wrap: wrap;
+        }
+
+        .actions button {
+            flex: 1;
+            min-width: 120px;
+        }
+
+        /* Header Actions */
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .card-header h2 {
+            font-size: 1.75em;
+            font-weight: 700;
+            color: var(--dark);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .nav {
+                padding: 16px;
+            }
+            
+            .content {
+                padding: 20px;
+            }
+            
+            .cards-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--light-gray);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--gray);
+            border-radius: 5px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--primary);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-content">
+                <h1>🎯 Quiz Bot</h1>
+                <p>Современная панель управления викторинами</p>
+            </div>
+        </div>
+
+        <div class="nav">
+            <button onclick="switchSection('categories')">📚 Категории</button>
+            <button onclick="switchSection('questions')">❓ Вопросы</button>
+            <button onclick="switchSection('statistics')">📊 Статистика</button>
+            <button onclick="switchSection('analytics')">📈 Аналитика</button>
+            <button onclick="switchSection('chats')">💬 Чаты</button>
+            <button onclick="switchSection('maintenance')">🔧 Обслуживание</button>
+            <button onclick="switchSection('import-export')">📥 Импорт/Экспорт</button>
+        </div>
+
+        <div class="content">
+            <!-- Категории -->
+            <div id="categories" class="section active">
+                <div class="card-header">
+                    <h2>Категории вопросов</h2>
+                    <button class="btn btn-primary" onclick="showAddCategoryForm()">+ Добавить</button>
+                </div>
+                <div class="cards-grid" id="categories-list">
+                    <div class="loading">Загрузка...</div>
+                </div>
+            </div>
+
+            <!-- Вопросы -->
+            <div id="questions" class="section">
+                <div class="card-header">
+                    <h2>Все вопросы</h2>
+                    <button class="btn btn-primary" onclick="showAddQuestionForm()">+ Добавить</button>
+                </div>
+                
+                <div class="search-bar">
+                    <input type="text" id="search-question" placeholder="🔍 Поиск..." oninput="filterQuestions()">
+                    <select id="filter-category" onchange="filterQuestions()">
+                        <option value="">Все категории</option>
+                    </select>
+                    <button class="btn btn-secondary" onclick="resetFilters()">Сбросить</button>
+                </div>
+
+                <div id="questions-list">
+                    <div class="loading">Загрузка...</div>
+                </div>
+
+                <div class="pagination" id="questions-pagination"></div>
+            </div>
+
+            <!-- Статистика -->
+            <div id="statistics" class="section">
+                <h2 style="margin-bottom: 24px;">Общая статистика</h2>
+                <div id="stats-content">
+                    <div class="loading">Загрузка...</div>
+                </div>
+            </div>
+
+            <!-- Аналитика -->
+            <div id="analytics" class="section">
+                <h2 style="margin-bottom: 24px;">Аналитика</h2>
+                <div style="display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap;">
+                    <button class="btn btn-primary" onclick="loadGlobalAnalytics()">🌍 Глобальная</button>
+                    <button class="btn btn-primary" onclick="loadChatsAnalytics()">💬 По чатам</button>
+                </div>
+                <div id="analytics-content">
+                    <div class="loading">Выберите тип аналитики</div>
+                </div>
+            </div>
+
+            <!-- Чаты -->
+            <div id="chats" class="section">
+                <h2 style="margin-bottom: 24px;">Управление чатами</h2>
+                <div id="chats-content">
+                    <div class="loading">Загрузка...</div>
+                </div>
+            </div>
+
+            <!-- Обслуживание -->
+            <div id="maintenance" class="section">
+                <h2 style="margin-bottom: 24px;">Режим обслуживания</h2>
+                <div id="maintenance-content">
+                    <div class="loading">Загрузка...</div>
+                </div>
+            </div>
+
+            <!-- Импорт/Экспорт -->
+            <div id="import-export" class="section">
+                <h2 style="margin-bottom: 24px;">Импорт и экспорт</h2>
+                
+                <div class="card" style="margin-bottom: 24px;">
+                    <h3 style="margin-bottom: 16px;">📥 Экспорт вопросов</h3>
+                    <p style="color: var(--gray); margin-bottom: 20px;">Скачайте все вопросы для резервного копирования</p>
+                    <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                        <button class="btn btn-primary" onclick="exportQuestions('json')">💾 JSON</button>
+                        <button class="btn btn-success" onclick="exportQuestions('csv')">📊 CSV</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 style="margin-bottom: 16px;">📤 Импорт вопросов</h3>
+                    <p style="color: var(--gray); margin-bottom: 20px;">Загрузите вопросы из JSON файла</p>
+                    <div class="form-group">
+                        <input type="file" id="import-file" accept=".json" style="margin-bottom: 12px;">
+                        <button class="btn btn-primary" onclick="importQuestions()">📤 Импортировать</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div id="modal" class="modal" onclick="if(event.target === this) closeModal()">
+        <div class="modal-content" id="modal-content"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script>
+        // (Здесь будет тот же JavaScript код из предыдущей версии)
+        // Я оставлю только интерфейсную часть, так как логика уже готова
+        
+        // === Copy all JavaScript from index_improved.html ===
+        let allQuestions = [];
+        let filteredQuestions = [];
+        let categories = [];
+        let currentPage = 1;
+        const itemsPerPage = 10;
+
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.animation = 'slideInRight 0.3s ease-out reverse';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        function showModal(content) {
+            document.getElementById('modal-content').innerHTML = content;
+            document.getElementById('modal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('modal').classList.remove('active');
+        }
+
+        function switchSection(sectionId) {
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
+            
+            document.getElementById(sectionId).classList.add('active');
+            event?.target?.classList.add('active');
+            
+            if (sectionId === 'categories') loadCategories();
+            else if (sectionId === 'questions') loadAllQuestions();
+            else if (sectionId === 'statistics') loadStatistics();
+            else if (sectionId === 'analytics') loadGlobalAnalytics();
+            else if (sectionId === 'chats') loadChats();
+            else if (sectionId === 'maintenance') loadMaintenanceMode();
+        }
+
+        async function loadCategories() {
+            try {
+                const response = await fetch('/api/categories');
+                const data = await response.json();
+                categories = data.categories;
+                
+                const container = document.getElementById('categories-list');
+                container.innerHTML = '';
+                
+                if (categories.length === 0) {
+                    container.innerHTML = '<div class="error">Категории не найдены</div>';
+                    return;
+                }
+                
+                categories.forEach(cat => {
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    card.innerHTML = `
+                        <h3>${cat.name}</h3>
+                        <div class="count">${cat.question_count} вопросов</div>
+                        <div class="actions">
+                            <button class="btn btn-primary" onclick="viewCategoryQuestions('${cat.name}')">Просмотр</button>
+                            <button class="btn btn-danger" onclick="deleteCategory('${cat.name}')">Удалить</button>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                });
+                
+                updateCategoryFilter();
+            } catch (error) {
+                showToast('Ошибка загрузки: ' + error.message, 'error');
+            }
+        }
+
+        function updateCategoryFilter() {
+            const select = document.getElementById('filter-category');
+            select.innerHTML = '<option value="">Все категории</option>';
+            categories.forEach(cat => {
+                const option = document.createElement('option');
+                option.value = cat.name;
+                option.textContent = cat.name;
+                select.appendChild(option);
+            });
+        }
+
+        async function loadAllQuestions() {
+            try {
+                const response = await fetch('/api/questions');
+                const data = await response.json();
+                allQuestions = data.questions;
+                filteredQuestions = [...allQuestions];
+                currentPage = 1;
+                renderQuestions();
+            } catch (error) {
+                showToast('Ошибка загрузки: ' + error.message, 'error');
+            }
+        }
+
+        function filterQuestions() {
+            const searchText = document.getElementById('search-question').value.toLowerCase();
+            const categoryFilter = document.getElementById('filter-category').value;
+            
+            filteredQuestions = allQuestions.filter(q => {
+                const matchesSearch = q.question.toLowerCase().includes(searchText);
+                const matchesCategory = !categoryFilter || q.category === categoryFilter;
+                return matchesSearch && matchesCategory;
+            });
+            
+            currentPage = 1;
+            renderQuestions();
+        }
+
+        function resetFilters() {
+            document.getElementById('search-question').value = '';
+            document.getElementById('filter-category').value = '';
+            filterQuestions();
+        }
+
+        function renderQuestions() {
+            const container = document.getElementById('questions-list');
+            
+            if (filteredQuestions.length === 0) {
+                container.innerHTML = '<div class="error">Вопросы не найдены</div>';
+                document.getElementById('questions-pagination').innerHTML = '';
+                return;
+            }
+            
+            const startIdx = (currentPage - 1) * itemsPerPage;
+            const endIdx = startIdx + itemsPerPage;
+            const pageQuestions = filteredQuestions.slice(startIdx, endIdx);
+            
+            container.innerHTML = '';
+            
+            pageQuestions.forEach((q, idx) => {
+                const item = document.createElement('div');
+                item.className = 'question-item';
+                item.innerHTML = `
+                    <div class="question-text">${q.question}</div>
+                    <span class="badge primary">${q.category}</span>
+                    <div class="question-answers">
+                        ${q.answers.map((ans, i) => `
+                            <div class="answer-option ${i === q.correct_answer ? 'correct' : ''}">
+                                ${i === q.correct_answer ? '✓ ' : ''}${ans}
+                            </div>
+                        `).join('')}
+                    </div>
+                    ${q.explanation ? `<div style="margin-top:12px; font-size:0.95em; color: var(--gray);">💡 ${q.explanation}</div>` : ''}
+                    <div class="actions">
+                        <button class="btn btn-primary" onclick='editQuestion(${JSON.stringify(q).replace(/'/g, "&apos;")}, ${startIdx + idx})'>Редактировать</button>
+                        <button class="btn btn-danger" onclick="deleteQuestion('${q.category}', ${startIdx + idx})">Удалить</button>
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+            
+            renderPagination();
+        }
+
+        function renderPagination() {
+            const totalPages = Math.ceil(filteredQuestions.length / itemsPerPage);
+            const pagination = document.getElementById('questions-pagination');
+            
+            if (totalPages <= 1) {
+                pagination.innerHTML = '';
+                return;
+            }
+            
+            let html = `<button onclick="changePage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>‹</button>`;
+            
+            for (let i = 1; i <= totalPages; i++) {
+                if (i === 1 || i === totalPages || (i >= currentPage - 2 && i <= currentPage + 2)) {
+                    html += `<button class="${i === currentPage ? 'active' : ''}" onclick="changePage(${i})">${i}</button>`;
+                } else if (i === currentPage - 3 || i === currentPage + 3) {
+                    html += `<span style="padding: 10px;">...</span>`;
+                }
+            }
+            
+            html += `<button onclick="changePage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>›</button>`;
+            pagination.innerHTML = html;
+        }
+
+        function changePage(page) {
+            const totalPages = Math.ceil(filteredQuestions.length / itemsPerPage);
+            if (page < 1 || page > totalPages) return;
+            currentPage = page;
+            renderQuestions();
+        }
+
+        async function loadStatistics() {
+            try {
+                const response = await fetch('/api/statistics');
+                const data = await response.json();
+                
+                document.getElementById('stats-content').innerHTML = `
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <h3>${data.total_categories}</h3>
+                            <p>Категорий</p>
+                        </div>
+                        <div class="stat-card">
+                            <h3>${data.total_questions}</h3>
+                            <p>Вопросов</p>
+                        </div>
+                        <div class="stat-card">
+                            <h3>${data.total_chats || 0}</h3>
+                            <p>Чатов</p>
+                        </div>
+                        <div class="stat-card">
+                            <h3>${data.total_users || 0}</h3>
+                            <p>Пользователей</p>
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                showToast('Ошибка: ' + error.message, 'error');
+            }
+        }
+
+        async function loadGlobalAnalytics() {
+            try {
+                const response = await fetch('/api/analytics/global');
+                const data = await response.json();
+                
+                document.getElementById('analytics-content').innerHTML = `
+                    <div class="stats-grid">
+                        <div class="stat-card"><h3>${data.total_users || 0}</h3><p>Пользователей</p></div>
+                        <div class="stat-card"><h3>${data.total_questions_answered || 0}</h3><p>Ответов</p></div>
+                        <div class="stat-card"><h3>${data.total_score || 0}</h3><p>Общий счет</p></div>
+                        <div class="stat-card"><h3>${data.total_chats || 0}</h3><p>Чатов</p></div>
+                    </div>
+                `;
+            } catch (error) {
+                showToast('Ошибка: ' + error.message, 'error');
+            }
+        }
+
+        async function loadChatsAnalytics() {
+            try {
+                const response = await fetch('/api/analytics/chats');
+                const data = await response.json();
+                
+                let html = '<div class="cards-grid">';
+                data.chats.forEach(chat => {
+                    html += `
+                        <div class="card">
+                            <h3>Чат ${chat.chat_id}</h3>
+                            <div class="count">Пользователей: ${chat.users_count}</div>
+                            <div class="count">Ответов: ${chat.total_answered}</div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                document.getElementById('analytics-content').innerHTML = html;
+            } catch (error) {
+                showToast('Ошибка: ' + error.message, 'error');
+            }
+        }
+
+        async function loadChats() {
+            try {
+                const response = await fetch('/api/chats');
+                const data = await response.json();
+                
+                let html = '<div class="cards-grid">';
+                data.chats.forEach(chat => {
+                    const enabled = chat.daily_quiz_enabled;
+                    html += `
+                        <div class="card">
+                            <h3>Чат ${chat.chat_id}</h3>
+                            <span class="badge ${enabled ? 'success' : 'danger'}">${enabled ? '✓ Активна' : '✗ Выключена'}</span>
+                            <div class="actions">
+                                <button class="btn btn-${enabled ? 'danger' : 'success'}" onclick="toggleDailyQuiz('${chat.chat_id}', ${!enabled})">
+                                    ${enabled ? 'Выключить' : 'Включить'}
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                document.getElementById('chats-content').innerHTML = html;
+            } catch (error) {
+                showToast('Ошибка: ' + error.message, 'error');
+            }
+        }
+
+        async function toggleDailyQuiz(chatId, enabled) {
+            if (!confirm(`${enabled ? 'Включить' : 'Выключить'} викторину?`)) return;
+            
+            try {
+                const response = await fetch(`/api/chats/${chatId}/daily-quiz/toggle?enabled=${enabled}`, {method: 'POST'});
+                if (response.ok) {
+                    showToast('Настройки обновлены!', 'success');
+                    loadChats();
+                } else {
+                    showToast('Ошибка', 'error');
+                }
+            } catch (error) {
+                showToast('Ошибка: ' + error.message, 'error');
+            }
+        }
+
+        async function loadMaintenanceMode() {
+            try {
+                const response = await fetch('/api/maintenance');
+                const data = await response.json();
+                
+                const status = data.maintenance_mode;
+                document.getElementById('maintenance-content').innerHTML = `
+                    <div class="${status ? 'error' : 'success'}">
+                        <h3>Статус: ${status ? '🔧 Обслуживание' : '✅ Работа'}</h3>
+                        ${data.reason ? `<p>${data.reason}</p>` : ''}
+                    </div>
+                    <form style="margin-top: 24px;" onsubmit="toggleMaintenance(event)">
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="maintenance-enabled" ${status ? 'checked' : ''} style="width: auto; margin-right: 8px;">
+                                Режим обслуживания
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label>Причина</label>
+                            <input type="text" id="maintenance-reason" value="${data.reason || ''}">
+                        </div>
+                        <button type="submit" class="btn btn-${status ? 'danger' : 'success'}">
+                            ${status ? 'Выключить' : 'Включить'}
+                        </button>
+                    </form>
+                `;
+            } catch (error) {
+                showToast('Ошибка: ' + error.message, 'error');
+            }
+        }
+
+        async function toggleMaintenance(event) {
+            event.preventDefault();
+            const enabled = document.getElementById('maintenance-enabled').checked;
+            const reason = document.getElementById('maintenance-reason').value;
+            
+            try {
+                const response = await fetch('/api/maintenance/toggle', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({enabled, reason: reason || null})
+                });
+                
+                if (response.ok) {
+                    showToast(`Режим ${enabled ? 'включен' : 'выключен'}!`, 'success');
+                    loadMaintenanceMode();
+                } else {
+                    showToast('Ошибка', 'error');
+                }
+            } catch (error) {
+                showToast('Ошибка: ' + error.message, 'error');
+            }
+        }
+
+        async function exportQuestions(format) {
+            try {
+                const response = await fetch(`/api/export/questions?format=${format}`);
+                if (!response.ok) {
+                    showToast('Ошибка экспорта', 'error');
+                    return;
+                }
+                
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `questions_${new Date().toISOString().split('T')[0]}.${format}`;
+                a.click();
+                window.URL.revokeObjectURL(url);
+                
+                showToast('Экспорт завершен!', 'success');
+            } catch (error) {
+                showToast('Ошибка: ' + error.message, 'error');
+            }
+        }
+
+        async function importQuestions() {
+            const fileInput = document.getElementById('import-file');
+            if (!fileInput.files.length) {
+                showToast('Выберите файл', 'error');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            
+            try {
+                const response = await fetch('/api/import/questions', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    showToast(`Импортировано: ${result.imported}`, 'success');
+                    loadCategories();
+                    loadAllQuestions();
+                } else {
+                    showToast('Ошибка импорта', 'error');
+                }
+            } catch (error) {
+                showToast('Ошибка: ' + error.message, 'error');
+            }
+        }
+
+        // Stub functions для работы с формами
+        function showAddCategoryForm() {
+            showModal(`
+                <h2>Новая категория</h2>
+                <div class="form-group">
+                    <label>Название</label>
+                    <input type="text" id="new-category-name">
+                </div>
+                <div style="display: flex; gap: 12px;">
+                    <button class="btn btn-success" onclick="addCategory()">Создать</button>
+                    <button class="btn btn-secondary" onclick="closeModal()">Отмена</button>
+                </div>
+            `);
+        }
+
+        async function addCategory() {
+            const name = document.getElementById('new-category-name').value.trim();
+            if (!name) {
+                showToast('Введите название', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/categories', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name})
+                });
+                
+                if (response.ok) {
+                    showToast('Категория создана!', 'success');
+                    closeModal();
+                    loadCategories();
+                } else {
+                    showToast('Ошибка', 'error');
+                }
+            } catch (error) {
+                showToast('Ошибка: ' + error.message, 'error');
+            }
+        }
+
+        async function deleteCategory(name) {
+            if (!confirm(`Удалить "${name}"?`)) return;
+            
+            try {
+                const response = await fetch(`/api/categories/${encodeURIComponent(name)}`, {method: 'DELETE'});
+                if (response.ok) {
+                    showToast('Удалено!', 'success');
+                    loadCategories();
+                } else {
+                    showToast('Ошибка', 'error');
+                }
+            } catch (error) {
+                showToast('Ошибка: ' + error.message, 'error');
+            }
+        }
+
+        function viewCategoryQuestions(name) {
+            switchSection('questions');
+            document.getElementById('filter-category').value = name;
+            filterQuestions();
+        }
+
+        function showAddQuestionForm() {
+            showModal(`
+                <h2>Новый вопрос</h2>
+                <form onsubmit="addQuestion(event)">
+                    <div class="form-group">
+                        <label>Категория</label>
+                        <select id="add-category" required>
+                            <option value="">Выберите</option>
+                            ${categories.map(c => `<option value="${c.name}">${c.name}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Вопрос</label>
+                        <textarea id="add-question-text" rows="3" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Ответы</label>
+                        <div id="add-answers">
+                            <input type="text" placeholder="Ответ 1" required style="margin-bottom:8px;">
+                            <input type="text" placeholder="Ответ 2" required style="margin-bottom:8px;">
+                        </div>
+                        <button type="button" class="btn btn-secondary" onclick="document.getElementById('add-answers').innerHTML += '<input type=text placeholder=Ответ style=margin-bottom:8px;>'">+ Еще</button>
+                    </div>
+                    <div class="form-group">
+                        <label>Номер правильного (с 0)</label>
+                        <input type="number" id="add-correct" min="0" value="0" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Объяснение</label>
+                        <textarea id="add-explanation" rows="2"></textarea>
+                    </div>
+                    <div style="display: flex; gap: 12px;">
+                        <button type="submit" class="btn btn-success">Добавить</button>
+                        <button type="button" class="btn btn-secondary" onclick="closeModal()">Отмена</button>
+                    </div>
+                </form>
+            `);
+        }
+
+        async function addQuestion(event) {
+            event.preventDefault();
+            
+            const category = document.getElementById('add-category').value;
+            const question = document.getElementById('add-question-text').value.trim();
+            const answerInputs = document.getElementById('add-answers').querySelectorAll('input');
+            const answers = Array.from(answerInputs).map(i => i.value.trim()).filter(a => a);
+            const correct_answer = parseInt(document.getElementById('add-correct').value);
+            const explanation = document.getElementById('add-explanation').value.trim() || null;
+            
+            if (answers.length < 2) {
+                showToast('Минимум 2 ответа', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/questions', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({category, question, answers, correct_answer, explanation})
+                });
+                
+                if (response.ok) {
+                    showToast('Вопрос добавлен!', 'success');
+                    closeModal();
+                    loadAllQuestions();
+                } else {
+                    showToast('Ошибка', 'error');
+                }
+            } catch (error) {
+                showToast('Ошибка: ' + error.message, 'error');
+            }
+        }
+
+        function editQuestion(q, idx) {
+            showModal(`
+                <h2>Редактирование</h2>
+                <form onsubmit="updateQuestion(event, '${q.category}', ${idx})">
+                    <div class="form-group">
+                        <label>Вопрос</label>
+                        <textarea id="edit-question-text" rows="3" required>${q.question}</textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Ответы</label>
+                        <div id="edit-answers">
+                            ${q.answers.map(ans => `<input type="text" value="${ans.replace(/"/g, '&quot;')}" required style="margin-bottom:8px;">`).join('')}
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Номер правильного</label>
+                        <input type="number" id="edit-correct" min="0" value="${q.correct_answer}" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Объяснение</label>
+                        <textarea id="edit-explanation" rows="2">${q.explanation || ''}</textarea>
+                    </div>
+                    <div style="display: flex; gap: 12px;">
+                        <button type="submit" class="btn btn-success">Сохранить</button>
+                        <button type="button" class="btn btn-secondary" onclick="closeModal()">Отмена</button>
+                    </div>
+                </form>
+            `);
+        }
+
+        async function updateQuestion(event, category, index) {
+            event.preventDefault();
+            
+            const question = document.getElementById('edit-question-text').value.trim();
+            const answerInputs = document.getElementById('edit-answers').querySelectorAll('input');
+            const answers = Array.from(answerInputs).map(i => i.value.trim());
+            const correct_answer = parseInt(document.getElementById('edit-correct').value);
+            const explanation = document.getElementById('edit-explanation').value.trim() || null;
+            
+            try {
+                const response = await fetch(`/api/questions/${encodeURIComponent(category)}/${index}`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({question, answers, correct_answer, explanation})
+                });
+                
+                if (response.ok) {
+                    showToast('Обновлено!', 'success');
+                    closeModal();
+                    loadAllQuestions();
+                } else {
+                    showToast('Ошибка', 'error');
+                }
+            } catch (error) {
+                showToast('Ошибка: ' + error.message, 'error');
+            }
+        }
+
+        async function deleteQuestion(category, index) {
+            if (!confirm('Удалить вопрос?')) return;
+            
+            try {
+                const response = await fetch(`/api/questions/${encodeURIComponent(category)}/${index}`, {method: 'DELETE'});
+                if (response.ok) {
+                    showToast('Удалено!', 'success');
+                    loadAllQuestions();
+                } else {
+                    showToast('Ошибка', 'error');
+                }
+            } catch (error) {
+                showToast('Ошибка: ' + error.message, 'error');
+            }
+        }
+
+        // Init
+        document.addEventListener('DOMContentLoaded', () => {
+            loadCategories();
+            document.querySelector('.nav button').classList.add('active');
+        });
+    </script>
+</body>
+</html>

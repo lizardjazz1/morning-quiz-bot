@@ -92,3 +92,12 @@ tatus*
 AVATARS/
 .claude/
 modules/openrouter_client.py
+
+# System configuration files
+*.service
+*.conf
+nginx-*.conf
+bot.pid
+
+# Web template backups
+web/templates/backup_*/

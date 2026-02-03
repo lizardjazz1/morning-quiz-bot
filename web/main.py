@@ -2041,6 +2041,70 @@ async def get_chat_detailed(chat_id: str):
                 users_list.sort(key=lambda x: x["total_score"], reverse=True)
                 result["top_users"] = users_list
 
+        # Загружаем статистику категорий с весами
+        categories_stats_file = chat_dir / "categories_stats.json"
+        if categories_stats_file.exists():
+            with open(categories_stats_file, 'r', encoding='utf-8') as f:
+                cat_stats = json.load(f)
+
+                # Получаем веса категорий для данного чата
+                try:
+                    import sys
+                    sys.path.insert(0, str(BASE_DIR))
+                    from app_config import AppConfig
+                    from modules.category_manager import CategoryManager
+
+                    app_config = AppConfig()
+                    category_manager = CategoryManager(app_config)
+
+                    # Получаем веса категорий
+                    weights_info = category_manager.get_category_weights_for_chat(chat_id)
+
+                    # Создаем словарь для быстрого поиска весов
+                    weights_dict = {w["name"]: w for w in weights_info}
+
+                    # Формируем список категорий с полной информацией
+                    cat_list = []
+                    for cat_name, cat_data in cat_stats.items():
+                        chat_usage = cat_data.get("chat_usage", 0)
+                        if isinstance(chat_usage, dict):
+                            chat_usage = sum(chat_usage.values())
+
+                        weight_data = weights_dict.get(cat_name, {})
+
+                        cat_list.append({
+                            "name": cat_name,
+                            "usage": int(chat_usage),
+                            "total_questions": cat_data.get("total_questions", 0),
+                            "weight": round(weight_data.get("weight", 0), 2),
+                            "excluded": weight_data.get("excluded", False),
+                            "days_since_use": round(weight_data.get("days_since_use", 0), 1)
+                        })
+
+                    # Сортируем по использованию
+                    cat_list.sort(key=lambda x: x["usage"], reverse=True)
+                    result["categories_stats"] = cat_list
+
+                except Exception as e:
+                    logger.warning(f"Не удалось загрузить веса категорий для чата {chat_id}: {e}")
+                    # Продолжаем без весов - базовая статистика
+                    cat_list = []
+                    for cat_name, cat_data in cat_stats.items():
+                        chat_usage = cat_data.get("chat_usage", 0)
+                        if isinstance(chat_usage, dict):
+                            chat_usage = sum(chat_usage.values())
+
+                        cat_list.append({
+                            "name": cat_name,
+                            "usage": int(chat_usage),
+                            "total_questions": cat_data.get("total_questions", 0)
+                        })
+
+                    cat_list.sort(key=lambda x: x["usage"], reverse=True)
+                    result["categories_stats"] = cat_list
+        else:
+            result["categories_stats"] = []
+
         return result
 
     except HTTPException:

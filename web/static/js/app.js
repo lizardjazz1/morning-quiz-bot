@@ -7,6 +7,10 @@ let allCategories = [];
 let allChats = [];
 let charts = {};
 
+// Pagination for questions
+let currentQuestionsPage = 1;
+let questionsPerPage = 50;
+
 // Initialize application
 document.addEventListener('DOMContentLoaded', () => {
     initDarkMode();
@@ -1057,22 +1061,28 @@ function showAllQuestions() {
 function renderQuestions(questions) {
     const container = document.getElementById('questionsContainer');
     const search = document.getElementById('questionSearch')?.value?.toLowerCase() || '';
-    
+
     let filtered = questions;
     if (search) {
-        filtered = questions.filter(q => 
+        filtered = questions.filter(q =>
             (q.question && q.question.toLowerCase().includes(search)) ||
             (q.correct && q.correct.toLowerCase().includes(search))
         );
     }
-    
+
     if (filtered.length === 0) {
         container.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">Нет вопросов</p>';
         return;
     }
-    
-    const MAX_DISPLAY = 50;
-    const displayQuestions = filtered.slice(0, MAX_DISPLAY);
+
+    // Пагинация
+    const totalPages = Math.ceil(filtered.length / questionsPerPage);
+    currentQuestionsPage = Math.min(currentQuestionsPage, totalPages);
+    currentQuestionsPage = Math.max(1, currentQuestionsPage);
+
+    const startIdx = (currentQuestionsPage - 1) * questionsPerPage;
+    const endIdx = startIdx + questionsPerPage;
+    const displayQuestions = filtered.slice(startIdx, endIdx);
     
     container.innerHTML = `
         <table class="data-table">
@@ -1135,8 +1145,98 @@ function renderQuestions(questions) {
                 }).join('')}
             </tbody>
         </table>
-        ${filtered.length > MAX_DISPLAY ? `<p style="margin-top: 1rem; color: var(--text-secondary);">Показано первые ${MAX_DISPLAY} из ${filtered.length} вопросов</p>` : ''}
+
+        <div style="margin-top: 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+            <div style="color: var(--text-secondary); font-size: 0.875rem;">
+                Показано ${startIdx + 1}-${Math.min(endIdx, filtered.length)} из ${filtered.length} вопросов
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <label style="font-size: 0.875rem; color: var(--text-secondary);">На странице:</label>
+                <select class="form-select" style="width: auto; padding: 0.25rem 0.5rem;" onchange="changeQuestionsPerPage(this.value)">
+                    <option value="25" ${questionsPerPage === 25 ? 'selected' : ''}>25</option>
+                    <option value="50" ${questionsPerPage === 50 ? 'selected' : ''}>50</option>
+                    <option value="100" ${questionsPerPage === 100 ? 'selected' : ''}>100</option>
+                    <option value="200" ${questionsPerPage === 200 ? 'selected' : ''}>200</option>
+                </select>
+            </div>
+        </div>
+
+        ${totalPages > 1 ? `
+        <div style="margin-top: 1rem; display: flex; justify-content: center; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <button class="btn btn-secondary" onclick="goToQuestionsPage(${currentQuestionsPage - 1})"
+                    ${currentQuestionsPage === 1 ? 'disabled' : ''}
+                    style="padding: 0.5rem 0.75rem; font-size: 0.875rem;">
+                ← Пред
+            </button>
+
+            ${generatePaginationButtons(currentQuestionsPage, totalPages)}
+
+            <button class="btn btn-secondary" onclick="goToQuestionsPage(${currentQuestionsPage + 1})"
+                    ${currentQuestionsPage === totalPages ? 'disabled' : ''}
+                    style="padding: 0.5rem 0.75rem; font-size: 0.875rem;">
+                След →
+            </button>
+        </div>
+        ` : ''}
     `;
+}
+
+function generatePaginationButtons(current, total) {
+    const maxButtons = 7;
+    let start = Math.max(1, current - Math.floor(maxButtons / 2));
+    let end = Math.min(total, start + maxButtons - 1);
+
+    if (end - start < maxButtons - 1) {
+        start = Math.max(1, end - maxButtons + 1);
+    }
+
+    let html = '';
+
+    if (start > 1) {
+        html += `<button class="btn btn-secondary" onclick="goToQuestionsPage(1)" style="padding: 0.5rem 0.75rem; font-size: 0.875rem;">1</button>`;
+        if (start > 2) {
+            html += `<span style="padding: 0.5rem; color: var(--text-secondary);">...</span>`;
+        }
+    }
+
+    for (let i = start; i <= end; i++) {
+        html += `
+            <button class="btn ${i === current ? 'btn-primary' : 'btn-secondary'}"
+                    onclick="goToQuestionsPage(${i})"
+                    style="padding: 0.5rem 0.75rem; font-size: 0.875rem;">
+                ${i}
+            </button>
+        `;
+    }
+
+    if (end < total) {
+        if (end < total - 1) {
+            html += `<span style="padding: 0.5rem; color: var(--text-secondary);">...</span>`;
+        }
+        html += `<button class="btn btn-secondary" onclick="goToQuestionsPage(${total})" style="padding: 0.5rem 0.75rem; font-size: 0.875rem;">${total}</button>`;
+    }
+
+    return html;
+}
+
+function goToQuestionsPage(page) {
+    currentQuestionsPage = page;
+    if (currentFilteredCategory) {
+        filterByCategory(currentFilteredCategory);
+    } else {
+        renderQuestions(allQuestions);
+    }
+}
+
+function changeQuestionsPerPage(value) {
+    questionsPerPage = parseInt(value);
+    currentQuestionsPage = 1;
+    if (currentFilteredCategory) {
+        filterByCategory(currentFilteredCategory);
+    } else {
+        renderQuestions(allQuestions);
+    }
 }
 
 function filterQuestions() {
@@ -1811,9 +1911,9 @@ function renderChats() {
                             <button class="btn btn-primary btn-sm" onclick="editChatSchedule('${chat.id}')" style="font-size: 0.75rem; padding: 0.4rem;">
                                 ⚙️ Настр.
                             </button>
-                            <button class="btn ${chat.daily_quiz_enabled ? 'btn-danger' : 'btn-success'} btn-sm" 
+                            <button class="btn ${chat.daily_quiz_enabled ? 'btn-danger' : 'btn-success'} btn-sm"
                                     onclick="toggleChatEnabled('${chat.id}', ${!chat.daily_quiz_enabled})" style="font-size: 0.75rem; padding: 0.4rem;">
-                                ${chat.daily_quiz_enabled ? '⏸️' : '▶️'}
+                                ${chat.daily_quiz_enabled ? '⏸️ Выкл.' : '▶️ Вкл.'}
                         </button>
                     </div>
                 </div>
@@ -2630,26 +2730,44 @@ async function viewChatStats(chatId) {
                             
                             <!-- Статистика категорий -->
                             <div>
-                                <h4 style="margin-bottom: 0.75rem;">📁 Категории (${categoriesStats.length})</h4>
+                                <h4 style="margin-bottom: 0.75rem;">📁 Категории и веса (${categoriesStats.length})</h4>
                                 <div style="max-height: 350px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px;">
-                                    <table class="data-table" style="margin: 0;">
+                                    <table class="data-table" style="margin: 0; font-size: 0.8rem;">
                                         <thead style="position: sticky; top: 0; background: var(--bg-secondary);">
                                             <tr>
                                                 <th>Категория</th>
-                                                <th style="text-align: right;">Использований</th>
-                                                <th style="text-align: right;">Вопросов</th>
+                                                <th style="text-align: right;">Исп.</th>
+                                                <th style="text-align: right;">Вес</th>
+                                                <th style="text-align: right;">Дней</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            ${categoriesStats.length > 0 ? categoriesStats.map(cat => `
-                                                <tr>
-                                                    <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(cat.name)}">${escapeHtml(cat.name)}</td>
-                                                    <td style="text-align: right; font-weight: 600; color: var(--primary);">${cat.chat_usage || 0}</td>
-                                                    <td style="text-align: right; color: var(--text-secondary);">${cat.total_questions || 0}</td>
+                                            ${categoriesStats.length > 0 ? categoriesStats.map(cat => {
+                                                const usage = cat.chat_usage || cat.usage || 0;
+                                                const weight = cat.weight !== undefined ? cat.weight : '—';
+                                                const excluded = cat.excluded || false;
+                                                const daysAgo = cat.days_since_use !== undefined ? cat.days_since_use : '—';
+                                                const weightColor = excluded ? 'var(--danger)' : (weight > 50 ? 'var(--success)' : 'var(--warning)');
+
+                                                return `
+                                                <tr style="${excluded ? 'opacity: 0.6;' : ''}">
+                                                    <td style="max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(cat.name)}">
+                                                        ${escapeHtml(cat.name)} ${excluded ? '🚫' : ''}
+                                                    </td>
+                                                    <td style="text-align: right; font-weight: 600; color: var(--primary);">${usage}</td>
+                                                    <td style="text-align: right; font-weight: 600; color: ${weightColor};">
+                                                        ${typeof weight === 'number' ? weight.toFixed(1) : weight}
+                                                    </td>
+                                                    <td style="text-align: right; color: var(--text-secondary);">
+                                                        ${typeof daysAgo === 'number' ? (daysAgo < 1 ? '<1' : Math.floor(daysAgo)) : daysAgo}
+                                                    </td>
                                                 </tr>
-                                            `).join('') : '<tr><td colspan="3" style="text-align: center; color: var(--text-secondary);">Нет данных</td></tr>'}
+                                            `}).join('') : '<tr><td colspan="4" style="text-align: center; color: var(--text-secondary);">Нет данных</td></tr>'}
                                         </tbody>
                                     </table>
+                                </div>
+                                <div style="margin-top: 0.5rem; font-size: 0.75rem; color: var(--text-secondary);">
+                                    🚫 - исключена (использована < 2 дней назад)
                                 </div>
                             </div>
                         </div>

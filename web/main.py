@@ -2052,10 +2052,14 @@ async def get_chat_detailed(chat_id: str):
                     import sys
                     sys.path.insert(0, str(BASE_DIR))
                     from app_config import AppConfig
+                    from state import BotState
+                    from data_manager import DataManager
                     from modules.category_manager import CategoryManager
 
                     app_config = AppConfig()
-                    category_manager = CategoryManager(app_config)
+                    bot_state = BotState()
+                    data_manager = DataManager(app_config)
+                    category_manager = CategoryManager(bot_state, app_config, data_manager)
 
                     # Получаем веса категорий
                     weights_info = category_manager.get_category_weights_for_chat(chat_id)
@@ -3398,10 +3402,14 @@ async def get_chat_full_info(chat_id: str):
                     import sys
                     sys.path.insert(0, str(BASE_DIR))
                     from app_config import AppConfig
+                    from state import BotState
+                    from data_manager import DataManager
                     from modules.category_manager import CategoryManager
 
                     app_config = AppConfig()
-                    category_manager = CategoryManager(app_config)
+                    bot_state = BotState()
+                    data_manager = DataManager(app_config)
+                    category_manager = CategoryManager(bot_state, app_config, data_manager)
 
                     # Получаем веса категорий
                     weights_info = category_manager.get_category_weights_for_chat(chat_id)

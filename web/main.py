@@ -2057,7 +2057,7 @@ async def get_chat_detailed(chat_id: str):
                     from modules.category_manager import CategoryManager
 
                     app_config = AppConfig()
-                    bot_state = BotState()
+                    bot_state = BotState(app_config)
                     data_manager = DataManager(app_config)
                     category_manager = CategoryManager(bot_state, app_config, data_manager)
 
@@ -3407,7 +3407,7 @@ async def get_chat_full_info(chat_id: str):
                     from modules.category_manager import CategoryManager
 
                     app_config = AppConfig()
-                    bot_state = BotState()
+                    bot_state = BotState(app_config)
                     data_manager = DataManager(app_config)
                     category_manager = CategoryManager(bot_state, app_config, data_manager)
 

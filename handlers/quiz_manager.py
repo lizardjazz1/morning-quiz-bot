@@ -58,8 +58,9 @@ CB_QCFG_NOOP = f"{CB_QCFG_}noop"
 CB_QCFG_CAT_POOL_MODE = f"{CB_QCFG_}cat_pool_mode"
 CB_QCFG_CAT_POOL_SELECT = f"{CB_QCFG_}cat_pool_select"
 
-DELAY_BEFORE_SESSION_MESSAGES_DELETION_SECONDS = 180   # 30 секунд (уменьшено с 5 минут)
-DELAY_BEFORE_POLL_SOLUTION_DELETION_SECONDS = 120 
+DELAY_BEFORE_SESSION_MESSAGES_DELETION_SECONDS = 180   # 3 минуты для служебных сообщений
+DELAY_BEFORE_POLL_SOLUTION_DELETION_SECONDS = 120      # 2 минуты для опросов (постепенное удаление)
+DELAY_BEFORE_RESULTS_DELETION_SECONDS = 180            # 3 минуты для результатов (дольше всего) 
 
 class QuizManager:
     def __init__(
@@ -147,12 +148,15 @@ class QuizManager:
         if active_quiz and not active_quiz.is_stopping:
             logger.warning(f"_initiate_quiz_session: Викторина уже активна в чате {chat_id}.")
             if initiated_by_user:
-                 await safe_send_message(
-            bot=context.bot,
-            chat_id=chat_id,
-            text=escape_markdown_v2(f"Викторина уже идет. Остановите текущую (`/{self.app_config.commands.stop_quiz}`)."),
-            parse_mode=ParseMode.MARKDOWN_V2
-        )
+                already_running_msg = await safe_send_message(
+                    bot=context.bot,
+                    chat_id=chat_id,
+                    text=escape_markdown_v2(f"Викторина уже идет. Остановите текущую (`/{self.app_config.commands.stop_quiz}`)."),
+                    parse_mode=ParseMode.MARKDOWN_V2
+                )
+                # Добавляем системное сообщение в автоудаление
+                if already_running_msg:
+                    self.state.add_message_for_deletion(chat_id, already_running_msg.message_id, delay_seconds=30)
             return
 
         cat_mode_for_get_questions: str
@@ -524,21 +528,38 @@ class QuizManager:
             return
         
         sent_solution_msg_id = await self.quiz_engine.send_solution_if_available(context, chat_id, ended_poll_id)
-        quiz_state = self.state.get_active_quiz(chat_id) 
+        quiz_state = self.state.get_active_quiz(chat_id)
 
-        if poll_info_before_removal and quiz_state:
+        # ПОСТЕПЕННОЕ УДАЛЕНИЕ: Планируем удаление этого конкретного опроса и решения через 120 секунд
+        if poll_info_before_removal:
             ended_poll_message_id = poll_info_before_removal.get("message_id")
+            messages_to_delete_now = []
+
             if ended_poll_message_id:
-                quiz_state.poll_and_solution_message_ids.append({
-                    "poll_msg_id": ended_poll_message_id,
-                    "solution_msg_id": sent_solution_msg_id
-                })
-                logger.debug(f"Poll msg {ended_poll_message_id} and solution msg {sent_solution_msg_id} for poll {ended_poll_id} added to delayed delete list for chat {chat_id}.")
+                messages_to_delete_now.append(ended_poll_message_id)
+            if sent_solution_msg_id:
+                messages_to_delete_now.append(sent_solution_msg_id)
+
+            if messages_to_delete_now:
+                # Планируем удаление этого опроса через 120 секунд от момента его закрытия
+                job_name_delete_this_poll = f"delete_poll_{ended_poll_id}_chat_{chat_id}_{int(dt.datetime.now().timestamp())}"
+                schedule_job_unique(
+                    self.application.job_queue,
+                    job_name=job_name_delete_this_poll,
+                    callback=self._delayed_delete_poll_solution_messages_job,
+                    when=timedelta(seconds=DELAY_BEFORE_POLL_SOLUTION_DELETION_SECONDS),
+                    data={"chat_id": chat_id, "message_ids": messages_to_delete_now}
+                )
+                logger.info(f"📅 Запланировано постепенное удаление опроса {ended_poll_id} ({len(messages_to_delete_now)} сообщений) через {DELAY_BEFORE_POLL_SOLUTION_DELETION_SECONDS}s")
+
+                # Добавляем в fallback на случай сбоя
+                for msg_id in messages_to_delete_now:
+                    self.state.add_message_for_deletion(chat_id, msg_id, delay_seconds=0)
             else:
-                logger.warning(f"_handle_poll_end_job: message_id не найден в poll_info_before_removal для poll_id {ended_poll_id}, чат {chat_id}. Не добавлено в список на удаление.")
-        elif not poll_info_before_removal:
-             logger.warning(f"_handle_poll_end_job: poll_info_before_removal is None для poll_id {ended_poll_id}, чат {chat_id}. Не добавлено в список на удаление.")
-        
+                logger.warning(f"_handle_poll_end_job: Нет сообщений для удаления для poll_id {ended_poll_id}, чат {chat_id}.")
+        else:
+             logger.warning(f"_handle_poll_end_job: poll_info_before_removal is None для poll_id {ended_poll_id}, чат {chat_id}. Не планируем удаление.")
+
         self.state.remove_current_poll(ended_poll_id)
 
         if not quiz_state: 
@@ -604,17 +625,25 @@ class QuizManager:
 
         logger.info(f"Запуск отложенного удаления {len(message_ids_to_delete_list)} СЛУЖЕБНЫХ сообщений в чате {chat_id}. Job: {context.job.name if context.job else 'N/A'}")
         for msg_id in message_ids_to_delete_list:
+            success = False
             try:
                 await context.bot.delete_message(chat_id=chat_id, message_id=msg_id)
                 logger.info(f"Сообщение {msg_id} (служебное) удалено отложенно из чата {chat_id}.")
+                success = True
             except BadRequest as e_br_del:
                  if "message to delete not found" in str(e_br_del).lower() or \
                     "message can't be deleted" in str(e_br_del).lower():
                      logger.debug(f"Сообщение {msg_id} (служебное) уже удалено или не может быть удалено (отложенно): {e_br_del}")
+                     success = True  # Считаем успешным - сообщения нет
                  else:
                      logger.warning(f"Ошибка BadRequest при отложенном удалении сообщения {msg_id} (служебное) из чата {chat_id}: {e_br_del}")
             except Exception as e_del_delayed:
                 logger.warning(f"Не удалось отложенно удалить сообщение {msg_id} (служебное) из чата {chat_id}: {e_del_delayed}")
+
+            # Удаляем из fallback при успехе
+            if success:
+                self.state.remove_message_from_deletion(chat_id, msg_id)
+
         logger.info(f"Отложенное удаление СЛУЖЕБНЫХ сообщений в чате {chat_id} завершено.")
 
     async def _delayed_delete_poll_solution_messages_job(self, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -642,17 +671,25 @@ class QuizManager:
 
         logger.info(f"Запуск отложенного удаления {len(message_ids_to_delete_list)} сообщений викторины в чате {chat_id}. Job: {context.job.name if context.job else 'N/A'}")
         for msg_id in message_ids_to_delete_list:
+            success = False
             try:
                 await context.bot.delete_message(chat_id=chat_id, message_id=msg_id)
                 logger.info(f"Сообщение викторины {msg_id} удалено отложенно из чата {chat_id}.")
+                success = True
             except BadRequest as e_br_del:
                  if "message to delete not found" in str(e_br_del).lower() or \
                     "message can't be deleted" in str(e_br_del).lower():
                      logger.debug(f"Сообщение викторины {msg_id} уже удалено или не может быть удалено (отложенно): {e_br_del}")
+                     success = True  # Считаем успешным - сообщения нет
                  else:
                      logger.warning(f"Ошибка BadRequest при отложенном удалении сообщения {msg_id} (викторина) из чата {chat_id}: {e_br_del}")
             except Exception as e_del_delayed:
                 logger.warning(f"Не удалось отложенно удалить сообщение {msg_id} (викторина) из чата {chat_id}: {e_del_delayed}")
+
+            # Удаляем из fallback при успехе
+            if success:
+                self.state.remove_message_from_deletion(chat_id, msg_id)
+
         logger.info(f"Отложенное удаление сообщений викторины в чате {chat_id} завершено.")
 
     async def _finalize_quiz_session(
@@ -711,13 +748,25 @@ class QuizManager:
                         solution_msg_id_for_deletion = solution_placeholder_id
                         logger.debug(f"Placeholder сообщение {solution_placeholder_id} для poll {poll_id_to_stop} будет удалено (solution не был отправлен)")
                     
-                    # Добавляем опрос в список на удаление при остановке ИЛИ при ошибке
+                    # Планируем удаление опроса при остановке/ошибке (он не прошел через _handle_poll_end_job)
                     # Это важно: при ошибке (например, таймаут) уже отправленные опросы нужно удалить
-                    quiz_state.poll_and_solution_message_ids.append({
-                        "poll_msg_id": message_id_of_poll,
-                        "solution_msg_id": solution_msg_id_for_deletion
-                    })
-                    logger.debug(f"Poll msg {message_id_of_poll} (poll_id: {poll_id_to_stop}) добавлен в список на отложенное удаление (was_stopped={was_stopped}, error_occurred={error_occurred}, solution_msg_id={solution_msg_id_for_deletion}).")
+                    interrupted_messages_to_delete = [message_id_of_poll]
+                    if solution_msg_id_for_deletion:
+                        interrupted_messages_to_delete.append(solution_msg_id_for_deletion)
+
+                    job_name_interrupted = f"delete_interrupted_poll_{poll_id_to_stop}_chat_{chat_id}_{int(dt.datetime.now().timestamp())}"
+                    schedule_job_unique(
+                        job_queue,
+                        job_name=job_name_interrupted,
+                        callback=self._delayed_delete_poll_solution_messages_job,
+                        when=timedelta(seconds=DELAY_BEFORE_POLL_SOLUTION_DELETION_SECONDS),
+                        data={"chat_id": chat_id, "message_ids": interrupted_messages_to_delete}
+                    )
+                    logger.info(f"📅 Запланировано удаление прерванного опроса {poll_id_to_stop} ({len(interrupted_messages_to_delete)} сообщений) через {DELAY_BEFORE_POLL_SOLUTION_DELETION_SECONDS}s")
+
+                    # Добавляем в fallback
+                    for msg_id in interrupted_messages_to_delete:
+                        self.state.add_message_for_deletion(chat_id, msg_id, delay_seconds=0)
 
                 self.state.remove_current_poll(poll_id_to_stop)
             quiz_state.active_poll_ids_in_session.discard(poll_id_to_stop)
@@ -861,32 +910,27 @@ class QuizManager:
         else:
             logger.debug(f"Нет сообщений о streak ачивках для удаления в чате {chat_id}.")
 
-        if quiz_state.poll_and_solution_message_ids or quiz_state.results_message_ids:
-            all_messages_to_delete_flat: List[int] = []
+        # ПОСТЕПЕННОЕ УДАЛЕНИЕ: Опросы и решения уже удаляются постепенно через _handle_poll_end_job
+        # Здесь планируем только удаление результатов (которые должны висеть дольше всего)
+        if quiz_state.results_message_ids:
+            results_to_delete = list(quiz_state.results_message_ids)
 
-            # Добавляем опросы и пояснения
-            for pair in quiz_state.poll_and_solution_message_ids:
-                if pair.get("poll_msg_id"):
-                    all_messages_to_delete_flat.append(pair["poll_msg_id"])
-                if pair.get("solution_msg_id"):
-                    all_messages_to_delete_flat.append(pair["solution_msg_id"])
+            job_name_results_cleanup = f"delayed_results_cleanup_chat_{chat_id}_qs_{int(quiz_state.quiz_start_time.timestamp())}"
+            schedule_job_unique(
+                job_queue,
+                job_name=job_name_results_cleanup,
+                callback=self._delayed_delete_poll_solution_messages_job,
+                when=timedelta(seconds=DELAY_BEFORE_RESULTS_DELETION_SECONDS),
+                data={"chat_id": chat_id, "message_ids": results_to_delete}
+            )
+            logger.info(f"📊 Запланировано удаление результатов викторины ({len(results_to_delete)} сообщений) через {DELAY_BEFORE_RESULTS_DELETION_SECONDS}s (дольше всего)")
 
-            # Добавляем результаты викторины
-            for result_msg_id in quiz_state.results_message_ids:
-                all_messages_to_delete_flat.append(result_msg_id)
-
-            if all_messages_to_delete_flat:
-                job_name_cleanup = f"delayed_quiz_cleanup_chat_{chat_id}_qs_{int(quiz_state.quiz_start_time.timestamp())}"
-                schedule_job_unique(
-                    job_queue,
-                    job_name=job_name_cleanup,
-                    callback=self._delayed_delete_poll_solution_messages_job,
-                    when=timedelta(seconds=DELAY_BEFORE_POLL_SOLUTION_DELETION_SECONDS),
-                    data={"chat_id": chat_id, "message_ids": all_messages_to_delete_flat}
-                )
-                logger.info(f"Запланировано отложенное удаление {len(all_messages_to_delete_flat)} сообщений викторины (опросы/пояснения/результаты) для чата {chat_id} (job: {job_name_cleanup}, delay: {DELAY_BEFORE_POLL_SOLUTION_DELETION_SECONDS}s).")
+            # ФАЛБЭК: Добавляем результаты в generic_messages_to_delete на случай сбоя
+            for msg_id in results_to_delete:
+                self.state.add_message_for_deletion(chat_id, msg_id, delay_seconds=0)
+            logger.debug(f"Результаты викторины добавлены в fallback (чат {chat_id}, {len(results_to_delete)} сообщений)")
         else:
-            logger.debug(f"Нет сообщений викторины для отложенного удаления в чате {chat_id}.")
+            logger.debug(f"Нет результатов викторины для отложенного удаления в чате {chat_id}.")
 
         # ОБНОВЛЯЕМ СТАТИСТИКУ КАТЕГОРИЙ ПОСЛЕ ЗАВЕРШЕНИЯ ВИКТОРИНЫ
         # (только если викторина завершилась успешно, один раз за сессию)
@@ -1263,21 +1307,32 @@ class QuizManager:
             interactive_start_message_id_to_pass: Optional[int] = None
 
             if quiz_cfg_msg_id and final_cfg.get('chat_id'):
+                deletion_success = False
                 try:
-                    if quiz_cfg_msg_id != final_cfg.get('original_command_message_id'): 
+                    if quiz_cfg_msg_id != final_cfg.get('original_command_message_id'):
                         await context.bot.delete_message(chat_id=final_cfg['chat_id'], message_id=quiz_cfg_msg_id)
+                        deletion_success = True
+                        logger.debug(f"✅ Сообщение настройки {quiz_cfg_msg_id} удалено сразу")
                 except Exception as e_del_menu:
-                    logger.warning(f"Не удалось удалить сообщение меню конфигурации {quiz_cfg_msg_id}: {e_del_menu}")
+                    logger.warning(f"❌ Не удалось сразу удалить сообщение меню конфигурации {quiz_cfg_msg_id}: {e_del_menu}")
+
+                # ФАЛБЭК: Если не удалось удалить сразу, добавляем в систему автоудаления
+                if not deletion_success and quiz_cfg_msg_id != final_cfg.get('original_command_message_id'):
+                    self.state.add_message_for_deletion(final_cfg['chat_id'], quiz_cfg_msg_id, delay_seconds=10)
+                    logger.info(f"📋 Сообщение настройки {quiz_cfg_msg_id} добавлено в автоудаление (fallback через 10 сек)")
 
             if final_cfg.get('chat_id'):
                 try:
                     sent_launch_msg = await safe_send_message(
-                    bot=context.bot,
-                    chat_id=final_cfg['chat_id'],
-                    text=start_message_text_escaped,
-                    parse_mode=ParseMode.MARKDOWN_V2
-                )
+                        bot=context.bot,
+                        chat_id=final_cfg['chat_id'],
+                        text=start_message_text_escaped,
+                        parse_mode=ParseMode.MARKDOWN_V2
+                    )
                     interactive_start_message_id_to_pass = sent_launch_msg.message_id
+                    # Добавляем сообщение "Запускаю викторину..." в автоудаление (30 сек)
+                    if sent_launch_msg:
+                        self.state.add_message_for_deletion(final_cfg['chat_id'], sent_launch_msg.message_id, delay_seconds=30)
                 except Exception as e_send_launch:
                     logger.error(f"Не удалось отправить сообщение 'Запускаю викторину...': {e_send_launch}")
 
@@ -1837,30 +1892,54 @@ class QuizManager:
             if query.message and quiz_cfg_msg_id == query.message.message_id and quiz_cfg_msg_id != original_cmd_msg_id:
                 try: await query.edit_message_text(final_message_text, reply_markup=None, parse_mode=ParseMode.MARKDOWN_V2)
                 except Exception: pass
-            elif chat_id_for_ops :
+            elif chat_id_for_ops:
                  if quiz_cfg_msg_id and quiz_cfg_msg_id != original_cmd_msg_id:
-                     try: await context.bot.delete_message(chat_id_for_ops, quiz_cfg_msg_id)
-                     except Exception: pass
-                 try: await safe_send_message(
-                    bot=context.bot,
-                    chat_id=chat_id_for_ops,
-                    text=final_message_text,
-                    parse_mode=ParseMode.MARKDOWN_V2
-                )
-                 except Exception: pass
-        elif update.message: 
+                     deletion_success = False
+                     try:
+                         await context.bot.delete_message(chat_id_for_ops, quiz_cfg_msg_id)
+                         deletion_success = True
+                     except Exception:
+                         pass
+                     # ФАЛБЭК: Если не удалось удалить сразу, добавляем в систему автоудаления
+                     if not deletion_success:
+                         self.state.add_message_for_deletion(chat_id_for_ops, quiz_cfg_msg_id, delay_seconds=10)
+                 try:
+                     cancel_msg = await safe_send_message(
+                         bot=context.bot,
+                         chat_id=chat_id_for_ops,
+                         text=final_message_text,
+                         parse_mode=ParseMode.MARKDOWN_V2
+                     )
+                     # Добавляем сообщение об отмене в автоудаление (20 сек)
+                     if cancel_msg:
+                         self.state.add_message_for_deletion(chat_id_for_ops, cancel_msg.message_id, delay_seconds=20)
+                 except Exception:
+                     pass
+        elif update.message:
             if chat_id_for_ops:
-                if quiz_cfg_msg_id and quiz_cfg_msg_id != original_cmd_msg_id: 
-                    try: await context.bot.delete_message(chat_id_for_ops, quiz_cfg_msg_id)
-                    except Exception: pass
-                try: await safe_send_message(
-                    bot=context.bot,
-                    chat_id=chat_id_for_ops,
-                    text=final_message_text,
-                    parse_mode=ParseMode.MARKDOWN_V2,
-                    reply_to_message_id=update.message.message_id
-                )
-                except Exception: pass
+                if quiz_cfg_msg_id and quiz_cfg_msg_id != original_cmd_msg_id:
+                    deletion_success = False
+                    try:
+                        await context.bot.delete_message(chat_id_for_ops, quiz_cfg_msg_id)
+                        deletion_success = True
+                    except Exception:
+                        pass
+                    # ФАЛБЭК: Если не удалось удалить сразу, добавляем в систему автоудаления
+                    if not deletion_success:
+                        self.state.add_message_for_deletion(chat_id_for_ops, quiz_cfg_msg_id, delay_seconds=10)
+                try:
+                    cancel_msg = await safe_send_message(
+                        bot=context.bot,
+                        chat_id=chat_id_for_ops,
+                        text=final_message_text,
+                        parse_mode=ParseMode.MARKDOWN_V2,
+                        reply_to_message_id=update.message.message_id
+                    )
+                    # Добавляем сообщение об отмене в автоудаление (20 сек)
+                    if cancel_msg:
+                        self.state.add_message_for_deletion(chat_id_for_ops, cancel_msg.message_id, delay_seconds=20)
+                except Exception:
+                    pass
             elif update.effective_chat:
                 try: await update.effective_chat.send_message(final_message_text, parse_mode=ParseMode.MARKDOWN_V2)
                 except Exception: pass

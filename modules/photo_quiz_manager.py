@@ -789,16 +789,22 @@ class PhotoQuizManager:
         """Планирует отложенное удаление сообщений фото-викторины"""
         try:
             logger.info(f"Начинаем планирование удаления {len(message_ids)} сообщений фото-викторины для чата {chat_id}")
-            
+
             job_queue = context.job_queue
             if not job_queue:
                 logger.error("Job queue не доступен в context!")
                 return
-                
+
+            # Получаем bot_state из context.bot_data
+            bot_state = context.bot_data.get('bot_state')
+            if not bot_state:
+                logger.error("BotState не найден в context.bot_data!")
+                return
+
             job_name = f"delayed_photo_quiz_cleanup_chat_{chat_id}_{int(datetime.now().timestamp())}"
-            
+
             logger.info(f"Создаем задачу {job_name} с задержкой {DELAY_BEFORE_PHOTO_QUIZ_DELETION_SECONDS} секунд")
-            
+
             schedule_job_unique(
                 job_queue,
                 job_name=job_name,
@@ -806,9 +812,14 @@ class PhotoQuizManager:
                 when=timedelta(seconds=DELAY_BEFORE_PHOTO_QUIZ_DELETION_SECONDS),
                 data={"chat_id": chat_id, "message_ids": message_ids}
             )
-            
+
+            # ФАЛБЭК: Добавляем все сообщения в generic_messages_to_delete
+            for msg_id in message_ids:
+                bot_state.add_message_for_deletion(chat_id, msg_id, delay_seconds=0)
+
             logger.info(f"✅ Запланировано отложенное удаление {len(message_ids)} сообщений фото-викторины для чата {chat_id} (job: {job_name}, delay: {DELAY_BEFORE_PHOTO_QUIZ_DELETION_SECONDS}s)")
-            
+            logger.debug(f"Сообщения фото-викторины добавлены в fallback (чат {chat_id}, {len(message_ids)} сообщений)")
+
         except Exception as e:
             logger.error(f"❌ Ошибка планирования удаления сообщений фото-викторины: {e}")
     
@@ -817,20 +828,38 @@ class PhotoQuizManager:
         try:
             chat_id = context.job.data["chat_id"]
             message_ids = context.job.data["message_ids"]
-            
+
+            # Получаем bot_state из context.bot_data
+            bot_state = context.bot_data.get('bot_state')
+            if not bot_state:
+                logger.error("BotState не найден в context.bot_data!")
+                return
+
             logger.info(f"Начинаем отложенное удаление {len(message_ids)} сообщений фото-викторины в чате {chat_id}")
-            
+
             deleted_count = 0
             for msg_id in message_ids:
+                success = False
                 try:
                     await context.bot.delete_message(chat_id=chat_id, message_id=msg_id)
                     deleted_count += 1
+                    success = True
                     logger.debug(f"Сообщение фото-викторины {msg_id} удалено из чата {chat_id}")
                 except Exception as e:
-                    logger.warning(f"Не удалось удалить сообщение фото-викторины {msg_id} из чата {chat_id}: {e}")
-            
+                    error_str = str(e).lower()
+                    if "message to delete not found" in error_str or \
+                       "message can't be deleted" in error_str:
+                        logger.debug(f"Сообщение фото-викторины {msg_id} уже удалено или недоступно: {e}")
+                        success = True  # Считаем успешным - сообщения нет
+                    else:
+                        logger.warning(f"Не удалось удалить сообщение фото-викторины {msg_id} из чата {chat_id}: {e}")
+
+                # Удаляем из fallback при успехе
+                if success:
+                    bot_state.remove_message_from_deletion(chat_id, msg_id)
+
             logger.info(f"Отложенное удаление сообщений фото-викторины в чате {chat_id} завершено. Удалено: {deleted_count}/{len(message_ids)}")
-            
+
         except Exception as e:
             logger.error(f"Ошибка отложенного удаления сообщений фото-викторины: {e}")
     

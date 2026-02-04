@@ -106,7 +106,7 @@ class BotState:
         self.global_settings: Dict[str, Any] = {}  # Глобальные настройки (статистика категорий и др.)
 
         self.global_command_cooldowns: Dict[str, Dict[int, datetime]] = defaultdict(dict)
-        self.generic_messages_to_delete: Dict[int, Set[int]] = defaultdict(set)
+        self.generic_messages_to_delete: Dict[int, Dict[int, float]] = defaultdict(dict)  # chat_id -> {message_id: timestamp}
 
     def get_active_quiz(self, chat_id: int) -> Optional[QuizState]:
         return self.active_quizzes.get(chat_id)
@@ -140,13 +140,37 @@ class BotState:
 
     def add_message_for_deletion(self, chat_id: int, message_id: int, delay_seconds: int = 300) -> None:
         """
-        Добавляет сообщение и планирует его удаление через delay_seconds (по умолчанию 5 минут).
-        """
-        self.generic_messages_to_delete[chat_id].add(message_id)
-        logger.debug(f"Сообщение {message_id} добавлено для удаления в чате {chat_id}")
+        Добавляет сообщение в fallback список и опционально планирует его удаление.
 
-        # Планируем удаление через N секунд если есть application
-        if self.application and hasattr(self.application, "job_queue") and self.application.job_queue:
+        Args:
+            chat_id: ID чата
+            message_id: ID сообщения
+            delay_seconds: Задержка перед удалением (по умолчанию 5 минут).
+                          Если 0 - сообщение добавляется только в fallback без планирования delayed задачи.
+
+        Сохраняет timestamp для fallback через periodic cleanup.
+        """
+        import time
+        timestamp = time.time()
+        self.generic_messages_to_delete[chat_id][message_id] = timestamp
+        logger.debug(f"Сообщение {message_id} добавлено для удаления в чате {chat_id} с timestamp {timestamp}")
+
+        # Автосохранение каждые 60 секунд (проверка по времени последнего сохранения)
+        if not hasattr(self, '_last_autosave_time'):
+            self._last_autosave_time = 0
+
+        if timestamp - self._last_autosave_time >= 60:
+            if self.data_manager:
+                try:
+                    self.data_manager.save_messages_to_delete()
+                    self._last_autosave_time = timestamp
+                    logger.debug(f"💾 Автосохранение сообщений для удаления выполнено")
+                except Exception as e:
+                    logger.warning(f"⚠️ Ошибка автосохранения: {e}")
+
+        # Планируем удаление через N секунд если есть application и delay_seconds > 0
+        # Если delay_seconds=0, то это означает только добавление в fallback без планирования delayed задачи
+        if delay_seconds > 0 and self.application and hasattr(self.application, "job_queue") and self.application.job_queue:
             job_name = f"del_msg_{chat_id}_{message_id}"
             # Удаляем старый job если есть
             existing = self.application.job_queue.get_jobs_by_name(job_name)
@@ -167,29 +191,46 @@ class BotState:
         chat_id = data["chat_id"]
         message_id = data["message_id"]
 
+        success = False
         try:
             await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
             logger.debug(f"Удалено сообщение {message_id} из чата {chat_id}")
+            success = True
         except Exception as e:
             error_str = str(e).lower()
             if "not found" in error_str or "cant be deleted" in error_str:
                 logger.debug(f"Сообщение {message_id} уже удалено или недоступно")
+                success = True  # Считаем успешным - сообщения нет
             else:
                 logger.warning(f"Не удалось удалить сообщение {message_id}: {e}")
+                # При других ошибках оставляем в fallback для periodic cleanup
 
-        # Удаляем из списка
-        if chat_id in self.generic_messages_to_delete:
-            self.generic_messages_to_delete[chat_id].discard(message_id)
-            if not self.generic_messages_to_delete[chat_id]:
-                del self.generic_messages_to_delete[chat_id]
+        # Удаляем из fallback только при успехе
+        if success:
+            if chat_id in self.generic_messages_to_delete:
+                self.generic_messages_to_delete[chat_id].pop(message_id, None)
+                if not self.generic_messages_to_delete[chat_id]:
+                    del self.generic_messages_to_delete[chat_id]
+
+                # Сохраняем изменения
+                if self.data_manager:
+                    try:
+                        self.data_manager.save_messages_to_delete()
+                        logger.debug(f"💾 Сообщение {message_id} удалено из fallback и сохранено")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Ошибка сохранения после удаления из fallback: {e}")
 
 
     def remove_message_from_deletion(self, chat_id: int, message_id: int) -> None:
         """Удаляет сообщение из списка для периодического удаления"""
         if chat_id in self.generic_messages_to_delete:
-            self.generic_messages_to_delete[chat_id].discard(message_id)
+            self.generic_messages_to_delete[chat_id].pop(message_id, None)
             logger.info(f"❌ Сообщение {message_id} удалено из списка для удаления в чате {chat_id}. Осталось: {len(self.generic_messages_to_delete[chat_id])}")
-            
+
+            # Удаляем запись чата если она пустая
+            if not self.generic_messages_to_delete[chat_id]:
+                del self.generic_messages_to_delete[chat_id]
+
             # Автоматически сохраняем данные при удалении сообщения
             try:
                 if self.data_manager:

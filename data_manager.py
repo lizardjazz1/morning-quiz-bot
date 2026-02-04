@@ -793,28 +793,69 @@ class DataManager:
             logger.error(f"Критическая ошибка при загрузке настроек чатов: {e}", exc_info=True)
 
     def load_messages_to_delete(self) -> None:
-        """Загружает сообщения для удаления из консолидированной структуры"""
+        """Загружает сообщения для удаления из консолидированной структуры с поддержкой миграции"""
+        import time
         try:
             messages_file = self.system_dir / "messages_to_delete.json"
             if not messages_file.exists():
                 logger.debug("Файл сообщений для удаления не найден")
                 return
-            
+
+            # Проверка на пустой файл
+            if messages_file.stat().st_size == 0:
+                logger.debug("Файл сообщений для удаления пустой, пропускаем загрузку")
+                return
+
             with open(messages_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-            
-            # Преобразуем строковые ключи обратно в int и списки в множества
-            for chat_id_str, message_ids_list in data.items():
+
+            current_time = time.time()
+            max_age_seconds = 24 * 3600  # 24 часа
+            migrated_count = 0
+            filtered_count = 0
+
+            # Преобразуем данные с миграцией из старого формата
+            for chat_id_str, message_data in data.items():
                 try:
                     chat_id = int(chat_id_str)
-                    self.state.generic_messages_to_delete[chat_id] = set(message_ids_list)
+
+                    # Проверяем формат данных
+                    if isinstance(message_data, list):
+                        # Старый формат: List[int] -> мигрируем в Dict[int, float]
+                        logger.info(f"Миграция из старого формата для чата {chat_id}")
+                        for msg_id in message_data:
+                            # Устанавливаем текущий timestamp для старых сообщений
+                            self.state.generic_messages_to_delete[chat_id][msg_id] = current_time
+                        migrated_count += len(message_data)
+
+                    elif isinstance(message_data, dict):
+                        # Новый формат: Dict[str, float] -> преобразуем ключи в int
+                        for msg_id_str, timestamp in message_data.items():
+                            msg_id = int(msg_id_str)
+                            age = current_time - timestamp
+
+                            # Фильтруем сообщения старше 24 часов
+                            if age <= max_age_seconds:
+                                self.state.generic_messages_to_delete[chat_id][msg_id] = timestamp
+                            else:
+                                filtered_count += 1
+                                logger.debug(f"Фильтрация старого сообщения {msg_id} (возраст: {age/3600:.1f} часов)")
+                    else:
+                        logger.warning(f"Неизвестный формат данных для чата {chat_id}: {type(message_data)}")
+
                 except (ValueError, TypeError) as e:
                     logger.warning(f"Ошибка преобразования данных для чата {chat_id_str}: {e}")
-            
-            total_messages = sum(len(message_ids) for message_ids in self.state.generic_messages_to_delete.values())
+
+            total_messages = sum(len(msgs) for msgs in self.state.generic_messages_to_delete.values())
             logger.info(f"Загружено {total_messages} сообщений для удаления из {len(self.state.generic_messages_to_delete)} чатов")
-            
-        except Exception as e: 
+            if migrated_count > 0:
+                logger.info(f"🔄 Мигрировано {migrated_count} сообщений из старого формата")
+            if filtered_count > 0:
+                logger.info(f"🗑️ Отфильтровано {filtered_count} старых сообщений (>24ч)")
+
+        except json.JSONDecodeError as e:
+            logger.warning(f"Файл messages_to_delete.json поврежден или содержит невалидный JSON: {e}. Пропускаем загрузку.")
+        except Exception as e:
             logger.error(f"Ошибка загрузки сообщений для удаления: {e}", exc_info=True)
 
     def save_user_data(self, chat_id: int) -> None:
@@ -1002,15 +1043,20 @@ class DataManager:
             return False
 
     def save_messages_to_delete(self) -> None:
-        """Сохраняет сообщения для удаления в консолидированную структуру"""
+        """Сохраняет сообщения для удаления в консолидированную структуру с timestamp"""
         try:
-            data_to_save = {str(chat_id): list(message_ids) for chat_id, message_ids in self.state.generic_messages_to_delete.items()}
-            
+            # Преобразуем Dict[int, Dict[int, float]] в JSON-совместимый формат
+            # chat_id (str) -> {message_id (str): timestamp (float)}
+            data_to_save = {}
+            for chat_id, messages_dict in self.state.generic_messages_to_delete.items():
+                data_to_save[str(chat_id)] = {str(msg_id): timestamp for msg_id, timestamp in messages_dict.items()}
+
             with open(self.system_dir / "messages_to_delete.json", 'w', encoding='utf-8') as f:
                 json.dump(data_to_save, f, ensure_ascii=False, indent=2)
-            
-            logger.debug(f"Сообщения для удаления сохранены ({len(data_to_save)} чатов)")
-            
+
+            total_messages = sum(len(msgs) for msgs in self.state.generic_messages_to_delete.values())
+            logger.debug(f"Сообщения для удаления сохранены ({len(data_to_save)} чатов, {total_messages} сообщений)")
+
         except Exception as e:
             logger.error(f"Ошибка сохранения сообщений для удаления: {e}", exc_info=True)
 

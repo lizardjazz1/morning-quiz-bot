@@ -14,17 +14,18 @@ from telegram import Update
 logger = logging.getLogger(__name__)
 
 async def cleanup_old_messages_job(context: ContextTypes.DEFAULT_TYPE):
+    import time
     logger.info("Запуск задачи очистки старых сообщений...")
 
     # Получаем BotState из data задачи или из context.bot_data
     bot_state = None
     if context.job and context.job.data and isinstance(context.job.data, dict):
         bot_state = context.job.data.get('bot_state')
-    
+
     if not bot_state:
         # Fallback: пытаемся получить из context.bot_data
         bot_state = context.bot_data.get('bot_state')
-    
+
     if not bot_state:
         logger.error("BotState не найден в context.job.data или context.bot_data. Задача очистки не может быть выполнена.")
         return
@@ -35,74 +36,95 @@ async def cleanup_old_messages_job(context: ContextTypes.DEFAULT_TYPE):
         logger.warning("Атрибут generic_messages_to_delete отсутствует или имеет неверный тип в BotState. Пропуск задачи.")
         return
 
-    # bot_state.generic_messages_to_delete: Dict[int, Set[int]]
-    # где int - chat_id, Set[int] - message_ids
+    # bot_state.generic_messages_to_delete: Dict[int, Dict[int, float]]
+    # где int - chat_id, Dict[int, float] - {message_id: timestamp}
 
-    total_messages_to_process = sum(len(message_ids) for message_ids in bot_state.generic_messages_to_delete.values())
+    total_messages_to_process = sum(len(messages) for messages in bot_state.generic_messages_to_delete.values())
     logger.info(f"📊 Всего сообщений для обработки: {total_messages_to_process} в {len(bot_state.generic_messages_to_delete)} чатах")
 
-    # ОПТИМИЗАЦИЯ: Ограничиваем количество обрабатываемых сообщений за раз
+    # Константы
+    MIN_AGE_SECONDS = 120  # Минимальный возраст сообщения (2 минуты)
     max_messages_per_batch = 50
     processed_in_this_batch = 0
-    
-    chats_to_remove_entry_for = [] # Список ID чатов, для которых запись в словаре стала пустой
+    current_time = time.time()
 
-    # Итерируемся по копии ключей словаря, чтобы безопасно удалять элементы из него
-    for chat_id, message_ids_set in list(bot_state.generic_messages_to_delete.items()):
-        if not message_ids_set: # Если для чата уже пустой сет, помечаем на удаление из словаря
+    chats_to_remove_entry_for = []
+
+    # Собираем все сообщения с сортировкой по возрасту
+    all_messages_with_age = []
+    for chat_id, messages_dict in list(bot_state.generic_messages_to_delete.items()):
+        if not messages_dict:
             chats_to_remove_entry_for.append(chat_id)
             continue
 
-        processed_message_ids = set() # Сообщения, которые были обработаны (удалены или ошибка типа "не найдено")
+        for msg_id, timestamp in messages_dict.items():
+            age = current_time - timestamp
+            if age >= MIN_AGE_SECONDS:
+                all_messages_with_age.append((chat_id, msg_id, age))
 
-        # ОПТИМИЗАЦИЯ: Ограничиваем количество сообщений для обработки в одном чате
-        messages_to_process = list(message_ids_set)[:max_messages_per_batch - processed_in_this_batch]
-        
-        # Итерируемся по ограниченному списку сообщений
-        for msg_id in messages_to_process:
-            if processed_in_this_batch >= max_messages_per_batch:
-                logger.info(f"Достигнут лимит обрабатываемых сообщений ({max_messages_per_batch}), останавливаем обработку")
-                break
-                
-            try:
-                # Здесь можно добавить логику проверки "времени жизни" сообщения, если это необходимо.
-                # Например, если сообщения хранятся с временными метками и удаляются только по истечении N часов.
-                await context.bot.delete_message(chat_id=chat_id, message_id=msg_id)
-                logger.debug(f"Удалено старое сообщение {msg_id} из чата {chat_id}")
-                processed_message_ids.add(msg_id)
-                processed_in_this_batch += 1
-            except Exception as e:
-                error_str = str(e).lower()
-                # Распространенные ошибки, указывающие, что сообщение уже удалено или не может быть удалено
-                if "message to delete not found" in error_str or \
-                   "message can't be deleted" in error_str or \
-                   "message_id_invalid" in error_str or \
-                   "message not found" in error_str or \
-                   "chat not found" in error_str: # Если чат удален/бот кикнут
-                    logger.warning(f"Сообщение {msg_id} в чате {chat_id} не найдено/не может быть удалено (или чат не найден): {e}. Удаление из списка отслеживания.")
-                    processed_message_ids.add(msg_id)
-                    processed_in_this_batch += 1
-                else:
-                    # Другие ошибки (например, временные проблемы с сетью) - оставляем сообщение для следующей попытки
-                    logger.error(f"Не удалось удалить сообщение {msg_id} из чата {chat_id}: {e}")
+    # Сортируем по возрасту (старые первыми)
+    all_messages_with_age.sort(key=lambda x: x[2], reverse=True)
 
-        # Удаляем обработанные ID из сета в BotState
-        for m_id in processed_message_ids:
-            message_ids_set.discard(m_id)
+    logger.info(f"🕐 Найдено {len(all_messages_with_age)} сообщений старше {MIN_AGE_SECONDS} секунд для обработки")
 
-        # Если после обработки сет сообщений для чата стал пустым, помечаем на удаление из словаря
-        if not message_ids_set:
-             chats_to_remove_entry_for.append(chat_id)
-             
-        # ОПТИМИЗАЦИЯ: Проверяем лимит обработанных сообщений
+    # Обрабатываем сообщения
+    processed_message_ids = {}  # chat_id -> set(message_ids)
+
+    for chat_id, msg_id, age in all_messages_with_age[:max_messages_per_batch]:
         if processed_in_this_batch >= max_messages_per_batch:
+            logger.info(f"Достигнут лимит обрабатываемых сообщений ({max_messages_per_batch}), останавливаем обработку")
             break
 
-    # Удаляем записи для чатов, у которых не осталось сообщений для удаления
+        try:
+            await context.bot.delete_message(chat_id=chat_id, message_id=msg_id)
+            logger.debug(f"Удалено старое сообщение {msg_id} из чата {chat_id} (возраст: {age:.1f}s)")
+
+            if chat_id not in processed_message_ids:
+                processed_message_ids[chat_id] = set()
+            processed_message_ids[chat_id].add(msg_id)
+            processed_in_this_batch += 1
+
+        except Exception as e:
+            error_str = str(e).lower()
+            # Распространенные ошибки, указывающие, что сообщение уже удалено или не может быть удалено
+            if "message to delete not found" in error_str or \
+               "message can't be deleted" in error_str or \
+               "message_id_invalid" in error_str or \
+               "message not found" in error_str or \
+               "chat not found" in error_str:
+                logger.warning(f"Сообщение {msg_id} в чате {chat_id} не найдено/не может быть удалено: {e}. Удаление из списка.")
+
+                if chat_id not in processed_message_ids:
+                    processed_message_ids[chat_id] = set()
+                processed_message_ids[chat_id].add(msg_id)
+                processed_in_this_batch += 1
+            else:
+                # Другие ошибки - оставляем сообщение для следующей попытки
+                logger.error(f"Не удалось удалить сообщение {msg_id} из чата {chat_id}: {e}")
+
+    # Удаляем обработанные сообщения из BotState
+    for chat_id, msg_ids_to_remove in processed_message_ids.items():
+        if chat_id in bot_state.generic_messages_to_delete:
+            for msg_id in msg_ids_to_remove:
+                bot_state.generic_messages_to_delete[chat_id].pop(msg_id, None)
+
+            # Если словарь чата пустой, помечаем на удаление
+            if not bot_state.generic_messages_to_delete[chat_id]:
+                chats_to_remove_entry_for.append(chat_id)
+
+    # Удаляем записи для чатов, у которых не осталось сообщений
     for chat_id_to_remove in chats_to_remove_entry_for:
         if chat_id_to_remove in bot_state.generic_messages_to_delete:
             del bot_state.generic_messages_to_delete[chat_id_to_remove]
             logger.debug(f"Удалена запись для чата {chat_id_to_remove} из generic_messages_to_delete (список сообщений пуст).")
+
+    # Автосохранение после очистки
+    if processed_in_this_batch > 0 and hasattr(bot_state, 'data_manager') and bot_state.data_manager:
+        try:
+            bot_state.data_manager.save_messages_to_delete()
+            logger.info(f"💾 Автосохранение после очистки {processed_in_this_batch} сообщений")
+        except Exception as e:
+            logger.error(f"❌ Ошибка автосохранения после очистки: {e}")
 
     logger.info(f"Задача очистки старых сообщений завершена. Обработано сообщений: {processed_in_this_batch}")
 

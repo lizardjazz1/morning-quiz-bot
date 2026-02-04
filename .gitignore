@@ -63,6 +63,8 @@ data/global/users.json
 data/statistics/
 data/questions_backup/
 data/backups/
+data/active_quizzes.json
+data/system/messages_to_delete.json
 # data/images/ - оставляем, нужны для фото-квизов
 
 # Test files

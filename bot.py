@@ -42,6 +42,7 @@ from handlers.common_handlers import CommonHandlers
 from handlers.cleanup_handler import schedule_cleanup_job
 from handlers.backup_handlers import BackupHandlers
 from handlers.photo_quiz_handlers import PhotoQuizHandlers
+from datetime import timedelta
 
 # Настройка логирования
 # Сначала создаем временный уровень для инициализации
@@ -60,22 +61,23 @@ logs_dir.mkdir(exist_ok=True)
 # Создаем logger ДО его использования
 logger = logging.getLogger(__name__)
 
-# Формируем имя файла с timestamp
-timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-log_filename = f"bot_{timestamp}.log"
+# Используем простое имя файла для ежедневной ротации
+log_filename = "bot.log"
 log_filepath = logs_dir / log_filename
 
-# Выводим информацию о созданном файле лога
-logger.info(f"📝 Лог будет сохранен в: {log_filepath}")
+# Выводим информацию о файле лога
+logger.info(f"📝 Логи сохраняются в: {log_filepath} (ежедневная ротация, хранение 7 дней)")
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=TEMP_LOG_LEVEL_DEFAULT,
     handlers=[
-        logging.handlers.RotatingFileHandler(
-            log_filepath, 
-            maxBytes=10*1024*1024,  # 10 MB
-            backupCount=5,           # Хранить 5 файлов бэкапа
-            encoding='utf-8'
+        logging.handlers.TimedRotatingFileHandler(
+            log_filepath,
+            when='midnight',         # Ротация в полночь
+            interval=1,              # Каждый день
+            backupCount=7,           # Хранить последние 7 дней
+            encoding='utf-8',
+            utc=False                # Использовать локальное время
         ),
         logging.StreamHandler(sys.stdout)
     ]
@@ -224,6 +226,54 @@ def check_and_kill_duplicate_bots() -> None:
         logger.error(f"Ошибка при проверке дублирующих процессов: {e}")
 
 
+async def autosave_messages_callback(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Периодическое автосохранение сообщений для удаления"""
+    try:
+        data_manager = context.bot_data.get('data_manager')
+        if data_manager:
+            data_manager.save_messages_to_delete()
+            logger.info("💾 Периодическое автосохранение сообщений для удаления выполнено")
+        else:
+            logger.warning("⚠️ data_manager не найден в bot_data для автосохранения")
+    except Exception as e:
+        logger.error(f"❌ Ошибка периодического автосохранения: {e}")
+
+
+def schedule_autosave_job(job_queue, data_manager) -> None:
+    """Планирует периодическое автосохранение сообщений для удаления"""
+    try:
+        job_name = "autosave_messages_to_delete"
+
+        # Удаляем старую задачу если есть
+        existing_jobs = job_queue.get_jobs_by_name(job_name)
+        for job in existing_jobs:
+            job.schedule_removal()
+
+        # Создаем новую задачу
+        job_queue.run_repeating(
+            autosave_messages_callback,
+            interval=timedelta(minutes=15),
+            first=timedelta(minutes=15),
+            name=job_name
+        )
+        logger.info("📅 Запланировано периодическое автосохранение сообщений (каждые 15 минут)")
+    except Exception as e:
+        logger.error(f"❌ Ошибка планирования автосохранения: {e}")
+
+
+async def save_state_on_shutdown(application: Application) -> None:
+    """Сохранение состояния при остановке бота"""
+    try:
+        data_manager = application.bot_data.get('data_manager')
+        if data_manager:
+            data_manager.save_messages_to_delete()
+            logger.info("💾 Сообщения для удаления сохранены при shutdown")
+        else:
+            logger.warning("⚠️ data_manager не найден в bot_data при shutdown")
+    except Exception as e:
+        logger.error(f"❌ Ошибка сохранения при shutdown: {e}")
+
+
 async def main() -> None:
     """Main entry point for the Morning Quiz Bot"""
     # Проверяем и завершаем дублирующие процессы бота
@@ -253,9 +303,6 @@ async def main() -> None:
         
         # Обновляем уровень логирования на основе конфигурации
         update_logging_level(app_config)
-
-        # Логируем информацию о созданном файле лога
-        logger.info(f"📝 Файл лога создан: {log_filepath}")
 
         bot_state = BotState(app_config=app_config)
         data_manager = DataManager(state=bot_state, app_config=app_config)
@@ -453,6 +500,7 @@ async def main() -> None:
             logger.debug(f"🔧 Доступные ключи в bot_data после start(): {list(application_instance.bot_data.keys())}")
             
             schedule_cleanup_job(application_instance.job_queue, bot_state)
+            schedule_autosave_job(application_instance.job_queue, data_manager)
             logger.info("Бот запущен и готов принимать обновления.")
             while application_instance.updater.running:
                 await asyncio.sleep(1)
@@ -467,6 +515,11 @@ async def main() -> None:
         logger.critical(f"Критическая ошибка в функции main: {e}", exc_info=True)
     finally:
         logger.info("Блок finally в main() начал выполнение.")
+
+        # Сохраняем состояние перед остановкой
+        if application_instance:
+            await save_state_on_shutdown(application_instance)
+
         if application_instance: # Используем application_instance
             if application_instance.updater and application_instance.updater.running:
                 logger.info("Остановка Updater в main().finally...")

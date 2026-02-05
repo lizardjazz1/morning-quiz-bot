@@ -530,35 +530,19 @@ class QuizManager:
         sent_solution_msg_id = await self.quiz_engine.send_solution_if_available(context, chat_id, ended_poll_id)
         quiz_state = self.state.get_active_quiz(chat_id)
 
-        # ПОСТЕПЕННОЕ УДАЛЕНИЕ: Планируем удаление этого конкретного опроса и решения через 120 секунд
-        if poll_info_before_removal:
+        # НАКОПЛЕНИЕ message_ids для батч-удаления в конце викторины
+        if poll_info_before_removal and quiz_state:
             ended_poll_message_id = poll_info_before_removal.get("message_id")
-            messages_to_delete_now = []
-
             if ended_poll_message_id:
-                messages_to_delete_now.append(ended_poll_message_id)
-            if sent_solution_msg_id:
-                messages_to_delete_now.append(sent_solution_msg_id)
-
-            if messages_to_delete_now:
-                # Планируем удаление этого опроса через 120 секунд от момента его закрытия
-                job_name_delete_this_poll = f"delete_poll_{ended_poll_id}_chat_{chat_id}_{int(dt.datetime.now().timestamp())}"
-                schedule_job_unique(
-                    self.application.job_queue,
-                    job_name=job_name_delete_this_poll,
-                    callback=self._delayed_delete_poll_solution_messages_job,
-                    when=timedelta(seconds=DELAY_BEFORE_POLL_SOLUTION_DELETION_SECONDS),
-                    data={"chat_id": chat_id, "message_ids": messages_to_delete_now}
-                )
-                logger.info(f"📅 Запланировано постепенное удаление опроса {ended_poll_id} ({len(messages_to_delete_now)} сообщений) через {DELAY_BEFORE_POLL_SOLUTION_DELETION_SECONDS}s")
-
-                # Добавляем в fallback на случай сбоя
-                for msg_id in messages_to_delete_now:
-                    self.state.add_message_for_deletion(chat_id, msg_id, delay_seconds=0)
+                quiz_state.poll_and_solution_message_ids.append({
+                    "poll_msg_id": ended_poll_message_id,
+                    "solution_msg_id": sent_solution_msg_id
+                })
+                logger.debug(f"Poll msg {ended_poll_message_id} and solution msg {sent_solution_msg_id} for poll {ended_poll_id} added to delayed delete list for chat {chat_id}.")
             else:
-                logger.warning(f"_handle_poll_end_job: Нет сообщений для удаления для poll_id {ended_poll_id}, чат {chat_id}.")
-        else:
-             logger.warning(f"_handle_poll_end_job: poll_info_before_removal is None для poll_id {ended_poll_id}, чат {chat_id}. Не планируем удаление.")
+                logger.warning(f"_handle_poll_end_job: message_id не найден в poll_info_before_removal для poll_id {ended_poll_id}, чат {chat_id}. Не добавлено в список на удаление.")
+        elif not poll_info_before_removal:
+             logger.warning(f"_handle_poll_end_job: poll_info_before_removal is None для poll_id {ended_poll_id}, чат {chat_id}. Не добавлено в список на удаление.")
 
         self.state.remove_current_poll(ended_poll_id)
 
@@ -742,31 +726,19 @@ class QuizManager:
                     # Если solution еще не был отправлен (job был отменен), placeholder все равно нужно удалить
                     solution_placeholder_id = poll_data.get("solution_placeholder_message_id")
                     solution_msg_id_for_deletion = None
-                    
+
                     # Если есть placeholder, но solution еще не отправлен, используем placeholder ID для удаления
                     if solution_placeholder_id:
                         solution_msg_id_for_deletion = solution_placeholder_id
                         logger.debug(f"Placeholder сообщение {solution_placeholder_id} для poll {poll_id_to_stop} будет удалено (solution не был отправлен)")
-                    
-                    # Планируем удаление опроса при остановке/ошибке (он не прошел через _handle_poll_end_job)
+
+                    # Добавляем прерванный опрос в список на батч-удаление (was_stopped or error_occurred)
                     # Это важно: при ошибке (например, таймаут) уже отправленные опросы нужно удалить
-                    interrupted_messages_to_delete = [message_id_of_poll]
-                    if solution_msg_id_for_deletion:
-                        interrupted_messages_to_delete.append(solution_msg_id_for_deletion)
-
-                    job_name_interrupted = f"delete_interrupted_poll_{poll_id_to_stop}_chat_{chat_id}_{int(dt.datetime.now().timestamp())}"
-                    schedule_job_unique(
-                        job_queue,
-                        job_name=job_name_interrupted,
-                        callback=self._delayed_delete_poll_solution_messages_job,
-                        when=timedelta(seconds=DELAY_BEFORE_POLL_SOLUTION_DELETION_SECONDS),
-                        data={"chat_id": chat_id, "message_ids": interrupted_messages_to_delete}
-                    )
-                    logger.info(f"📅 Запланировано удаление прерванного опроса {poll_id_to_stop} ({len(interrupted_messages_to_delete)} сообщений) через {DELAY_BEFORE_POLL_SOLUTION_DELETION_SECONDS}s")
-
-                    # Добавляем в fallback
-                    for msg_id in interrupted_messages_to_delete:
-                        self.state.add_message_for_deletion(chat_id, msg_id, delay_seconds=0)
+                    quiz_state.poll_and_solution_message_ids.append({
+                        "poll_msg_id": message_id_of_poll,
+                        "solution_msg_id": solution_msg_id_for_deletion
+                    })
+                    logger.debug(f"Poll msg {message_id_of_poll} (poll_id: {poll_id_to_stop}) добавлен в список на отложенное удаление (was_stopped={was_stopped}, error_occurred={error_occurred}, solution_msg_id={solution_msg_id_for_deletion}).")
 
                 self.state.remove_current_poll(poll_id_to_stop)
             quiz_state.active_poll_ids_in_session.discard(poll_id_to_stop)
@@ -910,27 +882,39 @@ class QuizManager:
         else:
             logger.debug(f"Нет сообщений о streak ачивках для удаления в чате {chat_id}.")
 
-        # ПОСТЕПЕННОЕ УДАЛЕНИЕ: Опросы и решения уже удаляются постепенно через _handle_poll_end_job
-        # Здесь планируем только удаление результатов (которые должны висеть дольше всего)
-        if quiz_state.results_message_ids:
-            results_to_delete = list(quiz_state.results_message_ids)
+        # БАТЧ УДАЛЕНИЕ: Удаляем все сообщения викторины (опросы + пояснения + результаты) одной задачей
+        if quiz_state.poll_and_solution_message_ids or quiz_state.results_message_ids:
+            all_messages_to_delete_flat: List[int] = []
 
-            job_name_results_cleanup = f"delayed_results_cleanup_chat_{chat_id}_qs_{int(quiz_state.quiz_start_time.timestamp())}"
-            schedule_job_unique(
-                job_queue,
-                job_name=job_name_results_cleanup,
-                callback=self._delayed_delete_poll_solution_messages_job,
-                when=timedelta(seconds=DELAY_BEFORE_RESULTS_DELETION_SECONDS),
-                data={"chat_id": chat_id, "message_ids": results_to_delete}
-            )
-            logger.info(f"📊 Запланировано удаление результатов викторины ({len(results_to_delete)} сообщений) через {DELAY_BEFORE_RESULTS_DELETION_SECONDS}s (дольше всего)")
+            # Добавляем опросы и пояснения
+            for pair in quiz_state.poll_and_solution_message_ids:
+                if pair.get("poll_msg_id"):
+                    all_messages_to_delete_flat.append(pair["poll_msg_id"])
+                if pair.get("solution_msg_id"):
+                    all_messages_to_delete_flat.append(pair["solution_msg_id"])
 
-            # ФАЛБЭК: Добавляем результаты в generic_messages_to_delete на случай сбоя
-            for msg_id in results_to_delete:
-                self.state.add_message_for_deletion(chat_id, msg_id, delay_seconds=0)
-            logger.debug(f"Результаты викторины добавлены в fallback (чат {chat_id}, {len(results_to_delete)} сообщений)")
+            # Добавляем результаты викторины
+            for result_msg_id in quiz_state.results_message_ids:
+                all_messages_to_delete_flat.append(result_msg_id)
+
+            if all_messages_to_delete_flat:
+                # ФАЛЛБЭК: Сначала добавляем ВСЕ сообщения в fallback (защита от сбоя delayed задачи)
+                for msg_id in all_messages_to_delete_flat:
+                    self.state.add_message_for_deletion(chat_id, msg_id, delay_seconds=0)
+                logger.info(f"🛡️ Добавлено {len(all_messages_to_delete_flat)} сообщений викторины в fallback защиту (чат {chat_id})")
+
+                # Планируем одну батч-задачу на удаление всех сообщений
+                job_name_cleanup = f"delayed_quiz_cleanup_chat_{chat_id}_qs_{int(quiz_state.quiz_start_time.timestamp())}"
+                schedule_job_unique(
+                    job_queue,
+                    job_name=job_name_cleanup,
+                    callback=self._delayed_delete_poll_solution_messages_job,
+                    when=timedelta(seconds=DELAY_BEFORE_POLL_SOLUTION_DELETION_SECONDS),
+                    data={"chat_id": chat_id, "message_ids": all_messages_to_delete_flat}
+                )
+                logger.info(f"📅 Запланировано батч-удаление {len(all_messages_to_delete_flat)} сообщений викторины через {DELAY_BEFORE_POLL_SOLUTION_DELETION_SECONDS}s (job: {job_name_cleanup})")
         else:
-            logger.debug(f"Нет результатов викторины для отложенного удаления в чате {chat_id}.")
+            logger.debug(f"Нет сообщений викторины для отложенного удаления в чате {chat_id}.")
 
         # ОБНОВЛЯЕМ СТАТИСТИКУ КАТЕГОРИЙ ПОСЛЕ ЗАВЕРШЕНИЯ ВИКТОРИНЫ
         # (только если викторина завершилась успешно, один раз за сессию)
